@@ -1,28 +1,54 @@
-name: Build repo snapshot
+name: snapshot
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   workflow_dispatch:
+
+# WICHTIG: Schreibrechte für Push/Tag
+permissions:
+  contents: write
 
 jobs:
   snapshot:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true  # Token für Push behalten
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.x'
 
       - name: Generate snapshot
         run: |
-          python .github/scripts/make_snapshot.py
+          python - << 'PY'
+          import os, subprocess, datetime, textwrap
+          dt = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+          branch = os.getenv('GITHUB_REF_NAME','')
+          commit = subprocess.check_output(['git','rev-parse','--short','HEAD']).decode().strip()
+          content = textwrap.dedent(f"""
+          # Repo Snapshot
+
+          - Time: {dt}
+          - Branch: {branch}
+          - Commit: {commit}
+          """).strip() + "\n"
+          with open("REPO_SNAPSHOT.md", "w", encoding="utf-8") as f:
+              f.write(content)
+          PY
 
       - name: Commit snapshot
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore: update REPO_SNAPSHOT.md"
-          file_pattern: "REPO_SNAPSHOT.md"
+          commit_message: "chore(snapshot): update REPO_SNAPSHOT.md"
+          file_pattern: REPO_SNAPSHOT.md
+          # Falls du jedes Mal automatisch taggen willst, auskommentieren:
+          # tagging_message: "snapshot-${{ github.run_number }}"
+          # commit_user_name: github-actions[bot]
+          # commit_user_email: 41898282+github-actions[bot]@users.noreply.github.com
