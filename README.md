@@ -1,17 +1,17 @@
 # 🏆 IBU Software – Dart Turnier Verwaltungs Tool
 
-Dieses Projekt ist ein voll funktionsfähiges Desktop-Tool zur Verwaltung von Dart-Turnieren und Meisterschaften.
+Desktop-Anwendung (PyQt6) zur Verwaltung von Dart-Turnieren und Meisterschaften.  
+Läuft lokal auf Windows, speichert Daten in SQLite.
 
-## Aktueller Stand (v0.1)
-- GUI mit Tabs: Turniere, Meisterschaften, Teilnehmer
-- Datenbank wird automatisch initialisiert
-- Projektstruktur mit Views, Models und Utility-Dateien
+---
 
-## Nächste Schritte (v0.2+)
-- Turniere erfassen & anzeigen
-- Teilnehmerverwaltung
-- Spielplan-Logik (Round Robin + KO)
+## 🚀 Schnellstart
 
-## Start
 ```bash
+# Im Projektordner
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install PyQt6
+
+# Start
 python main.py
