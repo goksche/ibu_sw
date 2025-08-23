@@ -1,64 +1,49 @@
-# Dart Turnier Verwaltungs Tool (ibu_sw)
+# Dart Turnier Verwaltungs Tool (PyQt6)
 
-Desktop-Tool (Windows, Python/PyQt6) für die Verwaltung von Dart-Turnieren:
-- Turniere, Teilnehmer und Meisterschaften verwalten
-- Gruppenphase (Auslosung & Spielplan) und KO-Phase
-- Speicherung lokal mit SQLite
-
-> **Aktuelle Version:** v0.6
+Desktop-Tool zur Verwaltung von Dart-Turnieren inkl. Gruppen- & KO-Phase sowie **Meisterschaftsmodus** (Saison mit Punktezählung über mehrere Turniere).  
+Technologie: **Python 3.11+**, **PyQt6**, **SQLite** (lokale Datei).
 
 ---
 
-## Inhalte
+## Aktueller Stand (v0.7)
 
-- [Features](#features)
-- [Schnellstart](#schnellstart)
-- [Ordnerstruktur](#ordnerstruktur)
-- [Wichtig: Löschschutz](#wichtig-löschschutz)
-- [Gruppenphase & KO-Phase](#gruppenphase--ko-phase)
-- [Roadmap](#roadmap)
-- [Changelog](#changelog)
-
----
-
-## Features
-
+### Fertig
 - **Turniere**
-  - Anlegen/Bearbeiten/Anzeige
-  - Modus: *Gruppenphase*, *KO*, *Gruppenphase+KO*
-  - Flag „meisterschaftsrelevant“ (für spätere Saisonwertung)
+  - Anlegen, Bearbeiten, Löschen (Löschen nur mit Passwort `6460`)
+  - Modus: *Gruppenphase*, *KO*, *Gruppenphase & KO*
 - **Teilnehmer**
-  - Anlegen/Bearbeiten/Löschen
-- **Meisterschaften**
-  - Anlegen/Bearbeiten/Löschen
-  - (Punkteschema folgt in Roadmap)
+  - Anlegen, Bearbeiten, Löschen (Löschen nur mit Passwort `6460`)
+  - Turnier-Teilnehmer zuweisen/ersetzen
 - **Gruppenphase**
-  - Gruppen bilden (automatische/halbautomatische Zuteilung möglich)
-  - Round-Robin-Spielplan je Gruppe (generieren, Ergebnisse erfassen)
-  - Tabellen mit Punkte/Legs/Diff
+  - Gruppen automatisch befüllen (GUI)
+  - Spielplan Round-Robin je Gruppe generieren
+  - Ergebnisse erfassen, Tabellen berechnen
+  - Sicherheitslogik: Überschreiben/Löschen nur ohne erfasste Ergebnisse
 - **KO-Phase**
-  - Seeding aus Gruppen nach Schema:
-    - Bei benachbarten Gruppenpaaren (A–B, C–D, …):
-      - A1 vs Bq, A2 vs B(q-1), …, Aq vs B1 (q = Top-N pro Gruppe)
-  - **Dynamische Rundennamen**:  
-    - 16 → Achtel • 8 → Viertel • 4 → Halb • 2 → Finale
-  - Ergebnisse erfassen, Sieger propagieren bis Finale
-- **Datenhaltung**
-  - SQLite unter `data/ibu.sqlite` (wird automatisch angelegt)
+  - Aus Gruppentabellen qualifizieren (2/4/8/16 …)
+  - Setzlogik: A1–B4, A2–B3, A3–B2, A4–B1 (erweiterbar bei mehr Gruppen)
+  - Ergebnisse speichern; Sieger wird automatisch in die nächste Runde übertragen
+  - Champion ermittelbar
+- **Meisterschaften (Saison)**
+  - Meisterschaft anlegen/umbenennen/löschen (Löschen mit Passwort `6460`)
+  - **Turniere per Checkbox zuweisen**
+  - **Punkteschema definieren** und speichern  
+    - **Standard-Schema**: *1=30, 2=24, 3=18, 4=15, ab Platz 5 = 5 Punkte* (per Button „Standard-Schema anwenden“)
+
+> CSV-Export & Ranglisten-Ansicht kommen später (nicht Teil des MVP).
 
 ---
 
-## Schnellstart
+## Installation
 
-### Voraussetzungen
-- **Python 3.11+** (Windows)
-- Abhängigkeiten:
-  - `PyQt6` (SQLite ist in der Standardbibliothek enthalten)
-
+### 1) Umgebung
 ```bash
-# (optional) venv
+# (Windows PowerShell oder Bash)
 python -m venv .venv
-.\.venv\Scripts\activate
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+# source .venv/bin/activate
 
-# Dependencies
+pip install --upgrade pip
 pip install PyQt6
