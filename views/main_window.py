@@ -4,6 +4,7 @@ from views.meisterschaft_view import MeisterschaftView
 from views.teilnehmer_view import TeilnehmerView
 from views.turnier_start_view import TurnierStartView
 from views.gruppenphase_view import GruppenphaseView
+from views.ko_phase_view import KOPhaseView
 
 
 class MainWindow(QMainWindow):
@@ -18,6 +19,7 @@ class MainWindow(QMainWindow):
         tabs.addTab(TeilnehmerView(), "Teilnehmer")
         tabs.addTab(TurnierStartView(), "Turnier starten")
         tabs.addTab(GruppenphaseView(), "Gruppenphase")
+        tabs.addTab(KOPhaseView(), "KO-Phase")
 
         central = QWidget()
         lay = QVBoxLayout(central)
