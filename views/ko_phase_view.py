@@ -1,4 +1,14 @@
-from typing import List
+# views/ko_phase_view.py
+# v0.7-Ansicht (klassische Tabelle) + Bronze-Runde (automatisch)
+# Fix: Sieger-Anzeige ermittelt ausschließlich den Final-Sieger (Bronze wird ignoriert).
+# Finale & Bronze werden ohne Propagation direkt gespeichert; andere Runden via save_ko_result_and_propagate.
+
+from __future__ import annotations
+
+import os
+import sqlite3
+from typing import List, Optional
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton, QHBoxLayout,
@@ -9,10 +19,22 @@ from PyQt6.QtWidgets import (
 from database.models import (
     fetch_turniere, fetch_ko_rounds, fetch_ko_matches, save_ko_result_and_propagate,
     generate_ko_bracket_total, clear_ko_matches, has_ko_matches, has_recorded_ko_results,
-    fetch_groups, compute_group_table, fetch_ko_champion
+    fetch_groups, compute_group_table, fetch_ko_champion  # bleibt importiert, wird aber nicht genutzt für die Anzeige
 )
 
+# Optionaler DB-Pfad aus models; Fallback auf ./data/ibu.sqlite
+try:
+    from database.models import DB_PATH as MODELS_DB_PATH
+except Exception:
+    MODELS_DB_PATH = None
+
+def _project_root() -> str:
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+DB_PATH = MODELS_DB_PATH or os.path.join(_project_root(), "data", "ibu.sqlite")
+
 DELETE_PASSWORD = "6460"
+BRONZE_ROUND = 99  # interne Rundennummer fuer "Kleines Finale"
 
 
 class KOPhaseView(QWidget):
@@ -28,7 +50,7 @@ class KOPhaseView(QWidget):
         title.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 8px;")
         root.addWidget(title)
 
-        # --- Kopfzeile: Turnier & Aktionen
+        # Kopfzeile
         row = QHBoxLayout()
         row.addWidget(QLabel("Turnier:"))
         self.cbo_turnier = QComboBox()
@@ -56,7 +78,7 @@ class KOPhaseView(QWidget):
 
         root.addLayout(row)
 
-        # --- Rundenauswahl
+        # Rundenzeile
         rline = QHBoxLayout()
         rline.addWidget(QLabel("Runde:"))
         self.cbo_round = QComboBox()
@@ -86,39 +108,101 @@ class KOPhaseView(QWidget):
 
         self._load_turniere()
 
-    # ------------------------------
-    # Hilfen
-    # ------------------------------
+    # ---------------- Hilfen ----------------
     def _current_turnier_id(self):
         return self._turnier_map.get(self.cbo_turnier.currentText())
 
     def _round_name_for(self, round_index: int, total_qualifiers: int) -> str:
-        """
-        Ermittelt die Rundenbezeichnung anhand der tatsächlich vorhandenen
-        Gesamt-Qualifikanten.
-        """
         if total_qualifiers is None or total_qualifiers <= 0:
             return f"Runde {round_index}"
         size_this_round = total_qualifiers // (2 ** (round_index - 1))
-        # kurze Labels gewünscht: "Achtel", "Viertel", "Halb", "Finale"
         mapping_short = {16: "Achtel", 8: "Viertel", 4: "Halb", 2: "Finale"}
         return mapping_short.get(size_this_round, f"Runde {round_index}")
 
     def _round1_total_qualifiers(self, turnier_id: int) -> int:
-        """
-        Liest die Anzahl R1-Matches und multipliziert ×2.
-        Falls kein KO-Plan existiert, nimmt den Wert aus dem SpinBox-Feld (Fallback).
-        """
         rounds = fetch_ko_rounds(turnier_id)
         if 1 in rounds:
             matches = fetch_ko_matches(turnier_id, 1)
             return max(0, len(matches) * 2)
-        # noch kein Plan -> Fallback
         return int(self.spn_total.value())
 
-    # ------------------------------
-    # Laden
-    # ------------------------------
+    def _db(self) -> sqlite3.Connection:
+        con = sqlite3.connect(DB_PATH)
+        con.row_factory = sqlite3.Row
+        return con
+
+    # ------------- Bronze/Finale: Ableiten/Anlegen/Erkennen -------------
+    def _semi_round_index(self, total_qual: int) -> Optional[int]:
+        if not self._rounds:
+            return None
+        for r in self._rounds:
+            size = total_qual // (2 ** (r - 1))
+            if size == 4:
+                return r
+        return None
+
+    def _final_round_index(self, total_qual: int) -> Optional[int]:
+        if not self._rounds:
+            return None
+        for r in self._rounds:
+            size = total_qual // (2 ** (r - 1))
+            if size == 2:
+                return r
+        return None
+
+    def _bronze_exists(self, tid: int) -> bool:
+        with self._db() as con:
+            row = con.execute(
+                "SELECT 1 FROM ko_spiele WHERE turnier_id=? AND runde=? LIMIT 1",
+                (tid, BRONZE_ROUND)
+            ).fetchone()
+            return row is not None
+
+    def _ensure_bronze_from_semis(self, tid: int, total_qual: int) -> None:
+        semi_idx = self._semi_round_index(total_qual)
+        if semi_idx is None:
+            return
+        with self._db() as con:
+            semis = con.execute(
+                "SELECT p1_id, p2_id, s1, s2 FROM ko_spiele "
+                "WHERE turnier_id=? AND runde=? ORDER BY match_no ASC",
+                (tid, semi_idx)
+            ).fetchall()
+
+            losers = []
+            for r in semis:
+                if r["s1"] is None or r["s2"] is None:
+                    continue
+                try:
+                    s1 = int(r["s1"]); s2 = int(r["s2"])
+                except Exception:
+                    continue
+                if s1 == s2:
+                    continue
+                loser = int(r["p1_id"]) if s1 < s2 else int(r["p2_id"])
+                losers.append(loser)
+
+            if len(losers) < 2:
+                return
+
+            bron = con.execute(
+                "SELECT id FROM ko_spiele WHERE turnier_id=? AND runde=? LIMIT 1",
+                (tid, BRONZE_ROUND)
+            ).fetchone()
+            if bron is None:
+                con.execute(
+                    "INSERT INTO ko_spiele (turnier_id, runde, match_no, p1_id, p2_id, s1, s2) "
+                    "VALUES (?, ?, 1, ?, ?, NULL, NULL)",
+                    (tid, BRONZE_ROUND, losers[0], losers[1])
+                )
+            else:
+                con.execute(
+                    "UPDATE ko_spiele SET p1_id=?, p2_id=? WHERE id=?",
+                    (losers[0], losers[1], int(bron["id"]))
+                )
+            con.commit()
+
+    # ---------------- Laden ----------------
     def _load_turniere(self):
         self.cbo_turnier.blockSignals(True)
         self.cbo_turnier.clear()
@@ -139,11 +223,24 @@ class KOPhaseView(QWidget):
         total_qual = None
 
         if tid:
-            self._rounds = fetch_ko_rounds(tid)
+            # Runden laden und "99" (Bronze) aus der normalen Liste ENTFERNEN
+            try:
+                fetched = fetch_ko_rounds(tid)
+                self._rounds = [int(r) for r in fetched if int(r) != BRONZE_ROUND]
+            except Exception:
+                self._rounds = []
             total_qual = self._round1_total_qualifiers(tid)
+            # Bronze ggf. erzeugen, wenn HF-Verlierer feststehen
+            self._ensure_bronze_from_semis(tid, total_qual)
 
+        # Normale Runden (ohne 99) anzeigen
         for r in self._rounds:
             self.cbo_round.addItem(self._round_name_for(r, total_qual), r)
+
+        # Bronze als zusätzliche Auswahl anhängen, wenn vorhanden
+        if tid and self._bronze_exists(tid):
+            if self.cbo_round.findText("Bronze", Qt.MatchFlag.MatchExactly) == -1:
+                self.cbo_round.addItem("Bronze", BRONZE_ROUND)
 
         self.cbo_round.blockSignals(False)
         self._load_matches_only()
@@ -153,11 +250,14 @@ class KOPhaseView(QWidget):
         tid = self._current_turnier_id()
         self.tbl_matches.setRowCount(0)
         self._matches = []
-        if not tid or not self._rounds:
+        if not tid:
             return
         r_sel = self.cbo_round.currentData()
         if r_sel is None:
+            if not self._rounds:
+                return
             r_sel = self._rounds[0]
+
         matches = fetch_ko_matches(tid, r_sel)
         self._matches = matches[:]
         self.tbl_matches.setRowCount(len(matches))
@@ -172,20 +272,37 @@ class KOPhaseView(QWidget):
             self.tbl_matches.setItem(i, 3, i1)
             self.tbl_matches.setItem(i, 4, i2)
 
+    # ---- Final-Sieger ermitteln (Bronze ignorieren) ----
+    def _compute_final_champion_name(self, tid: int) -> str:
+        """Ermittelt den Sieger NUR aus der Final-Runde; liefert '' wenn nicht entscheidbar."""
+        if not tid:
+            return ""
+        total_qual = self._round1_total_qualifiers(tid)
+        final_idx = self._final_round_index(total_qual)
+        if final_idx is None:
+            return ""
+        try:
+            matches = fetch_ko_matches(tid, final_idx)
+        except Exception:
+            return ""
+        if not matches:
+            return ""
+        # Wir erwarten 1 Final-Spiel
+        _mid, _mno, p1, p2, s1, s2 = matches[0]
+        if s1 is None or s2 is None or s1 == s2:
+            return ""
+        try:
+            s1i = int(s1); s2i = int(s2)
+        except Exception:
+            return ""
+        return p1 if s1i > s2i else p2
+
     def _update_champion(self):
         tid = self._current_turnier_id()
-        if not tid:
-            self.lbl_champion.setText("")
-            return
-        champ = fetch_ko_champion(tid)
-        if champ:
-            self.lbl_champion.setText(f"🏆 Sieger: {champ[1]}")
-        else:
-            self.lbl_champion.setText("")
+        name = self._compute_final_champion_name(tid) if tid else ""
+        self.lbl_champion.setText(f"🏆 Sieger: {name}" if name else "")
 
-    # ------------------------------
-    # Aktionen
-    # ------------------------------
+    # ---------------- Aktionen ----------------
     def _confirm(self, title, msg) -> bool:
         ret = QMessageBox.question(
             self, title, msg,
@@ -279,7 +396,15 @@ class KOPhaseView(QWidget):
         if not tid:
             return
 
+        # Erkennen, ob aktuelle Auswahl Finale/Bronze ist
+        total_qual = self._round1_total_qualifiers(tid)
+        final_idx = self._final_round_index(total_qual) or -1
+        r_sel = self.cbo_round.currentData()
+        is_bronze_round = (r_sel == BRONZE_ROUND)
+        is_final_round = (r_sel == final_idx)
+
         changed = 0
+
         for r, (mid, _mno, _p1, _p2, _s1_old, _s2_old) in enumerate(self._matches):
             s1_txt = self.tbl_matches.item(r, 3).text() if self.tbl_matches.item(r, 3) else ""
             s2_txt = self.tbl_matches.item(r, 4).text() if self.tbl_matches.item(r, 4) else ""
@@ -301,8 +426,22 @@ class KOPhaseView(QWidget):
                                     f"Ungültiger Wert in Zeile {r+1}. Nur ganze Zahlen oder leer.")
                 return
 
-            save_ko_result_and_propagate(mid, s1, s2, tid)
-            changed += 1
+            try:
+                if is_bronze_round or is_final_round:
+                    # KEINE Propagation (Finale hat keinen Parent; Bronze sowieso nicht)
+                    with self._db() as con:
+                        con.execute("UPDATE ko_spiele SET s1=?, s2=? WHERE id=?", (s1, s2, mid))
+                        con.commit()
+                else:
+                    # alle anderen Runden: mit Propagation (Signatur inkl. turnier_id!)
+                    save_ko_result_and_propagate(mid, s1, s2, tid)
+                changed += 1
+            except Exception as e:
+                QMessageBox.critical(self, "Fehler beim Speichern", f"Match {mid}: {e}")
+                return
+
+        # Nach Speichern Bronze ggf. erzeugen/aktualisieren und neu laden
+        self._ensure_bronze_from_semis(tid, total_qual)
 
         QMessageBox.information(self, "OK", f"{changed} KO-Spiele gespeichert.")
         self._load_rounds_and_matches()
