@@ -1,0 +1,28 @@
+name: Build repo snapshot
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate snapshot
+        run: |
+          python .github/scripts/make_snapshot.py
+
+      - name: Commit snapshot
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update REPO_SNAPSHOT.md"
+          file_pattern: "REPO_SNAPSHOT.md"
