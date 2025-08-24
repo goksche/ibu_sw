@@ -6,6 +6,21 @@ Windows‑Desktop‑App zur Verwaltung von Dartturnieren inkl. Gruppen‑ und KO
 
 ---
 
+## Inhalt
+
+* [Highlights v0.9.2](#highlights-v092)
+* [Projektstruktur](#projektstruktur)
+* [Systemvoraussetzungen](#systemvoraussetzungen)
+* [Installation](#installation)
+* [Start](#start)
+* [Bedienung (Tabs)](#bedienung-tabs)
+* [Datenbank](#datenbank)
+* [Workflow – Kurz & knackig](#workflow--kurz--knackig)
+* [Build – EXE & Installer](#build--exe--installer)
+* [Release / Git‑Cheatsheet](#release--git-cheatsheet)
+* [Known Issues & Hinweise](#known-issues--hinweise)
+* [Lizenz & Support](#lizenz--support)
+
 ## Highlights v0.9.2
 
 * **Windows‑Installer** (Inno Setup)
