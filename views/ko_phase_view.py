@@ -47,7 +47,7 @@ class KOPhaseView(QWidget):
         self.cb_turnier.currentIndexChanged.connect(self._on_turnier_changed)
         top.addWidget(self.cb_turnier, 1)
 
-        top.addWidget(QLabel("Gesamt-Qualifikanten (2,4,8,16,...):"))
+        top.addWidget(QLabel("Gesamt-Qualifikanten (2,4,8,16,):"))
         self.sb_total = QSpinBox()
         self.sb_total.setRange(2, 128)
         self.sb_total.setSingleStep(2)
@@ -63,7 +63,8 @@ class KOPhaseView(QWidget):
         top.addWidget(self.btn_clear)
 
         self.btn_reload = QPushButton("Neu laden")
-        self.btn_reload.clicked.connect(self._reload_matches)
+        # WICHTIG: Turnierliste (Combo) neu laden – nicht nur Matches!
+        self.btn_reload.clicked.connect(self._reload_turniere_keep_selection)
         top.addWidget(self.btn_reload)
 
         # Runde + Sieger
@@ -97,9 +98,18 @@ class KOPhaseView(QWidget):
         bottom.addWidget(self.btn_save)
 
     # ------------------------------------------------------------------
+    # Lebenszyklus: beim Anzeigen Tab aktualisieren
+    # ------------------------------------------------------------------
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Bei jedem Anzeigen die Turnierliste auffrischen (Selektion beibehalten)
+        self._reload_turniere_keep_selection()
+
+    # ------------------------------------------------------------------
     # Laden
     # ------------------------------------------------------------------
     def _load_turniere(self):
+        """Erstbefuellung (wird auch in __init__ genutzt)."""
         self.cb_turnier.blockSignals(True)
         self.cb_turnier.clear()
         items = fetch_turniere()
@@ -110,6 +120,29 @@ class KOPhaseView(QWidget):
         if items:
             self.cb_turnier.setCurrentIndex(0)
             self._on_turnier_changed()
+
+    def _reload_turniere_keep_selection(self):
+        """Turnierliste neu laden und – falls möglich – die aktuelle Auswahl beibehalten."""
+        old_tid = self.cb_turnier.currentData()
+        self.cb_turnier.blockSignals(True)
+        self.cb_turnier.clear()
+
+        items = fetch_turniere()
+        tid_to_index = {}
+        for idx, (tid, name, datum, modus, _ms) in enumerate(items):
+            label = f"{datum} – {name} ({modus})".strip()
+            self.cb_turnier.addItem(label, tid)
+            tid_to_index[tid] = idx
+
+        self.cb_turnier.blockSignals(False)
+
+        # Auswahl wiederherstellen (falls vorhanden)
+        if old_tid in tid_to_index:
+            self.cb_turnier.setCurrentIndex(tid_to_index[old_tid])
+        elif items:
+            self.cb_turnier.setCurrentIndex(0)
+
+        self._on_turnier_changed()
 
     def _on_turnier_changed(self):
         self.current_tid = self.cb_turnier.currentData()

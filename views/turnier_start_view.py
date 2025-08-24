@@ -1,5 +1,5 @@
 import random
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -15,7 +15,7 @@ from database.models import (
 
 GROUP_MIN = 2
 GROUP_MAX = 8
-DELETE_PASSWORD = "6460"  # weiter für Überschreiben nötig, nicht für Löschen
+DELETE_PASSWORD = "6460"  # weiter fuer Ueberschreiben noetig, nicht fuer Loeschen
 
 
 class TurnierStartView(QWidget):
@@ -24,7 +24,7 @@ class TurnierStartView(QWidget):
         self.setObjectName("TurnierStartView")
 
         self._turnier_map: Dict[str, int] = {}          # Anzeige -> id
-        self._staged_groups: List[List[int]] = []       # temporär erzeugte Gruppen (IDs)
+        self._staged_groups: List[List[int]] = []       # temporaer erzeugte Gruppen (IDs)
         self._staged_group_names: List[str] = []
 
         root = QVBoxLayout(self)
@@ -39,22 +39,23 @@ class TurnierStartView(QWidget):
         self.cbo_turnier = QComboBox()
         row_sel.addWidget(self.cbo_turnier, 1)
         self.btn_reload = QPushButton("Neu laden")
-        self.btn_reload.clicked.connect(self._load_turniere)
+        # WICHTIG: ab jetzt immer mit Auswahl-Erhalt
+        self.btn_reload.clicked.connect(self._reload_turniere_keep_selection)
         row_sel.addWidget(self.btn_reload)
         root.addLayout(row_sel)
 
-        # --- Teilnehmer Listen (links: verfügbar / rechts: im Turnier) ---
+        # --- Teilnehmer Listen (links: verfuegbar / rechts: im Turnier) ---
         lists = QHBoxLayout()
 
         left_box = QVBoxLayout()
-        left_box.addWidget(QLabel("Verfügbare Teilnehmer"))
+        left_box.addWidget(QLabel("Verfuegbare Teilnehmer"))
         self.lst_available = QListWidget()
         self.lst_available.setSelectionMode(self.lst_available.SelectionMode.ExtendedSelection)
         left_box.addWidget(self.lst_available)
         lists.addLayout(left_box, 1)
 
         mid_btns = QVBoxLayout()
-        self.btn_add = QPushButton("→ Hinzufügen")
+        self.btn_add = QPushButton("→ Hinzufuegen")
         self.btn_add.clicked.connect(self._add_selected)
         mid_btns.addWidget(self.btn_add)
 
@@ -62,7 +63,7 @@ class TurnierStartView(QWidget):
         self.btn_remove.clicked.connect(self._remove_selected)
         mid_btns.addWidget(self.btn_remove)
 
-        self.btn_add_all = QPushButton("≫ Alle hinzufügen")
+        self.btn_add_all = QPushButton("≫ Alle hinzufuegen")
         self.btn_add_all.clicked.connect(self._add_all)
         mid_btns.addWidget(self.btn_add_all)
 
@@ -106,7 +107,7 @@ class TurnierStartView(QWidget):
         self.btn_save_groups = QPushButton("Gruppierung speichern")
         self.btn_save_groups.clicked.connect(self._save_groups)
         row_groups.addWidget(self.btn_save_groups)
-        self.btn_clear_groups = QPushButton("Gruppierung löschen")
+        self.btn_clear_groups = QPushButton("Gruppierung loeschen")
         self.btn_clear_groups.clicked.connect(self._clear_groups)
         row_groups.addWidget(self.btn_clear_groups)
         row_groups.addStretch()
@@ -122,9 +123,18 @@ class TurnierStartView(QWidget):
         self._load_turniere()
 
     # ------------------------
+    # Auto-Reload beim Anzeigen des Tabs
+    # ------------------------
+    def showEvent(self, event):
+        super().showEvent(event)
+        # JEDES Mal, wenn der Tab sichtbar wird: Turniere neu laden (Selektion behalten)
+        self._reload_turniere_keep_selection()
+
+    # ------------------------
     # Laden / UI
     # ------------------------
     def _load_turniere(self):
+        """Erstbefuellung ohne Auswahl-Erhalt (nur beim Konstruktor genutzt)."""
         self.cbo_turnier.blockSignals(True)
         self.cbo_turnier.clear()
         self._turnier_map.clear()
@@ -133,6 +143,32 @@ class TurnierStartView(QWidget):
             self._turnier_map[label] = tid
             self.cbo_turnier.addItem(label)
         self.cbo_turnier.blockSignals(False)
+
+        self._load_participants_lists()
+        self._load_group_preview()
+
+    def _reload_turniere_keep_selection(self):
+        """Turnierliste neu laden und – falls moeglich – die aktuelle Auswahl beibehalten."""
+        old_tid: Optional[int] = self._current_turnier_id()
+
+        self.cbo_turnier.blockSignals(True)
+        self.cbo_turnier.clear()
+        self._turnier_map.clear()
+
+        items = fetch_turniere()
+        tid_to_index: Dict[int, int] = {}
+        for idx, (tid, name, datum, modus, meisterschaft) in enumerate(items):
+            label = f"{datum} – {name} ({modus})"
+            self._turnier_map[label] = tid
+            self.cbo_turnier.addItem(label)
+            tid_to_index[tid] = idx
+
+        self.cbo_turnier.blockSignals(False)
+
+        if old_tid is not None and old_tid in tid_to_index:
+            self.cbo_turnier.setCurrentIndex(tid_to_index[old_tid])
+        elif items:
+            self.cbo_turnier.setCurrentIndex(0)
 
         self._load_participants_lists()
         self._load_group_preview()
@@ -225,7 +261,7 @@ class TurnierStartView(QWidget):
     def _save_tn_list(self):
         tid = self._current_turnier_id()
         if not tid:
-            QMessageBox.warning(self, "Fehler", "Kein Turnier ausgewählt.")
+            QMessageBox.warning(self, "Fehler", "Kein Turnier ausgewaehlt.")
             return
         ids = []
         for i in range(self.lst_in_tournament.count()):
@@ -262,26 +298,26 @@ class TurnierStartView(QWidget):
         self._staged_group_names = self._group_names(n_groups)
         self._load_group_preview()
         QMessageBox.information(self, "Vorschau erstellt",
-                                "Teilnehmer wurden vorläufig auf Gruppen verteilt.\n"
-                                "Bitte „Gruppierung speichern“, um zu übernehmen.")
+                                "Teilnehmer wurden vorlaeufig auf Gruppen verteilt.\n"
+                                "Bitte „Gruppierung speichern“, um zu uebernehmen.")
 
     def _save_groups(self):
         tid = self._current_turnier_id()
         if not tid:
-            QMessageBox.warning(self, "Fehler", "Kein Turnier ausgewählt.")
+            QMessageBox.warning(self, "Fehler", "Kein Turnier ausgewaehlt.")
             return
         if not self._staged_groups or not self._staged_group_names:
             QMessageBox.warning(self, "Fehler",
                                 "Keine Gruppierung in der Vorschau. Bitte zuerst „Auto verteilen“.")
             return
 
-        # Falls bereits eine Gruppierung existiert -> Passwort & Bestätigung
+        # Falls bereits eine Gruppierung existiert -> Passwort & Bestaetigung
         if has_grouping(tid):
             pw, ok = QInputDialog.getText(
                 self,
                 "Passwort erforderlich",
-                "Gruppierung überschreiben – Passwort eingeben:",
-                QLineEdit.EchoMode.Password  # <- KORREKT in PyQt6
+                "Gruppierung ueberschreiben – Passwort eingeben:",
+                QLineEdit.EchoMode.Password  # Korrekt in PyQt6
             )
             if not ok:
                 return
@@ -289,8 +325,8 @@ class TurnierStartView(QWidget):
                 QMessageBox.critical(self, "Fehler", "Falsches Passwort. Vorgang abgebrochen.")
                 return
             ret = QMessageBox.question(
-                self, "Überschreiben bestätigen",
-                "Bestehende Gruppierung wird gelöscht und neu gespeichert. Fortfahren?",
+                self, "Ueberschreiben bestaetigen",
+                "Bestehende Gruppierung wird geloescht und neu gespeichert. Fortfahren?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
@@ -306,18 +342,18 @@ class TurnierStartView(QWidget):
         self._load_group_preview()
 
     def _clear_groups(self):
-        """Gespeicherte Gruppierung löschen – OHNE Passwort, nur Bestätigung."""
+        """Gespeicherte Gruppierung loeschen – OHNE Passwort, nur Bestaetigung."""
         tid = self._current_turnier_id()
         if not tid:
-            QMessageBox.warning(self, "Fehler", "Kein Turnier ausgewählt.")
+            QMessageBox.warning(self, "Fehler", "Kein Turnier ausgewaehlt.")
             return
         if not has_grouping(tid):
             QMessageBox.information(self, "Hinweis", "Keine gespeicherte Gruppierung vorhanden.")
             return
 
         ret = QMessageBox.question(
-            self, "Löschen bestätigen",
-            "Gespeicherte Gruppierung wirklich löschen?",
+            self, "Loeschen bestaetigen",
+            "Gespeicherte Gruppierung wirklich loeschen?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
@@ -325,7 +361,7 @@ class TurnierStartView(QWidget):
             return
 
         clear_grouping(tid)
-        QMessageBox.information(self, "OK", "Gruppierung gelöscht.")
+        QMessageBox.information(self, "OK", "Gruppierung geloescht.")
         self._staged_groups = []
         self._staged_group_names = []
         self._load_group_preview()

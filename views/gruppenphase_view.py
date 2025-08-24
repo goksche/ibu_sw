@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict, Optional
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton, QHBoxLayout,
@@ -17,9 +17,9 @@ DELETE_PASSWORD = "6460"
 class GruppenphaseView(QWidget):
     def __init__(self):
         super().__init__()
-        self._turnier_map = {}  # Anzeige -> id
-        self._group_map = {}    # Anzeige -> id
-        self._matches = []      # Cache der aktuell geladenen Matches (für IDs)
+        self._turnier_map: Dict[str, int] = {}  # Anzeige -> id
+        self._group_map: Dict[str, int] = {}    # Anzeige -> id
+        self._matches = []      # Cache der aktuell geladenen Matches (fuer IDs)
 
         root = QVBoxLayout(self)
 
@@ -40,14 +40,15 @@ class GruppenphaseView(QWidget):
         row.addWidget(self.cbo_group, 1)
 
         self.btn_reload = QPushButton("Neu laden")
-        self.btn_reload.clicked.connect(self._load_turniere)
+        # WICHTIG: ab jetzt mit Auswahl-Erhalt
+        self.btn_reload.clicked.connect(self._reload_turniere_keep_selection)
         row.addWidget(self.btn_reload)
 
-        self.btn_generate = QPushButton("Plan erstellen/überschreiben")
+        self.btn_generate = QPushButton("Plan erstellen/ueberschreiben")
         self.btn_generate.clicked.connect(self._generate_plan)
         row.addWidget(self.btn_generate)
 
-        self.btn_clear = QPushButton("Plan löschen")
+        self.btn_clear = QPushButton("Plan loeschen")
         self.btn_clear.clicked.connect(self._clear_plan)
         row.addWidget(self.btn_clear)
 
@@ -83,15 +84,24 @@ class GruppenphaseView(QWidget):
         self._load_turniere()
 
     # ----------------------------------------------------------
+    # Auto-Reload beim Anzeigen des Tabs
+    # ----------------------------------------------------------
+    def showEvent(self, event):
+        super().showEvent(event)
+        # JEDES Mal, wenn der Tab sichtbar wird: Turniere neu laden (Selektion behalten)
+        self._reload_turniere_keep_selection()
+
+    # ----------------------------------------------------------
     # Laden
     # ----------------------------------------------------------
-    def _current_turnier_id(self):
+    def _current_turnier_id(self) -> Optional[int]:
         return self._turnier_map.get(self.cbo_turnier.currentText())
 
-    def _current_group_id(self):
+    def _current_group_id(self) -> Optional[int]:
         return self._group_map.get(self.cbo_group.currentText())
 
     def _load_turniere(self):
+        """Erstbefuellung ohne Auswahl-Erhalt (nur im Konstruktor)."""
         self.cbo_turnier.blockSignals(True)
         self.cbo_turnier.clear()
         self._turnier_map.clear()
@@ -100,6 +110,31 @@ class GruppenphaseView(QWidget):
             self._turnier_map[label] = tid
             self.cbo_turnier.addItem(label)
         self.cbo_turnier.blockSignals(False)
+        self._load_groups_and_matches()
+
+    def _reload_turniere_keep_selection(self):
+        """Turnierliste neu laden und – falls moeglich – die aktuelle Auswahl beibehalten."""
+        old_tid: Optional[int] = self._current_turnier_id()
+
+        self.cbo_turnier.blockSignals(True)
+        self.cbo_turnier.clear()
+        self._turnier_map.clear()
+
+        items = fetch_turniere()
+        tid_to_index: Dict[int, int] = {}
+        for idx, (tid, name, datum, modus, _ms) in enumerate(items):
+            label = f"{datum} – {name} ({modus})"
+            self._turnier_map[label] = tid
+            self.cbo_turnier.addItem(label)
+            tid_to_index[tid] = idx
+
+        self.cbo_turnier.blockSignals(False)
+
+        if old_tid is not None and old_tid in tid_to_index:
+            self.cbo_turnier.setCurrentIndex(tid_to_index[old_tid])
+        elif items:
+            self.cbo_turnier.setCurrentIndex(0)
+
         self._load_groups_and_matches()
 
     def _load_groups_and_matches(self):
@@ -131,7 +166,7 @@ class GruppenphaseView(QWidget):
         self._load_table_into_table(table)
 
     # ----------------------------------------------------------
-    # UI-Füller
+    # UI-Fueller
     # ----------------------------------------------------------
     def _load_matches_into_table(self, matches):
         self._matches = matches[:]  # (id, runde, match_no, p1, p2, s1, s2)
@@ -163,7 +198,7 @@ class GruppenphaseView(QWidget):
     # Aktionen
     # ----------------------------------------------------------
     def _confirm_or_password(self, title: str, msg: str) -> bool:
-        """Nur Bestätigung (Yes/No)."""
+        """Nur Bestaetigung (Yes/No)."""
         ret = QMessageBox.question(
             self, title, msg,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -180,23 +215,23 @@ class GruppenphaseView(QWidget):
     def _generate_plan(self):
         tid = self._current_turnier_id()
         if not tid:
-            QMessageBox.warning(self, "Fehler", "Kein Turnier ausgewählt.")
+            QMessageBox.warning(self, "Fehler", "Kein Turnier ausgewaehlt.")
             return
 
         if has_group_matches(tid):
-            # Wenn bereits Ergebnisse existieren -> Passwort nötig
+            # Wenn bereits Ergebnisse existieren -> Passwort noetig
             if has_recorded_group_results(tid):
-                ok_pw = self._ask_password("Passwort erforderlich", "Plan überschreiben – Passwort:")
+                ok_pw = self._ask_password("Passwort erforderlich", "Plan ueberschreiben – Passwort:")
                 if not ok_pw:
                     QMessageBox.critical(self, "Abbruch", "Falsches Passwort oder abgebrochen.")
                     return
-                ok = self._confirm_or_password("Überschreiben bestätigen",
-                                               "Vorhandene Gruppenspiele werden gelöscht und neu erzeugt. Fortfahren?")
+                ok = self._confirm_or_password("Ueberschreiben bestaetigen",
+                                               "Vorhandene Gruppenspiele werden geloescht und neu erzeugt. Fortfahren?")
                 if not ok:
                     return
             else:
-                # Keine Ergebnisse -> nur Bestätigung
-                ok = self._confirm_or_password("Überschreiben bestätigen",
+                # Keine Ergebnisse -> nur Bestaetigung
+                ok = self._confirm_or_password("Ueberschreiben bestaetigen",
                                                "Vorhandene Gruppenspiele (ohne Ergebnisse) werden ersetzt. Fortfahren?")
                 if not ok:
                     return
@@ -208,31 +243,31 @@ class GruppenphaseView(QWidget):
     def _clear_plan(self):
         tid = self._current_turnier_id()
         if not tid:
-            QMessageBox.warning(self, "Fehler", "Kein Turnier ausgewählt.")
+            QMessageBox.warning(self, "Fehler", "Kein Turnier ausgewaehlt.")
             return
         if not has_group_matches(tid):
             QMessageBox.information(self, "Hinweis", "Kein Spielplan vorhanden.")
             return
 
         if has_recorded_group_results(tid):
-            # Mit Ergebnissen -> Passwort + Bestätigung
-            ok_pw = self._ask_password("Passwort erforderlich", "Plan löschen – Passwort:")
+            # Mit Ergebnissen -> Passwort + Bestaetigung
+            ok_pw = self._ask_password("Passwort erforderlich", "Plan loeschen – Passwort:")
             if not ok_pw:
                 QMessageBox.critical(self, "Abbruch", "Falsches Passwort oder abgebrochen.")
                 return
-            ok = self._confirm_or_password("Löschen bestätigen",
-                                           "Alle Gruppenspiele (mit Ergebnissen) werden gelöscht. Fortfahren?")
+            ok = self._confirm_or_password("Loeschen bestaetigen",
+                                           "Alle Gruppenspiele (mit Ergebnissen) werden geloescht. Fortfahren?")
             if not ok:
                 return
         else:
-            # Ohne Ergebnisse -> nur Bestätigung
-            ok = self._confirm_or_password("Löschen bestätigen",
-                                           "Alle Gruppenspiele (ohne Ergebnisse) werden gelöscht. Fortfahren?")
+            # Ohne Ergebnisse -> nur Bestaetigung
+            ok = self._confirm_or_password("Loeschen bestaetigen",
+                                           "Alle Gruppenspiele (ohne Ergebnisse) werden geloescht. Fortfahren?")
             if not ok:
                 return
 
         clear_group_matches(tid)
-        QMessageBox.information(self, "OK", "Spielplan gelöscht.")
+        QMessageBox.information(self, "OK", "Spielplan geloescht.")
         self._load_groups_and_matches()
 
     def _save_results(self):
@@ -240,7 +275,7 @@ class GruppenphaseView(QWidget):
             QMessageBox.information(self, "Hinweis", "Kein Spiel geladen.")
             return
 
-        # Werte aus Tabelle übernehmen
+        # Werte aus Tabelle uebernehmen
         changed = 0
         for r, (mid, _runde, _mno, _p1, _p2, _s1_old, _s2_old) in enumerate(self._matches):
             s1_txt = self.tbl_matches.item(r, 3).text() if self.tbl_matches.item(r, 3) else ""
@@ -260,7 +295,7 @@ class GruppenphaseView(QWidget):
                 s2 = parse(s2_txt)
             except ValueError:
                 QMessageBox.warning(self, "Eingabefehler",
-                                    f"Ungültiger Wert in Zeile {r+1}. Nur ganze Zahlen oder leer.")
+                                    f"Ungueltiger Wert in Zeile {r+1}. Nur ganze Zahlen oder leer.")
                 return
 
             save_match_result(mid, s1, s2)
