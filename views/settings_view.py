@@ -1,144 +1,207 @@
-# views/settings_view.py
-# v0.9.2 – Tab „Einstellungen“: Backups + Export-Ordner
-
 from __future__ import annotations
-import os
-import sys
+import shutil
+import sqlite3
+from pathlib import Path
+from datetime import datetime
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QUrl
-from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QGroupBox, QGridLayout, QLabel, QPushButton,
-    QFileDialog, QHBoxLayout
+    QWidget, QVBoxLayout, QLabel, QHBoxLayout, QPushButton, QFileDialog,
+    QLineEdit, QMessageBox, QGroupBox, QTabWidget
 )
 
-from utils.backup import create_backup, list_backups, restore_backup, BACKUP_DIR
-from utils.settings import get_export_dir, set_export_dir, reset_export_dir_to_default
-from utils.ui import show_info, show_error, ask_yes_no
+APP_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = APP_ROOT / "data"
+DB_FILE = DATA_DIR / "ibu.sqlite"
+EXPORTS_DIR_DEFAULT = APP_ROOT / "exports"
+BACKUPS_DIR = APP_ROOT / "backups"
+DELETE_PASSWORD = "6460"
+
+# Optionale Utils (werden benutzt, wenn vorhanden)
+try:
+    from utils.settings import get_export_dir as _get_export_dir, set_export_dir as _set_export_dir, reset_export_dir as _reset_export_dir
+except Exception:
+    _get_export_dir = _set_export_dir = _reset_export_dir = None
+
+try:
+    from utils.backup import create_backup as _create_backup, restore_backup as _restore_backup
+except Exception:
+    _create_backup = _restore_backup = None
+
+# ---------------------------------------------
+# Boards-Widget: dynamischer Import mit Fallback
+# ---------------------------------------------
+from PyQt6.QtWidgets import QWidget as _QW
+
+def _make_boards_widget(parent: _QW) -> _QW:
+    """Versucht, BoardsSettingsWidget aus settings_boards zu laden.
+    Fällt auf ein Hinweis-Widget zurück, wenn das Modul fehlt.
+    """
+    try:
+        import importlib
+        pkg = __package__  # 'views'
+        mod = importlib.import_module(f"{pkg}.settings_boards") if pkg else importlib.import_module("views.settings_boards")
+        cls = getattr(mod, "BoardsSettingsWidget")
+        return cls(parent)
+    except Exception as e:
+        box = QGroupBox("Dartscheiben")
+        v = QVBoxLayout(box)
+        lab = QLabel(
+            "Dartscheiben-Verwaltung nicht geladen.\n"
+            "Bitte Datei 'views/settings_boards.py' hinzufügen.\n\n"
+            f"Fehler: {e}"
+        )
+        lab.setStyleSheet("color:#a00;")
+        v.addWidget(lab)
+        return box
+
+
+def _ensure_dirs():
+    EXPORTS_DIR_DEFAULT.mkdir(parents=True, exist_ok=True)
+    BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if not DB_FILE.exists():
+        con = sqlite3.connect(DB_FILE.as_posix()); con.close()
+
 
 class SettingsView(QWidget):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setObjectName("SettingsView")
+        _ensure_dirs()
         self._build_ui()
-        self._refresh()
+        self._load()
 
-    def _build_ui(self) -> None:
+    # --------------------------------------------------------------
+    # UI
+    # --------------------------------------------------------------
+    def _build_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(10)
 
-        # --- Backups -----------------------------------------------------
-        gb_bu = QGroupBox("Backups der Datenbank")
-        grid_bu = QGridLayout(gb_bu)
+        title = QLabel("Einstellungen (v0.9.4)")
+        title.setStyleSheet("font-size:18px; font-weight:600; margin-bottom:6px;")
+        root.addWidget(title)
 
-        self.lbl_last = QLabel("-")
-        self.lbl_last.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.tabs = QTabWidget()
+        root.addWidget(self.tabs, 1)
 
-        self.btn_bu_create = QPushButton("Backup erstellen")
-        self.btn_bu_restore = QPushButton("Backup wiederherstellen …")
-        self.btn_bu_open = QPushButton("Backup-Ordner öffnen")
+        # Tab 1: Allgemein (Exportordner + Backup)
+        self.tab_general = QWidget(); v1 = QVBoxLayout(self.tab_general)
+        self.tabs.addTab(self.tab_general, "Allgemein")
 
-        grid_bu.addWidget(QLabel("Letztes Backup:"), 0, 0)
-        grid_bu.addWidget(self.lbl_last, 0, 1, 1, 3)
-        grid_bu.addWidget(self.btn_bu_create, 1, 1)
-        grid_bu.addWidget(self.btn_bu_restore, 1, 2)
-        grid_bu.addWidget(self.btn_bu_open, 1, 3)
-
-        self.btn_bu_create.clicked.connect(self._on_backup_create)
-        self.btn_bu_restore.clicked.connect(self._on_backup_restore)
-        self.btn_bu_open.clicked.connect(self._on_open_backup_dir)
-
-        # --- Export-Verzeichnis ------------------------------------------
-        gb_ex = QGroupBox("Export-Einstellungen")
-        grid_ex = QGridLayout(gb_ex)
-
-        self.lbl_export_dir = QLabel("-")
-        self.lbl_export_dir.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.btn_change_export = QPushButton("Export-Ordner ändern …")
-        self.btn_reset_export = QPushButton("Zurücksetzen")
-
-        grid_ex.addWidget(QLabel("Export-Ordner:"), 0, 0)
-        grid_ex.addWidget(self.lbl_export_dir, 0, 1, 1, 2)
-        grid_ex.addWidget(self.btn_change_export, 1, 1)
-        grid_ex.addWidget(self.btn_reset_export, 1, 2)
-
-        self.btn_change_export.clicked.connect(self._on_change_export)
-        self.btn_reset_export.clicked.connect(self._on_reset_export)
-
-        # --- Zusammenbau --------------------------------------------------
-        root.addWidget(gb_bu)
-        root.addWidget(gb_ex)
-        root.addStretch(1)
-
-    def _refresh(self) -> None:
-        # Backups
-        items = list_backups()
-        if items:
-            p, mtime = items[0]
-            from datetime import datetime
-            self.lbl_last.setText(f"{os.path.basename(p)} – {datetime.fromtimestamp(mtime).strftime('%d.%m.%Y %H:%M')}")
-        else:
-            self.lbl_last.setText("— noch kein Backup vorhanden —")
         # Export-Ordner
-        self.lbl_export_dir.setText(get_export_dir())
+        g_export = QGroupBox("Export-Ordner")
+        v1.addWidget(g_export)
+        ge = QVBoxLayout(g_export)
+        row = QHBoxLayout(); ge.addLayout(row)
+        row.addWidget(QLabel("Pfad:"))
+        self.ed_export = QLineEdit(); self.ed_export.setReadOnly(True)
+        row.addWidget(self.ed_export, 1)
+        self.btn_pick_export = QPushButton("Ordner wählen")
+        self.btn_pick_export.clicked.connect(self._pick_export_dir)
+        row.addWidget(self.btn_pick_export)
+        self.btn_reset_export = QPushButton("Zurücksetzen")
+        self.btn_reset_export.clicked.connect(self._reset_export_dir)
+        row.addWidget(self.btn_reset_export)
 
-    # --- Slots ------------------------------------------------------------
+        # Backup
+        g_backup = QGroupBox("Backup & Restore")
+        v1.addWidget(g_backup)
+        gb = QHBoxLayout(g_backup)
+        self.btn_backup = QPushButton("Backup erstellen")
+        self.btn_backup.clicked.connect(self._do_backup)
+        gb.addWidget(self.btn_backup)
+        self.btn_restore = QPushButton("Backup wiederherstellen")
+        self.btn_restore.clicked.connect(self._do_restore)
+        gb.addWidget(self.btn_restore)
+        gb.addStretch(1)
 
-    def _on_backup_create(self) -> None:
-        try:
-            path = create_backup()
-            show_info(self, "Backup", f"Backup erstellt:\n{path}")
-            self._refresh()
-        except Exception as e:
-            show_error(self, "Fehler beim Backup", f"{type(e).__name__}: {e}")
+        v1.addStretch(1)
 
-    def _on_backup_restore(self) -> None:
-        directory = BACKUP_DIR
-        os.makedirs(directory, exist_ok=True)
-        fname, _ = QFileDialog.getOpenFileName(self, "Backup auswählen", directory, "SQLite (*.sqlite)")
-        if not fname:
+        # Tab 2: Dartscheiben – über dyn. Import
+        self.tab_boards = QWidget(); v2 = QVBoxLayout(self.tab_boards)
+        self.tabs.addTab(self.tab_boards, "Dartscheiben")
+        v2.addWidget(_make_boards_widget(self.tab_boards))
+
+    # --------------------------------------------------------------
+    # Load
+    # --------------------------------------------------------------
+    def _load(self):
+        self.ed_export.setText(self._get_export_dir().as_posix())
+
+    # --------------------------------------------------------------
+    # Export-Ordner
+    # --------------------------------------------------------------
+    def _get_export_dir(self) -> Path:
+        if _get_export_dir:
+            try:
+                p = Path(_get_export_dir())
+                if p: return p
+            except Exception:
+                pass
+        return EXPORTS_DIR_DEFAULT
+
+    def _set_export_dir(self, p: Path) -> None:
+        if _set_export_dir:
+            try:
+                _set_export_dir(p.as_posix()); return
+            except Exception:
+                pass
+        # Fallback: nichts persistieren, nur UI
+
+    def _reset_export_dir(self):
+        if _reset_export_dir:
+            try:
+                _reset_export_dir()
+            except Exception:
+                pass
+        self.ed_export.setText(EXPORTS_DIR_DEFAULT.as_posix())
+
+    def _pick_export_dir(self):
+        p = QFileDialog.getExistingDirectory(self, "Export-Ordner wählen", self._get_export_dir().as_posix())
+        if not p:
             return
-        if not ask_yes_no(self, "Wiederherstellen bestätigen",
-                          "Das aktuelle Datenbankfile wird durch das gewählte Backup ersetzt.\n"
-                          "Es wird zuvor eine Sicherheitskopie erstellt.\n\nFortfahren?"):
+        pth = Path(p)
+        pth.mkdir(parents=True, exist_ok=True)
+        self._set_export_dir(pth)
+        self.ed_export.setText(pth.as_posix())
+
+    # --------------------------------------------------------------
+    # Backup
+    # --------------------------------------------------------------
+    def _do_backup(self):
+        BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+        if _create_backup:
+            try:
+                _create_backup()
+                QMessageBox.information(self, "Backup", "Backup wurde erstellt.")
+                return
+            except Exception as e:
+                QMessageBox.warning(self, "Backup", f"Interner Backup-Helper fehlgeschlagen: {e}. Fallback wird genutzt.")
+        # Fallback: DB-Datei kopieren
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dst = BACKUPS_DIR / f"ibu_backup_{ts}.sqlite"
+        try:
+            shutil.copy2(DB_FILE, dst)
+            QMessageBox.information(self, "Backup", f"Backup gespeichert: {dst.name}")
+        except Exception as e:
+            QMessageBox.critical(self, "Backup", f"Fehlgeschlagen: {e}")
+
+    def _do_restore(self):
+        if _restore_backup:
+            try:
+                _restore_backup()
+                QMessageBox.information(self, "Restore", "Backup wurde wiederhergestellt.")
+                return
+            except Exception as e:
+                QMessageBox.warning(self, "Restore", f"Interner Restore-Helper fehlgeschlagen: {e}. Fallback wird genutzt.")
+        # Fallback: Datei auswählen und über DB kopieren
+        fn, _ = QFileDialog.getOpenFileName(self, "Backup wählen", BACKUPS_DIR.as_posix(), "DB/Backup (*.sqlite *.db *.*)")
+        if not fn:
             return
+        src = Path(fn)
         try:
-            safety = restore_backup(fname)
-            show_info(self, "Backup wiederhergestellt",
-                      f"Die Datenbank wurde aus dem Backup wiederhergestellt.\n"
-                      f"Sicherheitskopie: {safety}\n\n"
-                      f"Es kann notwendig sein, die Anwendung neu zu starten.")
-            self._refresh()
+            shutil.copy2(src, DB_FILE)
+            QMessageBox.information(self, "Restore", f"Datenbank aus {src.name} wiederhergestellt.")
         except Exception as e:
-            show_error(self, "Fehler beim Wiederherstellen", f"{type(e).__name__}: {e}")
-
-    def _on_open_backup_dir(self) -> None:
-        directory = BACKUP_DIR
-        os.makedirs(directory, exist_ok=True)
-        try:
-            if sys.platform.startswith("win"):
-                os.startfile(directory)  # type: ignore[attr-defined]
-            else:
-                QDesktopServices.openUrl(QUrl.fromLocalFile(directory))
-        except Exception as e:
-            show_error(self, "Fehler", f"{type(e).__name__}: {e}")
-
-    def _on_change_export(self) -> None:
-        current = get_export_dir()
-        new_dir = QFileDialog.getExistingDirectory(self, "Export-Ordner wählen", current)
-        if not new_dir:
-            return
-        try:
-            set_export_dir(new_dir)
-            self._refresh()
-        except Exception as e:
-            show_error(self, "Fehler", f"{type(e).__name__}: {e}")
-
-    def _on_reset_export(self) -> None:
-        try:
-            reset_export_dir_to_default()
-            self._refresh()
-        except Exception as e:
-            show_error(self, "Fehler", f"{type(e).__name__}: {e}")
+            QMessageBox.critical(self, "Restore", f"Fehlgeschlagen: {e}")

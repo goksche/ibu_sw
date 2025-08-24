@@ -1,14 +1,14 @@
-# IBU Turniere – Dart Turnier Verwaltungs Tool (v0.9.3)
+# IBU Turniere – Dart Turnier Verwaltungs Tool (v0.9.4)
 
-Windows-Desktop-App zur Verwaltung von Dartturnieren inkl. Gruppen- und KO-Phase, **Bronze-Spiel**, **Meisterschaften** und **Ranglisten**. GUI mit **PyQt6**, lokale Datenhaltung in **SQLite** (`./data/ibu.sqlite`).
+Windows‑Desktop‑App zur Verwaltung von Dartturnieren inkl. Gruppen‑ und KO‑Phase, **Bronze‑Spiel**, **Meisterschaften** und **Ranglisten**. GUI mit **PyQt6**, lokale Datenhaltung in **SQLite** (`./data/ibu.sqlite`).
 
-> **Sicherheit:** Alle **Loeschaktionen** (Turniere, Teilnehmer, Meisterschaften, Plaene) sind mit dem Passwort **6460** geschuetzt.
+> **Sicherheit:** Alle **Löschaktionen** (Turniere, Teilnehmer, Meisterschaften, Pläne, Dartscheiben) sind mit dem Passwort **6460** geschützt. In Spielplänen sind **nur Ergebnisse (S1/S2)** editierbar – Spielerfelder sind gesperrt.
 
 ---
 
 ## Inhalt
 
-* [Highlights v0.9.3](#highlights-v093)
+* [Highlights v0.9.4](#highlights-v094)
 * [Projektstruktur](#projektstruktur)
 * [Systemvoraussetzungen](#systemvoraussetzungen)
 * [Installation](#installation)
@@ -17,24 +17,46 @@ Windows-Desktop-App zur Verwaltung von Dartturnieren inkl. Gruppen- und KO-Phase
 * [Datenbank](#datenbank)
 * [Workflow – Kurz & knackig](#workflow--kurz--knackig)
 * [Build – EXE & Installer](#build--exe--installer)
-* [Release / Git-Cheatsheet](#release--git-cheatsheet)
+* [Release / Git‑Cheatsheet](#release--git-cheatsheet)
 * [Known Issues & Hinweise](#known-issues--hinweise)
 * [Lizenz & Support](#lizenz--support)
 
-## Highlights v0.9.3
+## Highlights v0.9.4
 
-* **Auto-Reload der Turnierlisten**
+**Gruppenphase – Ranglisten & Tie‑Breaks**
 
-  * Tabs **Turnier starten**, **Gruppenphase** und **KO-Phase** laden Turniere **automatisch** neu, sobald der Tab angezeigt wird.
-  * **Neu erstellte** oder geaenderte Turniere sind **sofort** sichtbar – kein manuelles „Neu laden“ mehr noetig.
-* **Refresh behaelt Auswahl**
+* **Ranglisten‑Modus wählbar**:
 
-  * „Neu laden“ in den genannten Tabs behaelt die aktuelle Turnier-/Runden-Auswahl, kein Zurueckspringen.
-* **KO-Phase Robustheit**
+  * **Punkte** (Sieg = 3, Niederlage = 0),
+  * **Differenz** (Leg‑Differenz),
+  * **Siege** (Anzahl Siege).
+* **Regeln bei Punktgleichheit** (nur Spiele **innerhalb** der betroffenen Spieler werden berücksichtigt – *3er‑Tabelle*)
 
-  * Bronze-Spiel (intern `runde=99`) bleibt automatisch, Siegeranzeige stabil aus dem **Finale**.
+  * Modus **Punkte**: zuerst **Differenz**, dann **Direktbegegnung**.
+  * Modus **Differenz**: **Direktbegegnung**.
+  * Modus **Siege**: **Punkte** → **Differenz** → **Direktbegegnung**.
+* **Fallback „Stichmatch“**: Wenn nach allen Regeln weiterhin Gleichstand, wird nach **Ergebnisse speichern** ein Hinweis mit **Turnier & Gruppe** angezeigt (kein Popup beim Start).
 
-> Vorversionen: v0.9.2 (Backups & Einstellungen), v0.9.1 (PDF-Fix), v0.9.0 (Exporte), v0.8 (Meisterschafts-Rangliste & Bronze-Spiel).
+**KO‑Phase – Runden & BYEs**
+
+* **4 Qualifikanten** starten automatisch im **Halbfinale** (Rundenbezeichnung wird **dynamisch** aus der Matchanzahl ermittelt).
+* **6 Teilnehmer**: Automatisch **8er‑Bracket** mit **2 zufälligen BYEs** im Viertelfinale; erste Runde erhält sofort eine faire **Dartscheiben‑Zuweisung**.
+* **Bronze‑Spiel** erscheint automatisch, sobald **beide Halbfinals** entschieden sind (Rundenauswahl *„Bronze“*, intern `runde=99`).
+
+**Dartscheiben – Verwaltung & faire Zuweisung**
+
+* Neues Register **Einstellungen → Dartscheiben**: Nummer, Name, Aktiv‑Status (Löschen mit PW **6460**).
+* **Zuweisung** in **Gruppenphase** und **KO‑Phase** per Button („Scheiben neu verteilen“ / „für Runde zuweisen“).
+* **Faire Verteilung**: Historie über **alle Turnierspiele** (Gruppen + KO) wird berücksichtigt → alle Spieler nutzen die Boards möglichst gleichmäßig.
+* **Exporte** enthalten die zugewiesene **Dartscheibe** je Spiel.
+
+**Bedienung & Robustheit**
+
+* In Spielplänen sind nur **S1/S2** editierbar; **Unentschieden** sind nicht erlaubt.
+* Keine Lärm‑Popups beim Laden; Hinweise erst nach Nutzeraktionen.
+* DB‑Kompatibilität: Spalten `spieltag`/**`runde`**, `sets1/sets2`/**`s1/s2`** werden automatisch erkannt.
+
+> Vorversionen: v0.9.3 (Bugfixes Turnier/KO‑Register & Initial‑Ladeverhalten), v0.9.2 (Backups & Einstellungen), v0.9.1 (PDF‑Fix), v0.9.0 (Exporte), v0.8 (Meisterschafts‑Rangliste & Bronze‑Spiel).
 
 ---
 
@@ -42,19 +64,19 @@ Windows-Desktop-App zur Verwaltung von Dartturnieren inkl. Gruppen- und KO-Phase
 
 ```
 ibu_sw/
-├─ data/                 # SQLite-DB (ibu.sqlite) – wird automatisch angelegt
-├─ backups/              # Backups (v0.9.2+)
+├─ data/                 # SQLite‑DB (ibu.sqlite) – wird automatisch angelegt
+├─ backups/              # Backups
 ├─ exports/              # Exportziel (anpassbar in Einstellungen)
 ├─ build/
-│  ├─ build_exe.bat      # PyInstaller Build-Skript (OneFile EXE)
+│  ├─ build_exe.bat      # PyInstaller Build‑Skript (OneFile EXE)
 │  └─ installer.iss      # Inno Setup Script (Installer)
 ├─ database/
 │  └─ models.py          # gesamte Datenlogik/SQL
 ├─ utils/
 │  ├─ exporter.py        # CSV/PDF Exporte (ohne externe Libs)
 │  ├─ backup.py          # Backup/Restore
-│  ├─ settings.py        # App-Settings (Export-Ordner)
-│  └─ ui.py              # MessageBox-Helfer
+│  ├─ settings.py        # App‑Settings (Export‑Ordner)
+│  └─ ui.py              # MessageBox‑Helfer
 ├─ views/
 │  ├─ main_window.py
 │  ├─ teilnehmer_view.py
@@ -63,8 +85,9 @@ ibu_sw/
 │  ├─ gruppenphase_view.py
 │  ├─ ko_phase_view.py
 │  ├─ export_view.py
-│  └─ settings_view.py
-└─ main.py               # Einstiegspunkt (setzt Pfade auch im EXE-Build)
+│  ├─ settings_view.py
+│  └─ settings_boards.py # NEU: Dartscheiben‑Verwaltung (Einstellungen)
+└─ main.py               # Einstiegspunkt (setzt Pfade auch im EXE‑Build)
 ```
 
 ---
@@ -72,8 +95,8 @@ ibu_sw/
 ## Systemvoraussetzungen
 
 * Windows 10/11
-* (Nur fuer Source-Run/Build) Python **3.10+**
-* Pip-Pakete: **PyQt6** (alles andere nur Stdlib)
+* (Nur für Source‑Run/Build) Python **3.10+**
+* Pip‑Pakete: **PyQt6** (alles andere nur Stdlib)
 
 ---
 
@@ -81,12 +104,12 @@ ibu_sw/
 
 ### A) Mit Installer (empfohlen)
 
-* `build/output/IBU_Turniere_v0.9.3_setup.exe` ausfuehren.
-* Start ueber Startmenue/Shortcut **IBU Turniere**.
+* `build/output/IBU_Turniere_v0.9.4_setup.exe` ausführen.
+* Start über Startmenü/Shortcut **IBU Turniere**.
 
 ### B) Portable EXE
 
-* `dist/IBU Turniere.exe` direkt starten (keine Installation noetig).
+* `dist/IBU Turniere.exe` direkt starten (keine Installation nötig).
 
 ### C) Aus dem Quellcode (Entwicklung)
 
@@ -102,8 +125,8 @@ ibu_sw/
 ## Start
 
 ```bash
-# im aktivierten venv (Quellcode-Modus)
-python main.py
+  # im aktivierten venv (Quellcode-Modus)
+  python main.py
 ```
 
 Beim ersten Start wird `./data/ibu.sqlite` automatisch erstellt.
@@ -114,77 +137,85 @@ Beim ersten Start wird `./data/ibu.sqlite` automatisch erstellt.
 
 ### 1) Turniere
 
-* **CRUD**: Turniere anlegen/aendern/loeschen (Loeschen mit PW **6460**).
+* **CRUD**: Turniere anlegen/ändern/löschen (Löschen mit PW **6460**).
 * Felder: *Name*, *Datum*, *Modus* (Gruppen, KO, Gruppen+KO), *Meisterschaftsrelevant*.
 
 ### 2) Teilnehmer
 
 * **Globales CRUD** + **Zuweisung** zu einem Turnier (ersetzt bestehende Liste).
-* Loeschen mit PW **6460**.
+* Löschen mit PW **6460**.
 
 ### 3) Turnier starten
 
-* Spieler einem Turnier zuweisen, Gruppen (A, B, …) anlegen/fuellen, speichern.
-* **Neu**: Turnierliste aktualisiert sich **automatisch** beim Oeffnen des Tabs; „Neu laden“ behaelt die Auswahl.
+* Spieler einem Turnier zuweisen, Gruppen (A, B, …) anlegen/füllen, speichern.
 
 ### 4) Gruppenphase
 
-* **Round-Robin** generieren, Ergebnisse eintragen.
-* **Ueberschreiben/Loeschen** des Plans nur, wenn **keine** Ergebnisse vorliegen.
-* **Neu**: Turnierliste aktualisiert sich **automatisch** beim Oeffnen des Tabs; „Neu laden“ behaelt die Auswahl.
+* **Round‑Robin** generieren, Ergebnisse eintragen (**nur S1/S2 editierbar**).
+* **Ranglisten‑Modus**: Punkte / Differenz / Siege wählbar.
+* **Tie‑Breaks** je Modus (inkl. **3er‑Tabelle**), **Fallback Stichmatch**. Hinweis **erst nach Speichern**.
+* **Scheiben neu verteilen**: faire, turnierweite Board‑Verteilung.
+* **Plan löschen/überschreiben** nur ohne Ergebnisse; **Löschen mit PW 6460**.
 
-### 5) KO-Phase
+### 5) KO‑Phase
 
-* Qualifikanten: 2/4/8/16/…
-* **Seeding**: A1–B4, A2–B3, A3–B2, A4–B1 (mehr Gruppen analog).
+* Start abhängig von Qualifikanten: 4 ⇒ **Halbfinale**, 8 ⇒ **Viertelfinale**, … (Anzeige **dynamisch**).
+* **6 Teilnehmer**: 8er‑Baum + **2 BYEs** (zufällig) im Viertelfinale.
 * Ergebnisse speichern → **Sieger werden automatisch weitergetragen**.
-* **Bronze-Spiel** erscheint automatisch, sobald **beide Halbfinals** entschieden sind (in der Runden-Auswahl als *„Bronze“*; intern `runde=99`).
-* Button **„KO-Plan loeschen“** (PW 6460).
+* **Bronze‑Spiel** erscheint automatisch (Runde *„Bronze“* / `99`).
+* Button **„KO‑Plan löschen“** (PW 6460).
 * **Champion** wird **nur** aus dem **Finale** ermittelt.
-* **Neu**: Turnierliste aktualisiert sich **automatisch** beim Oeffnen des Tabs; „Neu laden“ behaelt die Auswahl.
+* **Scheiben zuweisen**: faire Zuweisung pro Runde.
 
 ### 6) Meisterschaften
 
-* **CRUD** (Loeschen mit PW **6460**), Turniere per Checkbox zuweisen.
-* Punkteschema bearbeiten oder **„Standard-Schema“** anwenden (1=30, 2=24, 3=18, 4=15, **ab 5=5**).
-* **Rangliste**: *alle* Spieler aus allen zugewiesenen Turnieren, inkl. Spieler ausserhalb Top-4 (je 5 Punkte).
-* **Neu berechnen**: per Button oder automatisch nach Final-Speicherung / Schema- bzw. Zuweisungsaenderungen.
+* **CRUD** (Löschen mit PW **6460**), Turniere per Checkbox zuweisen.
+* Punkteschema bearbeiten oder **„Standard‑Schema“** anwenden (1=30, 2=24, 3=18, 4=15, **ab 5=5**).
+* **Rangliste**: *alle* Spieler aus allen zugewiesenen Turnieren, inkl. Spieler außerhalb Top‑4 (je 5 Punkte).
+* **Neu berechnen**: per Button oder automatisch nach Final‑Speicherung / Schema‑ bzw. Zuweisungsänderungen.
 
 ### 7) Exporte
 
-* Meisterschafts-Rangliste (CSV/PDF), Gruppen-Spielplan & -Tabellen (CSV/PDF), KO-Uebersicht (CSV/PDF), Gesamt-Uebersicht & Teilnehmerliste (CSV/PDF).
-* Zielordner in **Einstellungen → Export-Ordner**.
+* Meisterschafts‑Rangliste (CSV/PDF), Gruppen‑Spielplan & ‑Tabellen (CSV/PDF), KO‑Übersicht (CSV/PDF), Gesamt‑Übersicht & Teilnehmerliste (CSV/PDF).
+* **Dartscheiben** sind in den Spielplan‑Exporten enthalten.
+* Zielordner in **Einstellungen → Export‑Ordner**.
 
 ### 8) Einstellungen
 
+* **Dartscheiben verwalten**: Nummer, Name, Aktiv (Löschen mit PW **6460**).
 * **Backup erstellen / wiederherstellen** (`./backups/`).
-* **Export-Ordner** aendern/zuruecksetzen.
+* **Export‑Ordner** ändern/zurücksetzen.
 
 ---
 
 ## Datenbank
 
 * Datei: `./data/ibu.sqlite` (automatisch angelegt).
-* **Abwaertskompatibel**:
+* **Neue/erweiterte Felder (v0.9.4)**:
 
-  * Aeltere DBs mit `runde` statt `spieltag` in `spiele` funktionieren ohne Migration.
-  * Meisterschafts-Flag akzeptiert `Ja/Nein` und wird intern robust als `0/1` verarbeitet.
+  * Tabelle `dartscheiben` (id, nummer, name, aktiv).
+  * Spalte `board_id` in `spiele` **und** `ko_spiele`.
+  * Spalte `group_rank_mode` in `turniere` (`punkte` | `differenz` | `siege`).
+* **Abwärtskompatibel**:
 
-> **Backup-Tipp:** Fuer manuelle Backups genuegt das Kopieren von `data/ibu.sqlite`. Komfortabel ueber **Einstellungen → Backup**.
+  * Alte DBs mit `spiele.runde` statt `spieltag` funktionieren ohne Migration.
+  * Ergebnisse sowohl über `sets1/sets2` als auch `s1/s2` werden unterstützt.
+  * Meisterschafts‑Flag akzeptiert `Ja/Nein` (intern robust als `0/1`).
+
+> **Backup‑Tipp:** Für manuelle Backups genügt das Kopieren von `data/ibu.sqlite`. Komfortabel über **Einstellungen → Backup**.
 
 ---
 
 ## Workflow – Kurz & knackig
 
-1. **Teilnehmer** anlegen.
-2. **Turnier** erstellen (Modus z. B. *Gruppen und KO*).
-3. In **Turnier starten**: Spieler zuweisen, Gruppen anlegen, speichern.
-4. **Gruppenphase**: Plan generieren, Ergebnisse eintragen.
-5. **KO-Phase**: Qualifikanten waehlen, Plan erzeugen, Ergebnisse eintragen.
-
-   * Nach den Halbfinals erscheint automatisch **„Bronze“**.
-6. (Optional) **Meisterschaft**: Turniere zuweisen, Schema pruefen, Rangliste ansehen/neu berechnen.
-7. **Exporte** oder **Backup** nutzen.
+1. **Einstellungen → Dartscheiben**: Boards anlegen/aktivieren.
+2. **Teilnehmer** anlegen.
+3. **Turnier** erstellen (Modus z. B. *Gruppen und KO*).
+4. In **Turnier starten**: Spieler zuweisen, Gruppen anlegen, speichern.
+5. **Gruppenphase**: Plan generieren, **Scheiben neu verteilen**, Ergebnisse eintragen.
+6. **KO‑Phase**: Qualifikanten wählen, Plan erzeugen (4 ⇒ Halbfinale; 6 ⇒ BYEs), **Runde mit Scheiben** belegen, Ergebnisse eintragen.
+7. (Optional) **Meisterschaft**: Turniere zuweisen, Schema prüfen, Rangliste ansehen/neu berechnen.
+8. **Exporte** oder **Backup** nutzen.
 
 ---
 
@@ -196,59 +227,58 @@ Beim ersten Start wird `./data/ibu.sqlite` automatisch erstellt.
 build\build_exe.bat
 ```
 
-* Ergebnis: `dist\IBU Turniere.exe` (Explorer oeffnet automatisch und markiert die Datei).
+* Ergebnis: `dist\IBU Turniere.exe` (Explorer öffnet automatisch und markiert die Datei).
 
 ### Installer erzeugen (Inno Setup)
 
 1. Inno Setup installieren.
-2. `build/installer.iss` in Inno Setup oeffnen → **Compile**.
-3. Ergebnis: `build/output/IBU_Turniere_v0.9.3_setup.exe`.
+2. `build/installer.iss` in Inno Setup öffnen → **Compile**.
+3. Ergebnis: `build/output/IBU_Turniere_v0.9.4_setup.exe`.
 
-> Installer installiert nach `%LOCALAPPDATA%\ibu_sw` (kein Admin noetig).
+> Installer installiert nach `%LOCALAPPDATA%\ibu_sw` (kein Admin nötig).
 
 ---
 
-## Release / Git-Cheatsheet
+## Release / Git‑Cheatsheet
 
 ```bash
-# Aenderungen sichern
-git add -A
-git commit -m "v0.9.3: Auto-Reload Turnierlisten, Refresh behaelt Auswahl, KO-Tab Robustheit"
+  # Änderungen sichern
+  git add -A
+  git commit -m "WIP"
 
-# Upstream holen & lokalen main rebasen
-git fetch origin
-git rebase origin/main
-# (Konflikte -> git add <files> ; git rebase --continue)
+  # Upstream holen & lokalen main rebasen
+  git fetch origin
+  git rebase origin/main
+  # (Konflikte -> git add <files> ; git rebase --continue)
 
-# Push
-git push origin main
+  # Push
+  git push origin main
 
-# Tag setzen (annotiert) & pushen
-git tag -a v0.9.3 -m "Release v0.9.3 — Auto-Reload Turnierlisten, Refresh behaelt Auswahl, KO-Phase Robustheit"
-git push origin v0.9.3
+  # Tag setzen (annotiert) & pushen
+  git tag -a v0.9.4 -m "Release v0.9.4 – Ranglisten-Modi, Dartscheiben, KO-Fixes"
+  git push origin v0.9.4
 ```
 
-Weitere nuetzliche Befehle:
+Weitere nützliche Befehle:
 
 ```bash
-  git push --tags
-  git tag -n --sort=-creatordate | head
-  git tag -d vX.Y.Z
-  git push origin :refs/tags/vX.Y.Z
+  git push --tags           # alle Tags pushen
+  git tag -d vX.Y.Z         # lokalen Tag löschen
+  git push origin :refs/tags/vX.Y.Z   # Remote-Tag löschen
 ```
 
 ---
 
 ## Known Issues & Hinweise
 
-* **Bronze/Finale**: Siegeranzeige bezieht sich ausschliesslich auf das **Finale** – Bronze wird korrekt ignoriert.
-* **EXE startet nicht / Qt-Plugin fehlt**: Immer `dist/IBU Turniere.exe` verwenden (PyInstaller sammelt PyQt6-Ressourcen ein).
-* **PDF-Export**: Stabil seit v0.9.1. Bei Problemen sicherstellen, dass `utils/exporter.py` aktuell ist.
-* **Loeschen**: Irreversibel (PW **6460** erforderlich).
+* **Stichmatch-Hinweis** erscheint nur nach **Ergebnisse speichern**; beim Start bleibt der Tab still.
+* **Bronze/Finale**: Siegeranzeige bezieht sich ausschließlich auf das **Finale** – Bronze wird korrekt ignoriert.
+* **PDF‑Export**: Stabil; bei Layoutproblemen sicherstellen, dass `utils/exporter.py` aktuell ist.
+* **Löschen**: Irreversibel (PW **6460** erforderlich).
 
 ---
 
 ## Lizenz & Support
 
-Interne Anwendung – keine oeffentliche Lizenz.
-Issues bitte mit **Fehlermeldung + Screenshot** und kurzer Repro-Beschreibung anlegen.
+Interne Anwendung – keine öffentliche Lizenz.
+Issues bitte mit **Fehlermeldung + Screenshot** und kurzer Repro‑Beschreibung anlegen.
