@@ -1,173 +1,232 @@
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QHBoxLayout,
-    QPushButton, QTableWidget, QTableWidgetItem, QMessageBox, QAbstractItemView,
-    QInputDialog
-)
+# views/meisterschaft_view.py
+# v0.8 – Meisterschaften mit Rangliste, Schema-Pflege und Turnierzuweisung.
+# Komplett eigenständig, nutzt nur die in database.models bereitgestellten Funktionen.
+
+from __future__ import annotations
+
+import os
+from typing import Dict, List, Optional
+
 from PyQt6.QtCore import Qt
-from database.models import (
-    insert_meisterschaft, fetch_meisterschaften, update_meisterschaft, delete_meisterschaft
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton,
+    QTableWidget, QTableWidgetItem, QListWidget, QListWidgetItem, QGroupBox,
+    QMessageBox, QSpinBox
 )
 
+from database.models import (
+    fetch_meisterschaften, fetch_turniere,
+    fetch_punkteschema, save_punkteschema, standard_punkteschema_basic,
+    set_meisterschaft_turniere, fetch_meisterschaft_turnier_ids,
+    compute_meisterschaft_rangliste
+)
+
+STANDARD_FALLBACK5 = 5  # Ab Platz 5
 
 class MeisterschaftView(QWidget):
-    def __init__(self):
-        super().__init__()
-        self._current_id = None
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("MeisterschaftView")
+
+        self._ms_index_to_id: List[int] = []
 
         root = QVBoxLayout(self)
 
-        title = QLabel("Meisterschaft erfassen / bearbeiten")
+        title = QLabel("Meisterschaften – Verwaltung & Rangliste")
         title.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 8px;")
         root.addWidget(title)
 
-        root.addWidget(QLabel("Name:"))
-        self.name_input = QLineEdit()
-        root.addWidget(self.name_input)
+        # --- Kopf: Auswahl Meisterschaft
+        head = QHBoxLayout()
+        head.addWidget(QLabel("Meisterschaft:"))
+        self.cbo_ms = QComboBox()
+        self.cbo_ms.currentIndexChanged.connect(self._on_ms_change)
+        head.addWidget(self.cbo_ms, 2)
 
-        root.addWidget(QLabel("Saison (z. B. 2025/26):"))
-        self.saison_input = QLineEdit()
-        root.addWidget(self.saison_input)
+        self.btn_recalc = QPushButton("Rangliste neu berechnen")
+        self.btn_recalc.clicked.connect(self._load_rangliste)
+        head.addWidget(self.btn_recalc)
 
-        root.addWidget(QLabel("Punkteschema (frei als Text, z. B. JSON/CSV):"))
-        self.schema_input = QPlainTextEdit()
-        self.schema_input.setPlaceholderText("Beispiel:\n1,10\n2,7\n3,5\n4,3\n...")
-        root.addWidget(self.schema_input)
+        root.addLayout(head)
 
-        row_btns = QHBoxLayout()
-        self.new_btn = QPushButton("Neu")
-        self.new_btn.clicked.connect(self._clear_form)
-        row_btns.addWidget(self.new_btn)
+        # --- Mittlere Zone: links Turnierzuweisung, rechts Punkteschema
+        mid = QHBoxLayout()
 
-        self.save_btn = QPushButton("Speichern (neu)")
-        self.save_btn.clicked.connect(self._save)
-        row_btns.addWidget(self.save_btn)
+        # Turniere zuweisen
+        gb_t = QGroupBox("Zugewiesene Turniere")
+        l_t = QVBoxLayout(gb_t)
+        self.lst_turniere = QListWidget()
+        self.lst_turniere.setSelectionMode(self.lst_turniere.SelectionMode.NoSelection)
+        l_t.addWidget(self.lst_turniere, 1)
+        btns_t = QHBoxLayout()
+        self.btn_save_turniere = QPushButton("Zuweisungen speichern")
+        self.btn_save_turniere.clicked.connect(self._save_turnier_zuweisungen)
+        btns_t.addStretch(1)
+        btns_t.addWidget(self.btn_save_turniere)
+        l_t.addLayout(btns_t)
+        mid.addWidget(gb_t, 1)
 
-        self.update_btn = QPushButton("Aktualisieren")
-        self.update_btn.clicked.connect(self._update)
-        row_btns.addWidget(self.update_btn)
+        # Punkteschema
+        gb_s = QGroupBox("Punkteschema (Platz → Punkte)")
+        l_s = QVBoxLayout(gb_s)
+        self.tbl_schema = QTableWidget(10, 2)
+        self.tbl_schema.setHorizontalHeaderLabels(["Platz", "Punkte"])
+        self.tbl_schema.verticalHeader().setVisible(False)
+        for r in range(10):
+            it_p = QTableWidgetItem(str(r+1))
+            it_p.setFlags(it_p.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            it_p.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.tbl_schema.setItem(r, 0, it_p)
+            self.tbl_schema.setItem(r, 1, QTableWidgetItem(""))
+        l_s.addWidget(self.tbl_schema, 1)
+        btns_s = QHBoxLayout()
+        self.btn_schema_std = QPushButton("Standard-Schema anwenden")
+        self.btn_schema_std.clicked.connect(self._apply_standard_schema)
+        self.btn_schema_save = QPushButton("Schema speichern")
+        self.btn_schema_save.clicked.connect(self._save_schema)
+        btns_s.addStretch(1)
+        btns_s.addWidget(self.btn_schema_std)
+        btns_s.addWidget(self.btn_schema_save)
+        l_s.addLayout(btns_s)
+        mid.addWidget(gb_s, 1)
 
-        self.delete_btn = QPushButton("Löschen")
-        self.delete_btn.clicked.connect(self._delete)
-        row_btns.addWidget(self.delete_btn)
+        root.addLayout(mid)
 
-        root.addLayout(row_btns)
-
-        tbl_title = QLabel("Meisterschaften (zum Bearbeiten auswählen):")
-        tbl_title.setStyleSheet("font-weight: bold; margin-top: 12px;")
-        root.addWidget(tbl_title)
-
-        self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Name", "Saison", "Schema…"])
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.table.itemSelectionChanged.connect(self._on_selection)
-        root.addWidget(self.table)
-
-        self._load()
-        self._set_state(False)
-
-    # --- actions ---
-    def _save(self):
-        name = (self.name_input.text() or "").strip()
-        saison = (self.saison_input.text() or "").strip()
-        schema = (self.schema_input.toPlainText() or "").strip()
-        if not name or not saison:
-            QMessageBox.warning(self, "Fehler", "Bitte Name und Saison eingeben.")
-            return
-        insert_meisterschaft(name, saison, schema)
-        self._clear_form()
-        self._load()
-        QMessageBox.information(self, "OK", "Meisterschaft gespeichert.")
-
-    def _update(self):
-        if self._current_id is None:
-            QMessageBox.information(self, "Hinweis", "Bitte zuerst einen Eintrag auswählen.")
-            return
-        name = (self.name_input.text() or "").strip()
-        saison = (self.saison_input.text() or "").strip()
-        schema = (self.schema_input.toPlainText() or "").strip()
-        if not name or not saison:
-            QMessageBox.warning(self, "Fehler", "Bitte Name und Saison eingeben.")
-            return
-        update_meisterschaft(self._current_id, name, saison, schema)
-        self._clear_form()
-        self._load()
-        QMessageBox.information(self, "OK", "Meisterschaft aktualisiert.")
-
-    def _delete(self):
-        if self._current_id is None:
-            QMessageBox.information(self, "Hinweis", "Bitte zuerst einen Eintrag auswählen.")
-            return
-
-        # Passwortabfrage
-        pw, ok = QInputDialog.getText(
-            self,
-            "Passwort erforderlich",
-            "Bitte Lösch-Passwort eingeben:",
-            QLineEdit.EchoMode.Password
+        # --- Rangliste
+        gb_r = QGroupBox("Rangliste")
+        l_r = QVBoxLayout(gb_r)
+        self.tbl_rank = QTableWidget(0, 6)
+        self.tbl_rank.setHorizontalHeaderLabels(
+            ["Rang", "Spieler", "Punkte gesamt", "Turniere", "Beste Platzierung", "Letztes Turnierdatum"]
         )
-        if not ok:
+        self.tbl_rank.verticalHeader().setVisible(False)
+        self.tbl_rank.setSortingEnabled(False)
+        l_r.addWidget(self.tbl_rank)
+        root.addWidget(gb_r, 2)
+
+        self._load_ms()
+
+    # ------------------ Laden ------------------
+
+    def _load_ms(self):
+        self.cbo_ms.blockSignals(True)
+        self.cbo_ms.clear()
+        self._ms_index_to_id.clear()
+        for r in fetch_meisterschaften():
+            # Erwartetes Tuple: (id, name, saison, punkteschema)
+            mid, name, saison, _schema = r
+            label = f"{name} – {saison}"
+            self.cbo_ms.addItem(label)
+            self._ms_index_to_id.append(mid)
+        self.cbo_ms.blockSignals(False)
+        if self.cbo_ms.count() > 0:
+            self.cbo_ms.setCurrentIndex(0)
+            self._on_ms_change(0)
+
+    def _current_ms_id(self) -> Optional[int]:
+        idx = self.cbo_ms.currentIndex()
+        if idx < 0 or idx >= len(self._ms_index_to_id):
+            return None
+        return self._ms_index_to_id[idx]
+
+    def _on_ms_change(self, _idx: int):
+        self._load_turniere_list()
+        self._load_schema_table()
+        self._load_rangliste()
+
+    # ---- Turniere ----
+    def _load_turniere_list(self):
+        self.lst_turniere.clear()
+        ms_id = self._current_ms_id()
+        if ms_id is None:
             return
-        if (pw or "").strip() != "6460":
-            QMessageBox.critical(self, "Fehler", "Falsches Passwort. Löschen abgebrochen.")
+        assigned = set(fetch_meisterschaft_turnier_ids(ms_id))  # [ids]
+        for tid, name, datum, modus, _msflag in fetch_turniere():
+            it = QListWidgetItem(f"{datum} – {name} ({modus})")
+            it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            it.setCheckState(Qt.CheckState.Checked if tid in assigned else Qt.CheckState.Unchecked)
+            it.setData(Qt.ItemDataRole.UserRole, tid)
+            self.lst_turniere.addItem(it)
+
+    # ---- Schema ----
+    def _load_schema_table(self):
+        self.tbl_schema.blockSignals(True)
+        for r in range(self.tbl_schema.rowCount()):
+            self.tbl_schema.item(r, 1).setText("")
+        ms_id = self._current_ms_id()
+        if ms_id is None:
+            self.tbl_schema.blockSignals(False)
             return
+        mapping = {platz: punkte for platz, punkte in fetch_punkteschema(ms_id)}
+        for platz, punkte in mapping.items():
+            if 1 <= platz <= self.tbl_schema.rowCount():
+                self.tbl_schema.item(platz-1, 1).setText(str(punkte))
+        self.tbl_schema.blockSignals(False)
 
-        ret = QMessageBox.question(
-            self, "Löschen bestätigen",
-            "Ausgewählte Meisterschaft wirklich löschen?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        if ret != QMessageBox.StandardButton.Yes:
+    def _save_schema(self):
+        ms_id = self._current_ms_id()
+        if ms_id is None:
             return
-        delete_meisterschaft(self._current_id)
-        self._clear_form()
-        self._load()
-        QMessageBox.information(self, "OK", "Meisterschaft gelöscht.")
+        rows = []
+        for r in range(self.tbl_schema.rowCount()):
+            platz = r + 1
+            txt = self.tbl_schema.item(r, 1).text().strip() if self.tbl_schema.item(r, 1) else ""
+            if txt == "":
+                continue
+            try:
+                punkte = int(txt)
+            except ValueError:
+                QMessageBox.warning(self, "Eingabe", f"Ungültige Punkte in Zeile {platz}.")
+                return
+            rows.append((platz, punkte))
+        save_punkteschema(ms_id, rows)
+        QMessageBox.information(self, "OK", "Punkteschema gespeichert.")
+        self._load_rangliste()
 
-    # --- helpers ---
-    def _load(self):
-        data = fetch_meisterschaften()
-        self.table.setRowCount(len(data))
-        for row, (mid, name, saison, schema) in enumerate(data):
-            name_item = QTableWidgetItem(name)
-            name_item.setData(Qt.ItemDataRole.UserRole, mid)
-            self.table.setItem(row, 0, name_item)
-            self.table.setItem(row, 1, QTableWidgetItem(saison))
-            preview = (schema[:40] + "…") if schema and len(schema) > 40 else (schema or "")
-            self.table.setItem(row, 2, QTableWidgetItem(preview))
-        self.table.clearSelection()
-        self._current_id = None
-        self._set_state(False)
-
-    def _on_selection(self):
-        sel = self.table.selectionModel().selectedRows()
-        if not sel:
-            self._current_id = None
-            self._set_state(False)
+    def _apply_standard_schema(self):
+        ms_id = self._current_ms_id()
+        if ms_id is None:
             return
-        r = sel[0].row()
-        name_item = self.table.item(r, 0)
-        saison_item = self.table.item(r, 1)
-        self._current_id = int(name_item.data(Qt.ItemDataRole.UserRole))
-        self.name_input.setText(name_item.text())
-        self.saison_input.setText(saison_item.text() if saison_item else "")
-        # Volltext-Schema nachladen:
-        for mid, name, saison, schema in fetch_meisterschaften():
-            if mid == self._current_id:
-                self.schema_input.setPlainText(schema or "")
-                break
-        self._set_state(True)
+        standard_punkteschema_basic(ms_id)
+        self._load_schema_table()
+        self._load_rangliste()
 
-    def _clear_form(self):
-        self._current_id = None
-        self.name_input.clear()
-        self.saison_input.clear()
-        self.schema_input.clear()
-        self.table.clearSelection()
-        self._set_state(False)
+    # ---- Turnierzuweisung speichern ----
+    def _save_turnier_zuweisungen(self):
+        ms_id = self._current_ms_id()
+        if ms_id is None:
+            return
+        ids: List[int] = []
+        for i in range(self.lst_turniere.count()):
+            it: QListWidgetItem = self.lst_turniere.item(i)
+            if it.checkState() == Qt.CheckState.Checked:
+                ids.append(int(it.data(Qt.ItemDataRole.UserRole)))
+        set_meisterschaft_turniere(ms_id, ids)
+        QMessageBox.information(self, "OK", "Zuweisungen gespeichert.")
+        self._load_rangliste()
 
-    def _set_state(self, has_selection: bool):
-        self.update_btn.setEnabled(has_selection)
-        self.delete_btn.setEnabled(has_selection)
+    # ---- Rangliste ----
+    def _load_rangliste(self):
+        self.tbl_rank.setRowCount(0)
+        ms_id = self._current_ms_id()
+        if ms_id is None:
+            return
+        rows = compute_meisterschaft_rangliste(ms_id)
+
+        self.tbl_rank.setRowCount(len(rows))
+        for i, d in enumerate(rows):
+            def _cell(txt, center=False, ro=True):
+                it = QTableWidgetItem("" if txt is None else str(txt))
+                if ro:
+                    it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                if center:
+                    it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                return it
+
+            self.tbl_rank.setItem(i, 0, _cell(d["rank"], center=True))
+            self.tbl_rank.setItem(i, 1, _cell(d["name"]))
+            self.tbl_rank.setItem(i, 2, _cell(d["punkte"], center=True))
+            self.tbl_rank.setItem(i, 3, _cell(d["turniere"], center=True))
+            best = d["beste_platzierung"] if d["beste_platzierung"] is not None else "-"
+            self.tbl_rank.setItem(i, 4, _cell(best, center=True))
+            self.tbl_rank.setItem(i, 5, _cell(d["letztes_datum"], center=True))
