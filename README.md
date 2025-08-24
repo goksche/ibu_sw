@@ -1,4 +1,4 @@
-# IBU Turniere – Dart Turnier Verwaltungs Tool (v0.9.3)
+# IBU Turniere – Dart Turnier Verwaltungs Tool (v0.9.2)
 
 Windows‑Desktop‑App zur Verwaltung von Dartturnieren inkl. Gruppen‑ und KO‑Phase, **Bronze‑Spiel**, **Meisterschaften** und **Ranglisten**. GUI mit **PyQt6**, lokale Datenhaltung in **SQLite** (`./data/ibu.sqlite`).
 
@@ -6,11 +6,11 @@ Windows‑Desktop‑App zur Verwaltung von Dartturnieren inkl. Gruppen‑ und KO
 
 ---
 
-## Highlights v0.9.3
+## Highlights v0.9.2
 
 * **Windows‑Installer** (Inno Setup)
 
-  * Offizielles Setup: `build/output/IBU_Turniere_v0.9.3_setup.exe`.
+  * Offizielles Setup: `build/output/IBU_Turniere_v0.9.2_setup.exe`.
   * Installiert nach `%LOCALAPPDATA%\ibu_sw` (keine Admin‑Rechte nötig), legt `data/`, `exports/`, `backups/` an.
   * App‑Name / EXE / Fenster: **IBU Turniere**.
 * **Robuste EXE (PyInstaller)**
@@ -69,7 +69,7 @@ ibu_sw/
 
 ### A) Mit Installer (empfohlen)
 
-* `build/output/IBU_Turniere_v0.9.3_setup.exe` ausführen.
+* `build/output/IBU_Turniere_v0.9.2_setup.exe` ausführen.
 * Start über Startmenü/Shortcut **IBU Turniere**.
 
 ### B) Portable EXE
@@ -187,7 +187,7 @@ build\build_exe.bat
 
 1. Inno Setup installieren.
 2. `build/installer.iss` in Inno Setup öffnen → **Compile**.
-3. Ergebnis: `build/output/IBU_Turniere_v0.9.3_setup.exe`.
+3. Ergebnis: `build/output/IBU_Turniere_v0.9.2_setup.exe`.
 
 > Installer installiert nach `%LOCALAPPDATA%\ibu_sw` (kein Admin nötig).
 
@@ -209,8 +209,8 @@ git rebase origin/main
 git push origin main
 
 # Tag setzen (annotiert) & pushen
-git tag -a v0.9.3 -m "Release v0.9.3 – Windows-Installer (IBU Turniere)"
-git push origin v0.9.3
+git tag -a v0.9.2 -m "Release v0.9.2 – Windows-Installer (IBU Turniere)"
+git push origin v0.9.2
 ```
 
 Weitere nützliche Befehle:
