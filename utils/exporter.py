@@ -1,5 +1,5 @@
 # utils/exporter.py
-# v0.9 – Exporte (CSV/PDF) ohne externe Abhängigkeiten
+# v0.9.1 – Exporte (CSV/PDF) ohne externe Abhängigkeiten
 from __future__ import annotations
 
 import csv
@@ -11,6 +11,7 @@ from typing import List, Optional, Sequence, Tuple
 
 from PyQt6.QtGui import QTextDocument, QPageSize, QPageLayout
 from PyQt6.QtPrintSupport import QPrinter
+from PyQt6.QtCore import QMarginsF  # <- wichtig für QPageLayout (mm-Ränder)
 
 # Datenmodell-Funktionen
 from database.models import (
@@ -27,7 +28,6 @@ from database.models import (
     ensure_bronze_from_semis,
     fetch_ko_champion,
 )
-
 
 # ---------------------------------------------------------------------
 # Allgemeine Hilfsfunktionen
@@ -83,19 +83,25 @@ def save_csv(rows: Sequence[Sequence[object]], header: Sequence[str], path: str)
 
 
 def save_pdf_from_html(html: str, path: str, orientation: str = "portrait") -> str:
+    """
+    PDF-Erzeugung via QTextDocument + QPrinter.
+    Fix (v0.9.1): QPageLayout korrekt mit QMarginsF und Units initialisieren.
+    """
     printer = QPrinter(QPrinter.PrinterMode.HighResolution)
     printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
     printer.setOutputFileName(path)
 
     page_size = QPageSize(QPageSize.PageSizeId.A4)
-    orient = QPageLayout.Orientation.Landscape if orientation == "landscape" else QPageLayout.Orientation.Portrait
-    layout = QPageLayout(page_size, orient, QPageLayout.Unit.Millimeter)
-    # 12 mm Ränder
-    layout.setMargins(QPageLayout.Margins(12, 12, 12, 12))
+    orient = (
+        QPageLayout.Orientation.Landscape
+        if orientation == "landscape"
+        else QPageLayout.Orientation.Portrait
+    )
+    # Ränder in Millimeter
+    layout = QPageLayout(page_size, orient, QMarginsF(12, 12, 12, 12), QPageLayout.Unit.Millimeter)
     printer.setPageLayout(layout)
 
     doc = QTextDocument()
-    doc.setDefaultFont(None)  # Standard
     doc.setHtml(html)
     doc.print(printer)
     return path
@@ -131,7 +137,7 @@ def _html_wrap(title: str, intro_lines: Sequence[str], table_html_blocks: Sequen
       <h1>{title}</h1>
       {intro}
       {tables}
-      <div class="foot">Exportiert am {datetime.now().strftime("%d.%m.%Y %H:%M")} – ibu_sw v0.9</div>
+      <div class="foot">Exportiert am {datetime.now().strftime("%d.%m.%Y %H:%M")} – ibu_sw v0.9.1</div>
     </body>
     </html>
     """
@@ -420,7 +426,7 @@ def _ko_round_label_from_match_count(count: int) -> str:
         return "Achtelfinale"
     if count == 16:
         return "Sechzehntelfinale"
-    return f"Runde"
+    return "Runde"
 
 
 def _ko_rounds_with_counts(turnier_id: int) -> List[Tuple[int, int]]:
@@ -464,7 +470,6 @@ def export_ko_csv(turnier_id: int, path: Optional[str] = None) -> str:
         rows.append(["Champion", "-", champ[1], "", "", ""])
     bron = fetch_ko_matches(turnier_id, 99)
     if bron and bron[0][4] is not None and bron[0][5] is not None and bron[0][4] != bron[0][5]:
-        # bron[0]: (id, match_no, n1, n2, s1, s2)
         p1 = bron[0][2]; p2 = bron[0][3]; s1 = bron[0][4]; s2 = bron[0][5]
         third = p1 if int(s1) > int(s2) else p2
         rows.append(["Platz 3", "-", third, "", "", ""])
