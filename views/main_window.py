@@ -1,5 +1,7 @@
 # views/main_window.py
-# Hauptfenster – Tabs + neuer Tab „Exporte“ (v0.9)
+# v0.9.3 – Hauptfenster mit Tabs: Turniere, Meisterschaften, Teilnehmer,
+#           Turnier starten, Gruppenphase, KO-Phase, Exporte, Einstellungen.
+
 from __future__ import annotations
 
 import importlib
@@ -15,28 +17,31 @@ from views.teilnehmer_view import TeilnehmerView
 from views.turnier_start_view import TurnierStartView
 from views.gruppenphase_view import GruppenphaseView
 
-# Neuer Export-Tab (v0.9)
+# Exporte + Einstellungen
 from views.export_view import ExportView
+from views.settings_view import SettingsView
 
 
 def _resolve_ko_view_class() -> Type[QWidget]:
     """
-    Robust: Versucht zuerst den direkten Klassenimport (KoPhaseView).
-    Falls der Name abweicht, wird das Modul geladen und eine QWidget-Unterklasse
-    aus dem Modul als View-Klasse bestimmt.
+    Versucht zuerst den direkten Import von KoPhaseView.
+    Falls der Name abweicht, wird die erste QWidget-Unterklasse aus dem Modul verwendet.
     """
+    # 1) direkter Import (Standardname)
     try:
         from views.ko_phase_view import KoPhaseView  # type: ignore
         return KoPhaseView  # type: ignore[name-defined]
     except Exception:
         pass
 
+    # 2) Modul inspizieren und passende QWidget-Klasse finden
     mod = importlib.import_module("views.ko_phase_view")
-    candidates = []
+    candidates: list[type] = []
     for _name, obj in inspect.getmembers(mod, inspect.isclass):
         if issubclass(obj, QWidget) and obj.__module__ == mod.__name__:
             candidates.append(obj)
 
+    # bevorzugt Klassen, deren Name auf "KoPhaseView" endet
     for cls in candidates:
         if cls.__name__.lower().endswith("kophaseview"):
             return cls
@@ -52,7 +57,7 @@ def _resolve_ko_view_class() -> Type[QWidget]:
 def _safe_instantiate(view_cls: Type[QWidget], parent: Optional[QWidget]) -> QWidget:
     """
     Instanziiert eine View robust:
-    - zuerst mit parent (falls __init__(self, parent) vorhanden),
+    - zuerst mit parent (falls __init__(self, parent) existiert),
     - sonst ohne Argumente.
     """
     try:
@@ -64,7 +69,7 @@ def _safe_instantiate(view_cls: Type[QWidget], parent: Optional[QWidget]) -> QWi
 class MainWindow(QMainWindow):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Dart Turnier Verwaltungs Tool")
+        self.setWindowTitle("IBU Turniere")
         self.resize(1200, 800)
         self._build_ui()
 
@@ -90,13 +95,14 @@ class MainWindow(QMainWindow):
         self.tab_gruppen = _safe_instantiate(GruppenphaseView, self)
         self.tabs.addTab(self.tab_gruppen, "Gruppenphase")
 
-        # KO-Phase (robuster Import + robuste Instanziierung)
         KoViewClass = _resolve_ko_view_class()
         self.tab_ko = _safe_instantiate(KoViewClass, self)
         self.tabs.addTab(self.tab_ko, "KO-Phase")
 
-        # neuer Tab: Exporte (v0.9)
         self.tab_export = _safe_instantiate(ExportView, self)
         self.tabs.addTab(self.tab_export, "Exporte")
+
+        self.tab_settings = _safe_instantiate(SettingsView, self)
+        self.tabs.addTab(self.tab_settings, "Einstellungen")
 
         self.setCentralWidget(self.tabs)

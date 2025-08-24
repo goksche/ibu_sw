@@ -1,5 +1,6 @@
 # views/export_view.py
-# v0.9 – eigener Tab „Exporte“
+# v0.9.2 – eigener Tab „Exporte“, nutzt Settings-Export-Ordner
+
 from __future__ import annotations
 
 import os
@@ -30,7 +31,6 @@ from utils.exporter import (
     export_turnier_uebersicht_pdf,
 )
 
-
 class ExportView(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -38,15 +38,12 @@ class ExportView(QWidget):
         self._build_ui()
         self._load_data()
 
-    # ------------------------------------------
-    # UI
-    # ------------------------------------------
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(10)
 
-        # --- Meisterschaft ---
+        # Meisterschaft
         gb_ms = QGroupBox("Meisterschafts-Exporte")
         grid_ms = QGridLayout(gb_ms)
 
@@ -62,7 +59,7 @@ class ExportView(QWidget):
         self.btn_ms_csv.clicked.connect(self._on_ms_csv)
         self.btn_ms_pdf.clicked.connect(self._on_ms_pdf)
 
-        # --- Turnier ---
+        # Turnier
         gb_tn = QGroupBox("Turnier-Exporte")
         grid_tn = QGridLayout(gb_tn)
 
@@ -90,7 +87,7 @@ class ExportView(QWidget):
         self.btn_tn_csv.clicked.connect(self._on_tn_csv)
         self.btn_tn_pdf.clicked.connect(self._on_tn_pdf)
 
-        # --- Ausgabe / Ordner ---
+        # Ausgabe / Ordner
         gb_out = QGroupBox("Ausgabe")
         lay_out = QHBoxLayout(gb_out)
         self.lbl_dir = QLabel(ensure_exports_dir())
@@ -101,15 +98,11 @@ class ExportView(QWidget):
         lay_out.addWidget(self.lbl_dir, 1)
         lay_out.addWidget(self.btn_open)
 
-        # add to root
         root.addWidget(gb_ms)
         root.addWidget(gb_tn)
         root.addWidget(gb_out)
         root.addStretch(1)
 
-    # ------------------------------------------
-    # Daten laden
-    # ------------------------------------------
     def _load_data(self) -> None:
         self.cmb_ms.clear()
         for mid, name, saison, _schema in fetch_meisterschaften():
@@ -121,9 +114,7 @@ class ExportView(QWidget):
             label = f"{name}" + (f" – {datum}" if datum else "")
             self.cmb_tn.addItem(label, int(tid))
 
-    # ------------------------------------------
-    # Actions
-    # ------------------------------------------
+    # Actions -------------------------------------------------------------
     def _current_ms_id(self) -> Optional[int]:
         idx = self.cmb_ms.currentIndex()
         return None if idx < 0 else int(self.cmb_ms.currentData())
@@ -140,7 +131,7 @@ class ExportView(QWidget):
 
     def _open_dir(self) -> None:
         directory = ensure_exports_dir()
-        # Windows: os.startfile, sonst DesktopServices
+        self.lbl_dir.setText(directory)
         try:
             if sys.platform.startswith("win"):
                 os.startfile(directory)  # type: ignore[attr-defined]
@@ -149,7 +140,7 @@ class ExportView(QWidget):
         except Exception as e:
             self._notify_fail(e)
 
-    # --- Buttons: Meisterschaft ---
+    # Buttons: Meisterschaft
     def _on_ms_csv(self) -> None:
         ms_id = self._current_ms_id()
         if ms_id is None:
@@ -172,7 +163,7 @@ class ExportView(QWidget):
         except Exception as e:
             self._notify_fail(e)
 
-    # --- Buttons: Turnier ---
+    # Buttons: Turnier
     def _on_tn_csv(self) -> None:
         tid = self._current_tn_id()
         if tid is None:

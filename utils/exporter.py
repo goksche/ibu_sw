@@ -1,17 +1,18 @@
 # utils/exporter.py
-# v0.9.1 – Exporte (CSV/PDF) ohne externe Abhängigkeiten
+# v0.9.3 – Exporte (CSV/PDF) ohne externe Abhängigkeiten + Settings-Exportordner
 from __future__ import annotations
 
 import csv
 import os
-import sys
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional, Sequence, Tuple
 
 from PyQt6.QtGui import QTextDocument, QPageSize, QPageLayout
 from PyQt6.QtPrintSupport import QPrinter
-from PyQt6.QtCore import QMarginsF  # <- wichtig für QPageLayout (mm-Ränder)
+from PyQt6.QtCore import QMarginsF
+
+from utils.settings import get_export_dir  # Settings-Integration
 
 # Datenmodell-Funktionen
 from database.models import (
@@ -29,30 +30,22 @@ from database.models import (
     fetch_ko_champion,
 )
 
-# ---------------------------------------------------------------------
-# Allgemeine Hilfsfunktionen
-# ---------------------------------------------------------------------
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-EXPORTS_DIR = os.path.join(PROJECT_ROOT, "exports")
+# Anzeige/Branding
+APP_NAME = "IBU Turniere"
+APP_VERSION = "v0.9.2"  # in den Export-Fußzeilen
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 def ensure_exports_dir() -> str:
-    os.makedirs(EXPORTS_DIR, exist_ok=True)
-    return EXPORTS_DIR
-
+    """Liest das Export-Verzeichnis aus den Settings und stellt es sicher."""
+    base = get_export_dir()
+    os.makedirs(base, exist_ok=True)
+    return base
 
 def timestamp() -> str:
-    # Lokale Zeit, Format YYYYMMDD-HHMM
     return datetime.now().strftime("%Y%m%d-%H%M")
 
-
 def unique_path(base_dir: str, base_name: str, ext: str) -> str:
-    """
-    Erzeugt einen eindeutigen Pfad.
-    base_name: ohne Extension
-    ext: ohne Punkt, z. B. 'csv', 'pdf'
-    """
-    ensure_exports_dir()
     path = os.path.join(base_dir, f"{base_name}.{ext}")
     if not os.path.exists(path):
         return path
@@ -63,13 +56,10 @@ def unique_path(base_dir: str, base_name: str, ext: str) -> str:
             return p
         i += 1
 
-
 def _csv_writer(path: str):
-    # Excel-freundlich: UTF-8 mit BOM, Semikolon, CRLF
     fh = open(path, "w", encoding="utf-8-sig", newline="")
     writer = csv.writer(fh, delimiter=";", lineterminator="\r\n")
     return fh, writer
-
 
 def save_csv(rows: Sequence[Sequence[object]], header: Sequence[str], path: str) -> str:
     fh, writer = _csv_writer(path)
@@ -81,23 +71,13 @@ def save_csv(rows: Sequence[Sequence[object]], header: Sequence[str], path: str)
         fh.close()
     return path
 
-
 def save_pdf_from_html(html: str, path: str, orientation: str = "portrait") -> str:
-    """
-    PDF-Erzeugung via QTextDocument + QPrinter.
-    Fix (v0.9.1): QPageLayout korrekt mit QMarginsF und Units initialisieren.
-    """
     printer = QPrinter(QPrinter.PrinterMode.HighResolution)
     printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
     printer.setOutputFileName(path)
 
     page_size = QPageSize(QPageSize.PageSizeId.A4)
-    orient = (
-        QPageLayout.Orientation.Landscape
-        if orientation == "landscape"
-        else QPageLayout.Orientation.Portrait
-    )
-    # Ränder in Millimeter
+    orient = QPageLayout.Orientation.Landscape if orientation == "landscape" else QPageLayout.Orientation.Portrait
     layout = QPageLayout(page_size, orient, QMarginsF(12, 12, 12, 12), QPageLayout.Unit.Millimeter)
     printer.setPageLayout(layout)
 
@@ -105,7 +85,6 @@ def save_pdf_from_html(html: str, path: str, orientation: str = "portrait") -> s
     doc.setHtml(html)
     doc.print(printer)
     return path
-
 
 def _css_base() -> str:
     return """
@@ -123,7 +102,6 @@ def _css_base() -> str:
     </style>
     """
 
-
 def _html_wrap(title: str, intro_lines: Sequence[str], table_html_blocks: Sequence[str]) -> str:
     intro = "".join(f"<div class='meta'>{line}</div>" for line in intro_lines)
     tables = "".join(table_html_blocks)
@@ -137,11 +115,10 @@ def _html_wrap(title: str, intro_lines: Sequence[str], table_html_blocks: Sequen
       <h1>{title}</h1>
       {intro}
       {tables}
-      <div class="foot">Exportiert am {datetime.now().strftime("%d.%m.%Y %H:%M")} – ibu_sw v0.9.1</div>
+      <div class="foot">Exportiert am {datetime.now().strftime("%d.%m.%Y %H:%M")} – {APP_NAME} {APP_VERSION}</div>
     </body>
     </html>
     """
-
 
 def _html_table(headers: Sequence[str], rows: Sequence[Sequence[object]], caption: Optional[str] = None) -> str:
     thead = "".join(f"<th>{h}</th>" for h in headers)
@@ -160,22 +137,17 @@ def _html_table(headers: Sequence[str], rows: Sequence[Sequence[object]], captio
       </table>
     """
 
+# --------------------- Meisterschaft – Rangliste -----------------------
 
-# ---------------------------------------------------------------------
-# Meisterschaft – Rangliste
-# ---------------------------------------------------------------------
 def _ms_name(ms_id: int) -> Tuple[str, str]:
-    # returns (name, saison)
     for mid, name, saison, _schema in fetch_meisterschaften():
         if int(mid) == int(ms_id):
             return str(name or ""), str(saison or "")
-    # fallback via DB (selten)
     with _connect() as con:
         r = con.execute("SELECT name, COALESCE(saison,'') FROM meisterschaften WHERE id=?", (ms_id,)).fetchone()
         if r:
             return str(r[0] or ""), str(r[1] or "")
     return (f"MS-{ms_id}", "")
-
 
 def export_meisterschaft_rangliste_csv(ms_id: int, path: Optional[str] = None) -> str:
     rows = compute_meisterschaft_rangliste(ms_id)
@@ -198,7 +170,6 @@ def export_meisterschaft_rangliste_csv(ms_id: int, path: Optional[str] = None) -
     base_name += f"__{timestamp()}"
     final_path = path or unique_path(base_dir, base_name, "csv")
     return save_csv(csv_rows, header, final_path)
-
 
 def export_meisterschaft_rangliste_pdf(ms_id: int, path: Optional[str] = None) -> str:
     rows = compute_meisterschaft_rangliste(ms_id)
@@ -229,16 +200,13 @@ def export_meisterschaft_rangliste_pdf(ms_id: int, path: Optional[str] = None) -
     final_path = path or unique_path(base_dir, base_name, "pdf")
     return save_pdf_from_html(html, final_path, orientation="portrait")
 
+# --------------------------- Turnier-Stammdaten ------------------------
 
-# ---------------------------------------------------------------------
-# Turnier – Stammdaten
-# ---------------------------------------------------------------------
 @dataclass
 class _TurnierInfo:
     id: int
     name: str
     datum: str
-
 
 def _turnier_info(turnier_id: int) -> _TurnierInfo:
     for tid, name, datum, _modus, _ms in fetch_turniere():
@@ -250,10 +218,8 @@ def _turnier_info(turnier_id: int) -> _TurnierInfo:
             return _TurnierInfo(int(turnier_id), str(r[0] or ""), str(r[1] or ""))
     return _TurnierInfo(int(turnier_id), f"Turnier-{turnier_id}", "")
 
+# ----------------------- Turnier – Teilnehmerliste ---------------------
 
-# ---------------------------------------------------------------------
-# Turnier – Teilnehmerliste
-# ---------------------------------------------------------------------
 def export_turnier_teilnehmer_csv(turnier_id: int, path: Optional[str] = None) -> str:
     info = _turnier_info(turnier_id)
     teilnehmer = fetch_turnier_teilnehmer(turnier_id)
@@ -269,7 +235,6 @@ def export_turnier_teilnehmer_csv(turnier_id: int, path: Optional[str] = None) -
     base_name += f"__{timestamp()}"
     final_path = path or unique_path(base_dir, base_name, "csv")
     return save_csv(rows, header, final_path)
-
 
 def export_turnier_teilnehmer_pdf(turnier_id: int, path: Optional[str] = None) -> str:
     info = _turnier_info(turnier_id)
@@ -291,10 +256,8 @@ def export_turnier_teilnehmer_pdf(turnier_id: int, path: Optional[str] = None) -
     final_path = path or unique_path(base_dir, base_name, "pdf")
     return save_pdf_from_html(html, final_path, orientation="portrait")
 
+# ----------------------- Turnier – Gruppen: Spielplan ------------------
 
-# ---------------------------------------------------------------------
-# Turnier – Gruppen: Spielplan (Round Robin)
-# ---------------------------------------------------------------------
 def export_gruppen_spielplan_csv(turnier_id: int, path: Optional[str] = None) -> str:
     info = _turnier_info(turnier_id)
     groups = fetch_groups(turnier_id)
@@ -306,16 +269,14 @@ def export_gruppen_spielplan_csv(turnier_id: int, path: Optional[str] = None) ->
 
     for gid, gname in groups:
         matches = fetch_group_matches(turnier_id, gid)
-        # matches: (id, runde, match_no, n1, n2, s1, s2)
         for _mid, runde, match_no, n1, n2, s1, s2 in matches:
-            rows.append([gname, runde, match_no, n1, n2, s1 if s1 is not None else "", s2 if s2 is not None else ""])
+            rows.append([gname, runde, match_no, n1, n2, "" if s1 is None else s1, "" if s2 is None else s2])
 
     base_dir = ensure_exports_dir()
     base_name = f"gruppen-spielplan__{info.name.replace(' ', '-')}" + (f"-{info.datum}" if info.datum else "")
     base_name += f"__{timestamp()}"
     final_path = path or unique_path(base_dir, base_name, "csv")
     return save_csv(rows, header, final_path)
-
 
 def export_gruppen_spielplan_pdf(turnier_id: int, path: Optional[str] = None) -> str:
     info = _turnier_info(turnier_id)
@@ -341,10 +302,8 @@ def export_gruppen_spielplan_pdf(turnier_id: int, path: Optional[str] = None) ->
     final_path = path or unique_path(base_dir, base_name, "pdf")
     return save_pdf_from_html(html, final_path, orientation="portrait")
 
+# ----------------------- Turnier – Gruppen: Tabellen -------------------
 
-# ---------------------------------------------------------------------
-# Turnier – Gruppen: Tabellen/Rankings
-# ---------------------------------------------------------------------
 def export_gruppen_tabellen_csv(turnier_id: int, path: Optional[str] = None) -> str:
     info = _turnier_info(turnier_id)
     groups = fetch_groups(turnier_id)
@@ -359,7 +318,6 @@ def export_gruppen_tabellen_csv(turnier_id: int, path: Optional[str] = None) -> 
         if not table:
             rows.append([gname, "-", "-", "-", "-", "-", "-", "-", "-", "-"])
             continue
-        # Rang innerhalb der Gruppe berechnen
         rank = 0
         last_key = None
         for t in table:
@@ -367,16 +325,13 @@ def export_gruppen_tabellen_csv(turnier_id: int, path: Optional[str] = None) -> 
             if key != last_key:
                 rank += 1
                 last_key = key
-            rows.append([
-                gname, rank, t["spieler"], t["spiele"], t["siege"], t["niederlagen"], t["lf"], t["la"], t["diff"], t["pkt"]
-            ])
+            rows.append([gname, rank, t["spieler"], t["spiele"], t["siege"], t["niederlagen"], t["lf"], t["la"], t["diff"], t["pkt"]])
 
     base_dir = ensure_exports_dir()
     base_name = f"gruppen-tabellen__{info.name.replace(' ', '-')}" + (f"-{info.datum}" if info.datum else "")
     base_name += f"__{timestamp()}"
     final_path = path or unique_path(base_dir, base_name, "csv")
     return save_csv(rows, header, final_path)
-
 
 def export_gruppen_tabellen_pdf(turnier_id: int, path: Optional[str] = None) -> str:
     info = _turnier_info(turnier_id)
@@ -411,43 +366,31 @@ def export_gruppen_tabellen_pdf(turnier_id: int, path: Optional[str] = None) -> 
     final_path = path or unique_path(base_dir, base_name, "pdf")
     return save_pdf_from_html(html, final_path, orientation="portrait")
 
+# ----------------------- Turnier – KO-Übersicht -----------------------
 
-# ---------------------------------------------------------------------
-# Turnier – KO: Paarungen & Ergebnisse
-# ---------------------------------------------------------------------
 def _ko_round_label_from_match_count(count: int) -> str:
-    if count == 1:
-        return "Finale"
-    if count == 2:
-        return "Halbfinale"
-    if count == 4:
-        return "Viertelfinale"
-    if count == 8:
-        return "Achtelfinale"
-    if count == 16:
-        return "Sechzehntelfinale"
+    if count == 1: return "Finale"
+    if count == 2: return "Halbfinale"
+    if count == 4: return "Viertelfinale"
+    if count == 8: return "Achtelfinale"
+    if count == 16: return "Sechzehntelfinale"
     return "Runde"
 
-
 def _ko_rounds_with_counts(turnier_id: int) -> List[Tuple[int, int]]:
-    """Liste (runde, match_count) inkl. Bronze (99)."""
-    rounds = fetch_ko_rounds(turnier_id)  # z. B. [1,2,3,99]
+    rounds = fetch_ko_rounds(turnier_id)
     out: List[Tuple[int, int]] = []
     for r in rounds:
         matches = fetch_ko_matches(turnier_id, r)
         out.append((r, len(matches)))
-    # Bronze sicherstellen, falls vorhanden aber nicht gelistet
     ensure_bronze_from_semis(turnier_id)
     if 99 not in [r for r, _ in out]:
         bron = fetch_ko_matches(turnier_id, 99)
         if bron:
             out.append((99, len(bron)))
-    # sortieren: alles außer Bronze aufsteigend, Bronze ans Ende
     non_bronze = [(r, c) for r, c in out if r != 99]
     non_bronze.sort(key=lambda x: x[0])
     bronze = [(r, c) for r, c in out if r == 99]
     return non_bronze + bronze
-
 
 def export_ko_csv(turnier_id: int, path: Optional[str] = None) -> str:
     info = _turnier_info(turnier_id)
@@ -464,7 +407,6 @@ def export_ko_csv(turnier_id: int, path: Optional[str] = None) -> str:
         for _id, match_no, n1, n2, s1, s2 in matches:
             rows.append([rname, match_no, n1, n2, "" if s1 is None else s1, "" if s2 is None else s2])
 
-    # Champion/Platz 3 falls möglich – als letzte Zeile mit Hinweis
     champ = fetch_ko_champion(turnier_id)
     if champ:
         rows.append(["Champion", "-", champ[1], "", "", ""])
@@ -479,7 +421,6 @@ def export_ko_csv(turnier_id: int, path: Optional[str] = None) -> str:
     base_name += f"__{timestamp()}"
     final_path = path or unique_path(base_dir, base_name, "csv")
     return save_csv(rows, header, final_path)
-
 
 def export_ko_pdf(turnier_id: int, path: Optional[str] = None) -> str:
     info = _turnier_info(turnier_id)
@@ -515,23 +456,19 @@ def export_ko_pdf(turnier_id: int, path: Optional[str] = None) -> str:
     final_path = path or unique_path(base_dir, base_name, "pdf")
     return save_pdf_from_html(html, final_path, orientation="portrait")
 
+# ------------------ Turnier – Ergebnis-Übersicht (flach) ---------------
 
-# ---------------------------------------------------------------------
-# Turnier – Ergebnis-Übersicht (flach)
-# ---------------------------------------------------------------------
 def export_turnier_uebersicht_csv(turnier_id: int, path: Optional[str] = None) -> str:
     info = _turnier_info(turnier_id)
     header = ["Phase", "Gruppe/Runde", "Runde/Match", "Spieler 1", "Spieler 2", "S1", "S2"]
     rows: List[List[object]] = []
 
-    # Gruppen
     groups = fetch_groups(turnier_id)
     for gid, gname in groups:
         matches = fetch_group_matches(turnier_id, gid)
         for _mid, runde, match_no, n1, n2, s1, s2 in matches:
             rows.append(["Gruppenphase", gname, f"{runde}/{match_no}", n1, n2, "" if s1 is None else s1, "" if s2 is None else s2])
 
-    # KO
     rounds = _ko_rounds_with_counts(turnier_id)
     for r, cnt in rounds:
         rname = "Bronze" if r == 99 else _ko_round_label_from_match_count(cnt)
@@ -548,13 +485,10 @@ def export_turnier_uebersicht_csv(turnier_id: int, path: Optional[str] = None) -
     final_path = path or unique_path(base_dir, base_name, "csv")
     return save_csv(rows, header, final_path)
 
-
 def export_turnier_uebersicht_pdf(turnier_id: int, path: Optional[str] = None) -> str:
     info = _turnier_info(turnier_id)
-
     blocks: List[str] = []
 
-    # Gruppen
     groups = fetch_groups(turnier_id)
     if groups:
         g_rows: List[List[object]] = []
@@ -566,7 +500,6 @@ def export_turnier_uebersicht_pdf(turnier_id: int, path: Optional[str] = None) -
     else:
         blocks.append("<div class='warn'>Keine Gruppenspiele vorhanden.</div>")
 
-    # KO
     rounds = _ko_rounds_with_counts(turnier_id)
     if rounds:
         k_rows: List[List[object]] = []
