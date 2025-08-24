@@ -6,7 +6,8 @@ from pathlib import Path
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton, QHBoxLayout,
-    QTableWidget, QTableWidgetItem, QMessageBox, QSplitter, QHeaderView
+    QTableWidget, QTableWidgetItem, QMessageBox, QSplitter, QHeaderView,
+    QAbstractItemView
 )
 
 from database.models import (
@@ -363,7 +364,7 @@ class GruppenphaseView(QWidget):
 
         root = QVBoxLayout(self)
 
-        title = QLabel("Gruppenphase – Spielplan & Ergebnisse (v0.9.4)")
+        title = QLabel("Gruppenphase – Spielplan & Ergebnisse (v0.9.5)")
         title.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 8px;")
         root.addWidget(title)
 
@@ -407,12 +408,19 @@ class GruppenphaseView(QWidget):
         self.tbl_matches = QTableWidget(0, 6)
         self.tbl_matches.setHorizontalHeaderLabels(["Runde", "Spieler 1", "Spieler 2", "S1", "S2", "Scheibe"])
         self.tbl_matches.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        # ✅ Editier-Modus: Benutzer kann S1/S2 per Doppelklick/AnyKey/EditKey öffnen
+        self.tbl_matches.setEditTriggers(
+            QAbstractItemView.EditTrigger.DoubleClicked
+            | QAbstractItemView.EditTrigger.EditKeyPressed
+            | QAbstractItemView.EditTrigger.AnyKeyPressed
+        )
         splitter.addWidget(self.tbl_matches)
 
-        # Tabelle: Rangliste
+        # Tabelle: Rangliste (komplett read-only)
         self.tbl_table = QTableWidget(0, 8)
         self.tbl_table.setHorizontalHeaderLabels(["Spieler", "Spiele", "Siege", "Niederl.", "Legs +", "Legs -", "Diff", "Punkte"])
         self.tbl_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.tbl_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         splitter.addWidget(self.tbl_table)
 
         root.addWidget(splitter)
@@ -509,36 +517,35 @@ class GruppenphaseView(QWidget):
         self._matches = matches[:]  # (id, runde, match_no, p1, p2, s1, s2)
         self.tbl_matches.setRowCount(len(matches))
         for r, (mid, runde, _mno, p1, p2, s1, s2) in enumerate(matches):
-            self.tbl_matches.setItem(r, 0, QTableWidgetItem(str(runde)))
-            item_p1 = QTableWidgetItem(p1); item_p2 = QTableWidgetItem(p2)
-            # Spielerzellen NICHT editierbar
-            item_p1.setFlags(item_p1.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            item_p2.setFlags(item_p2.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            # Runde
+            it_r = QTableWidgetItem(str(runde)); it_r.setFlags(it_r.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.tbl_matches.setItem(r, 0, it_r)
+            # Spieler (read-only)
+            item_p1 = QTableWidgetItem(p1); item_p1.setFlags(item_p1.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            item_p2 = QTableWidgetItem(p2); item_p2.setFlags(item_p2.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.tbl_matches.setItem(r, 1, item_p1)
             self.tbl_matches.setItem(r, 2, item_p2)
-
+            # S1/S2 (einzige editierbare Felder)
             s1_item = QTableWidgetItem("" if s1 is None else str(s1))
             s2_item = QTableWidgetItem("" if s2 is None else str(s2))
-            s1_item.setFlags(s1_item.flags() | Qt.ItemFlag.ItemIsEditable)
-            s2_item.setFlags(s2_item.flags() | Qt.ItemFlag.ItemIsEditable)
+            s1_item.setFlags((s1_item.flags() | Qt.ItemFlag.ItemIsEditable) & ~Qt.ItemFlag.ItemIsUserCheckable)
+            s2_item.setFlags((s2_item.flags() | Qt.ItemFlag.ItemIsEditable) & ~Qt.ItemFlag.ItemIsUserCheckable)
             self.tbl_matches.setItem(r, 3, s1_item)
             self.tbl_matches.setItem(r, 4, s2_item)
-
+            # Board (read-only)
             board_txt = board_map.get(mid, "") if board_map else ""
             b_item = QTableWidgetItem(board_txt); b_item.setFlags(b_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.tbl_matches.setItem(r, 5, b_item)
+            # ID im UserRole hinterlegen auf einer read-only Zelle
+            it_r.setData(Qt.ItemDataRole.UserRole, mid)
 
     def _load_table_into_table(self, rows: List[dict], tie_groups: List[List[int]], show_dialog: bool):
         self.tbl_table.setRowCount(len(rows))
         for r, row in enumerate(rows):
-            self.tbl_table.setItem(r, 0, QTableWidgetItem(str(row['spieler'])))
-            self.tbl_table.setItem(r, 1, QTableWidgetItem(str(row['spiele'])))
-            self.tbl_table.setItem(r, 2, QTableWidgetItem(str(row['siege'])))
-            self.tbl_table.setItem(r, 3, QTableWidgetItem(str(row['niederlagen'])))
-            self.tbl_table.setItem(r, 4, QTableWidgetItem(str(row['lf'])))
-            self.tbl_table.setItem(r, 5, QTableWidgetItem(str(row['la'])))
-            self.tbl_table.setItem(r, 6, QTableWidgetItem(str(row['diff'])))
-            self.tbl_table.setItem(r, 7, QTableWidgetItem(str(row['pkt'])))
+            for c, key in enumerate(["spieler", "spiele", "siege", "niederlagen", "lf", "la", "diff", "pkt"]):
+                it = QTableWidgetItem(str(row[key]))
+                it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.tbl_table.setItem(r, c, it)
 
         # Popup nur auf Aktion (nicht beim Laden)
         if show_dialog and tie_groups:
@@ -579,7 +586,7 @@ class GruppenphaseView(QWidget):
             if not ok: return
 
         generate_group_round_robin(tid)
-        # Nach Erstellung: faire Scheibenverteilung (nur aktuelle Gruppe, sonst ggf. lange Laufzeit)
+        # Nach Erstellung: faire Scheibenverteilung (nur aktuelle Gruppe)
         _assign_boards_fair_for_group(tid, gid)
 
         QMessageBox.information(self, "OK", "Spielplan erzeugt und Scheiben verteilt.")

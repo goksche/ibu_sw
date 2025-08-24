@@ -1,4 +1,4 @@
-# IBU Turniere – Dart Turnier Verwaltungs Tool (v0.9.4)
+# IBU Turniere – Dart Turnier Verwaltungs Tool (v0.9.5)
 
 Windows‑Desktop‑App zur Verwaltung von Dartturnieren inkl. Gruppen‑ und KO‑Phase, **Bronze‑Spiel**, **Meisterschaften** und **Ranglisten**. GUI mit **PyQt6**, lokale Datenhaltung in **SQLite** (`./data/ibu.sqlite`).
 
@@ -8,7 +8,7 @@ Windows‑Desktop‑App zur Verwaltung von Dartturnieren inkl. Gruppen‑ und KO
 
 ## Inhalt
 
-* [Highlights v0.9.4](#highlights-v094)
+* [Highlights v0.9.5](#highlights-v095)
 * [Projektstruktur](#projektstruktur)
 * [Systemvoraussetzungen](#systemvoraussetzungen)
 * [Installation](#installation)
@@ -21,42 +21,16 @@ Windows‑Desktop‑App zur Verwaltung von Dartturnieren inkl. Gruppen‑ und KO
 * [Known Issues & Hinweise](#known-issues--hinweise)
 * [Lizenz & Support](#lizenz--support)
 
-## Highlights v0.9.4
+## Highlights v0.9.5
 
-**Gruppenphase – Ranglisten & Tie‑Breaks**
+**Gruppen & KO – Nur Resultat‑Felder editierbar**
 
-* **Ranglisten‑Modus wählbar**:
+* In **Gruppenphase** und **KO‑Phase** sind **ausschließlich** die Felder **S1/S2** editierbar.
+* **Spieler**, **Runde** und **Dartscheibe** sind **gesperrt** (read‑only).
+* Editieren per **Doppelklick**, **Tastatureingabe** oder **Edit‑Key**.
+* **Validierung:** Unentschieden sind nicht erlaubt (Speichern wird verhindert).
 
-  * **Punkte** (Sieg = 3, Niederlage = 0),
-  * **Differenz** (Leg‑Differenz),
-  * **Siege** (Anzahl Siege).
-* **Regeln bei Punktgleichheit** (nur Spiele **innerhalb** der betroffenen Spieler werden berücksichtigt – *3er‑Tabelle*)
-
-  * Modus **Punkte**: zuerst **Differenz**, dann **Direktbegegnung**.
-  * Modus **Differenz**: **Direktbegegnung**.
-  * Modus **Siege**: **Punkte** → **Differenz** → **Direktbegegnung**.
-* **Fallback „Stichmatch“**: Wenn nach allen Regeln weiterhin Gleichstand, wird nach **Ergebnisse speichern** ein Hinweis mit **Turnier & Gruppe** angezeigt (kein Popup beim Start).
-
-**KO‑Phase – Runden & BYEs**
-
-* **4 Qualifikanten** starten automatisch im **Halbfinale** (Rundenbezeichnung wird **dynamisch** aus der Matchanzahl ermittelt).
-* **6 Teilnehmer**: Automatisch **8er‑Bracket** mit **2 zufälligen BYEs** im Viertelfinale; erste Runde erhält sofort eine faire **Dartscheiben‑Zuweisung**.
-* **Bronze‑Spiel** erscheint automatisch, sobald **beide Halbfinals** entschieden sind (Rundenauswahl *„Bronze“*, intern `runde=99`).
-
-**Dartscheiben – Verwaltung & faire Zuweisung**
-
-* Neues Register **Einstellungen → Dartscheiben**: Nummer, Name, Aktiv‑Status (Löschen mit PW **6460**).
-* **Zuweisung** in **Gruppenphase** und **KO‑Phase** per Button („Scheiben neu verteilen“ / „für Runde zuweisen“).
-* **Faire Verteilung**: Historie über **alle Turnierspiele** (Gruppen + KO) wird berücksichtigt → alle Spieler nutzen die Boards möglichst gleichmäßig.
-* **Exporte** enthalten die zugewiesene **Dartscheibe** je Spiel.
-
-**Bedienung & Robustheit**
-
-* In Spielplänen sind nur **S1/S2** editierbar; **Unentschieden** sind nicht erlaubt.
-* Keine Lärm‑Popups beim Laden; Hinweise erst nach Nutzeraktionen.
-* DB‑Kompatibilität: Spalten `spieltag`/**`runde`**, `sets1/sets2`/**`s1/s2`** werden automatisch erkannt.
-
-> Vorversionen: v0.9.3 (Bugfixes Turnier/KO‑Register & Initial‑Ladeverhalten), v0.9.2 (Backups & Einstellungen), v0.9.1 (PDF‑Fix), v0.9.0 (Exporte), v0.8 (Meisterschafts‑Rangliste & Bronze‑Spiel).
+> Vorversionen: v0.9.4 (Ranglisten‑Modi, Dartscheiben‑Verwaltung & faire Zuweisung, KO‑Fixes inkl. Halbfinale bei 4 Qualifikanten), v0.9.3 (Bugfixes Turnier/KO‑Register & Initial‑Ladeverhalten), v0.9.2 (Backups & Einstellungen), v0.9.1 (PDF‑Fix), v0.9.0 (Exporte), v0.8 (Meisterschafts‑Rangliste & Bronze‑Spiel).
 
 ---
 
@@ -86,7 +60,7 @@ ibu_sw/
 │  ├─ ko_phase_view.py
 │  ├─ export_view.py
 │  ├─ settings_view.py
-│  └─ settings_boards.py # NEU: Dartscheiben‑Verwaltung (Einstellungen)
+│  └─ settings_boards.py # Dartscheiben‑Verwaltung (Einstellungen)
 └─ main.py               # Einstiegspunkt (setzt Pfade auch im EXE‑Build)
 ```
 
@@ -104,7 +78,7 @@ ibu_sw/
 
 ### A) Mit Installer (empfohlen)
 
-* `build/output/IBU_Turniere_v0.9.4_setup.exe` ausführen.
+* `build/output/IBU_Turniere_v0.9.5_setup.exe` ausführen.
 * Start über Startmenü/Shortcut **IBU Turniere**.
 
 ### B) Portable EXE
@@ -233,7 +207,7 @@ build\build_exe.bat
 
 1. Inno Setup installieren.
 2. `build/installer.iss` in Inno Setup öffnen → **Compile**.
-3. Ergebnis: `build/output/IBU_Turniere_v0.9.4_setup.exe`.
+3. Ergebnis: `build/output/IBU_Turniere_v0.9.5_setup.exe`.
 
 > Installer installiert nach `%LOCALAPPDATA%\ibu_sw` (kein Admin nötig).
 
@@ -249,14 +223,14 @@ build\build_exe.bat
   # Upstream holen & lokalen main rebasen
   git fetch origin
   git rebase origin/main
-  # (Konflikte -> git add <files> ; git rebase --continue)
+  # (Konflikte -> git add <Dateien> ; git rebase --continue)
 
   # Push
   git push origin main
 
   # Tag setzen (annotiert) & pushen
-  git tag -a v0.9.4 -m "Release v0.9.4 – Ranglisten-Modi, Dartscheiben, KO-Fixes"
-  git push origin v0.9.4
+  git tag -a v0.9.5 -m "Release v0.9.5 – Nur Resultat-Felder editierbar"
+  git push origin v0.9.5
 ```
 
 Weitere nützliche Befehle:

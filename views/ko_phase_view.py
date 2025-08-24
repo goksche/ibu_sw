@@ -7,6 +7,7 @@ from typing import List, Dict, Optional
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton,
     QSpinBox, QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView,
+    QAbstractItemView
 )
 from PyQt6.QtCore import Qt
 
@@ -170,7 +171,7 @@ class KOPhaseView(QWidget):
     def _build_ui(self):
         root = QVBoxLayout(self)
 
-        title = QLabel("KO-Phase – Bracket & Ergebnisse (v0.9.4)")
+        title = QLabel("KO-Phase – Bracket & Ergebnisse (v0.9.5)")
         title.setStyleSheet("font-size:18px; font-weight:600;")
         root.addWidget(title)
 
@@ -211,6 +212,12 @@ class KOPhaseView(QWidget):
         self.tbl.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.tbl.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self.tbl.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        # ✅ Editier-Modus: Benutzer kann S1/S2 per Doppelklick/AnyKey/EditKey öffnen
+        self.tbl.setEditTriggers(
+            QAbstractItemView.EditTrigger.DoubleClicked
+            | QAbstractItemView.EditTrigger.EditKeyPressed
+            | QAbstractItemView.EditTrigger.AnyKeyPressed
+        )
         root.addWidget(self.tbl)
 
         bottom = QHBoxLayout(); root.addLayout(bottom)
@@ -301,14 +308,22 @@ class KOPhaseView(QWidget):
         self.tbl.setRowCount(0)
         for mid, match_no, n1, n2, s1, s2 in matches:
             row = self.tbl.rowCount(); self.tbl.insertRow(row)
-            self.tbl.setItem(row, 0, QTableWidgetItem(str(match_no)))
-            self.tbl.item(row, 0).setData(Qt.ItemDataRole.UserRole, mid)
-            it1 = QTableWidgetItem(n1); it2 = QTableWidgetItem(n2)
-            it1.setFlags(it1.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            it2.setFlags(it2.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            # Match-Nr. (read-only) + ID in UserRole
+            it_m = QTableWidgetItem(str(match_no)); it_m.setFlags(it_m.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            it_m.setData(Qt.ItemDataRole.UserRole, mid)
+            self.tbl.setItem(row, 0, it_m)
+            # Spieler (read-only)
+            it1 = QTableWidgetItem(n1); it1.setFlags(it1.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            it2 = QTableWidgetItem(n2); it2.setFlags(it2.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.tbl.setItem(row, 1, it1); self.tbl.setItem(row, 2, it2)
-            self.tbl.setItem(row, 3, QTableWidgetItem("" if s1 is None else str(s1)))
-            self.tbl.setItem(row, 4, QTableWidgetItem("" if s2 is None else str(s2)))
+            # S1/S2 (einzige editierbare Felder)
+            s1_item = QTableWidgetItem("" if s1 is None else str(s1))
+            s2_item = QTableWidgetItem("" if s2 is None else str(s2))
+            s1_item.setFlags((s1_item.flags() | Qt.ItemFlag.ItemIsEditable) & ~Qt.ItemFlag.ItemIsUserCheckable)
+            s2_item.setFlags((s2_item.flags() | Qt.ItemFlag.ItemIsEditable) & ~Qt.ItemFlag.ItemIsUserCheckable)
+            self.tbl.setItem(row, 3, s1_item)
+            self.tbl.setItem(row, 4, s2_item)
+            # Board (read-only Text)
             b_item = QTableWidgetItem(board_map.get(mid, "")); b_item.setFlags(b_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.tbl.setItem(row, 5, b_item)
         self._update_champion()
