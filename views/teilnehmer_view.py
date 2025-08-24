@@ -1,98 +1,146 @@
+from __future__ import annotations
+from typing import Optional
+
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QMessageBox, QAbstractItemView, QInputDialog
 )
-from PyQt6.QtCore import Qt
+
+# Vorhandene Model-Funktionen weiterverwenden
 from database.models import (
     insert_teilnehmer, fetch_teilnehmer, update_teilnehmer, delete_teilnehmer
 )
+# NEU: Helper für Scolia-ID (eigenes kleines Modul, keine Inkompatibilität mit bestehendem Code)
+from database.scolia_support import ensure_scolia_schema, fetch_teilnehmer_full, set_scolia_id
+
+DELETE_PASSWORD = "6460"
 
 
 class TeilnehmerView(QWidget):
     def __init__(self):
         super().__init__()
-        self._current_id = None
+        self._current_id: Optional[int] = None
 
         root = QVBoxLayout(self)
 
-        title = QLabel("Teilnehmer erfassen / bearbeiten")
+        title = QLabel("Teilnehmer – Verwaltung (v0.9.6)")
         title.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 8px;")
         root.addWidget(title)
 
-        root.addWidget(QLabel("Name:"))
-        self.name_input = QLineEdit()
-        root.addWidget(self.name_input)
+        # Eingabezeile
+        form = QHBoxLayout()
+        form.addWidget(QLabel("Name:"))
+        self.ed_name = QLineEdit(); self.ed_name.setPlaceholderText("Voller Name")
+        form.addWidget(self.ed_name, 2)
 
-        root.addWidget(QLabel("Spitzname (optional):"))
-        self.nick_input = QLineEdit()
-        root.addWidget(self.nick_input)
+        form.addWidget(QLabel("Spitzname:"))
+        self.ed_spitz = QLineEdit(); self.ed_spitz.setPlaceholderText("optional")
+        form.addWidget(self.ed_spitz, 2)
 
-        row_btns = QHBoxLayout()
-        self.new_btn = QPushButton("Neu")
-        self.new_btn.clicked.connect(self._clear_form)
-        row_btns.addWidget(self.new_btn)
+        form.addWidget(QLabel("Scolia-ID:"))
+        self.ed_scolia = QLineEdit(); self.ed_scolia.setPlaceholderText("optional, z. B. 12345")
+        form.addWidget(self.ed_scolia, 2)
 
-        self.save_btn = QPushButton("Speichern (neu)")
-        self.save_btn.clicked.connect(self._save)
-        row_btns.addWidget(self.save_btn)
+        self.btn_add = QPushButton("Hinzufügen"); self.btn_add.clicked.connect(self._on_add)
+        form.addWidget(self.btn_add)
 
-        self.update_btn = QPushButton("Aktualisieren")
-        self.update_btn.clicked.connect(self._update)
-        row_btns.addWidget(self.update_btn)
+        self.btn_update = QPushButton("Ändern"); self.btn_update.clicked.connect(self._on_update)
+        form.addWidget(self.btn_update)
 
-        self.delete_btn = QPushButton("Löschen")
-        self.delete_btn.clicked.connect(self._delete)
-        row_btns.addWidget(self.delete_btn)
+        self.btn_reload = QPushButton("Neu laden"); self.btn_reload.clicked.connect(self._reload)
+        form.addWidget(self.btn_reload)
 
-        root.addLayout(row_btns)
+        root.addLayout(form)
 
-        tbl_title = QLabel("Gespeicherte Teilnehmer (zum Bearbeiten auswählen):")
-        tbl_title.setStyleSheet("font-weight: bold; margin-top: 12px;")
-        root.addWidget(tbl_title)
+        # Tabelle
+        self.tbl = QTableWidget(0, 3)
+        self.tbl.setHorizontalHeaderLabels(["Name", "Spitzname", "Scolia-ID"])
+        self.tbl.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.tbl.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.tbl.itemSelectionChanged.connect(self._on_select)
+        root.addWidget(self.tbl)
 
-        self.table = QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels(["Name", "Spitzname"])
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.table.itemSelectionChanged.connect(self._on_selection)
-        root.addWidget(self.table)
+        # Löschen-Button
+        row = QHBoxLayout(); root.addLayout(row)
+        row.addStretch(1)
+        self.btn_delete = QPushButton("Teilnehmer löschen…"); self.btn_delete.clicked.connect(self._on_delete)
+        row.addWidget(self.btn_delete)
 
-        self._load()
-        self._set_state(False)
+        ensure_scolia_schema()  # stellt sicher, dass Spalte existiert
+        self._reload()
 
-    # --- actions ---
-    def _save(self):
-        name = (self.name_input.text() or "").strip()
-        nick = (self.nick_input.text() or "").strip()
-        if not name:
-            QMessageBox.warning(self, "Fehler", "Bitte einen Namen eingeben.")
+    # ----------------------------------------------
+    # Laden/Refresh
+    # ----------------------------------------------
+    def _reload(self):
+        self.tbl.setRowCount(0)
+        for (tid, name, spitz, scolia) in fetch_teilnehmer_full():
+            r = self.tbl.rowCount(); self.tbl.insertRow(r)
+            it_name = QTableWidgetItem(name)
+            it_spitz = QTableWidgetItem(spitz)
+            it_scolia = QTableWidgetItem(scolia)
+            # ID im UserRole der ersten Zelle halten
+            it_name.setData(Qt.ItemDataRole.UserRole, int(tid))
+            for c, it in enumerate([it_name, it_spitz, it_scolia]):
+                it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.tbl.setItem(r, c, it)
+        self._current_id = None
+
+    def _on_select(self):
+        items = self.tbl.selectedItems()
+        if not items:
+            self._current_id = None
             return
-        insert_teilnehmer(name, nick or None)
-        self._clear_form()
-        self._load()
-        QMessageBox.information(self, "OK", "Teilnehmer gespeichert.")
+        row = items[0].row()
+        self._current_id = int(self.tbl.item(row, 0).data(Qt.ItemDataRole.UserRole))
+        self.ed_name.setText(self.tbl.item(row, 0).text())
+        self.ed_spitz.setText(self.tbl.item(row, 1).text())
+        self.ed_scolia.setText(self.tbl.item(row, 2).text())
 
-    def _update(self):
-        if self._current_id is None:
-            QMessageBox.information(self, "Hinweis", "Bitte zuerst einen Eintrag auswählen.")
+    # ----------------------------------------------
+    # CRUD
+    # ----------------------------------------------
+    def _on_add(self):
+        name = (self.ed_name.text() or "").strip()
+        spitz = (self.ed_spitz.text() or "").strip()
+        scolia = (self.ed_scolia.text() or "").strip()
+        if name == "":
+            QMessageBox.warning(self, "Eingabe fehlt", "Bitte einen Namen eingeben.")
             return
-        name = (self.name_input.text() or "").strip()
-        nick = (self.nick_input.text() or "").strip()
-        if not name:
-            QMessageBox.warning(self, "Fehler", "Bitte einen Namen eingeben.")
+        try:
+            new_id = insert_teilnehmer(name, spitz)
+            if scolia:
+                set_scolia_id(new_id, scolia)
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Anlegen fehlgeschlagen: {e}")
             return
-        update_teilnehmer(self._current_id, name, nick or None)
-        self._clear_form()
-        self._load()
-        QMessageBox.information(self, "OK", "Teilnehmer aktualisiert.")
+        self._reload()
+        self.ed_name.clear(); self.ed_spitz.clear(); self.ed_scolia.clear()
 
-    def _delete(self):
-        if self._current_id is None:
-            QMessageBox.information(self, "Hinweis", "Bitte zuerst einen Eintrag auswählen.")
+    def _on_update(self):
+        if not self._current_id:
+            QMessageBox.information(self, "Auswahl fehlt", "Bitte zuerst einen Teilnehmer in der Tabelle wählen.")
             return
+        name = (self.ed_name.text() or "").strip()
+        spitz = (self.ed_spitz.text() or "").strip()
+        scolia = (self.ed_scolia.text() or "").strip()
+        if name == "":
+            QMessageBox.warning(self, "Eingabe fehlt", "Bitte einen Namen eingeben.")
+            return
+        try:
+            update_teilnehmer(self._current_id, name, spitz)
+            set_scolia_id(self._current_id, scolia)
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Änderung fehlgeschlagen: {e}")
+            return
+        self._reload()
 
-        # Passwortabfrage
+    def _on_delete(self):
+        if not self._current_id:
+            QMessageBox.information(self, "Auswahl fehlt", "Bitte zuerst einen Teilnehmer wählen.")
+            return
         pw, ok = QInputDialog.getText(
             self,
             "Passwort erforderlich",
@@ -101,57 +149,19 @@ class TeilnehmerView(QWidget):
         )
         if not ok:
             return
-        if (pw or "").strip() != "6460":
+        if (pw or "").strip() != DELETE_PASSWORD:
             QMessageBox.critical(self, "Fehler", "Falsches Passwort. Löschen abgebrochen.")
             return
-
-        ret = QMessageBox.question(
+        if QMessageBox.question(
             self, "Löschen bestätigen",
             "Ausgewählten Teilnehmer wirklich löschen?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
-        )
-        if ret != QMessageBox.StandardButton.Yes:
+        ) != QMessageBox.StandardButton.Yes:
             return
-        delete_teilnehmer(self._current_id)
-        self._clear_form()
-        self._load()
-        QMessageBox.information(self, "OK", "Teilnehmer gelöscht.")
-
-    # --- helpers ---
-    def _load(self):
-        data = fetch_teilnehmer()
-        self.table.setRowCount(len(data))
-        for row, (tid, name, nick) in enumerate(data):
-            name_item = QTableWidgetItem(name)
-            name_item.setData(Qt.ItemDataRole.UserRole, tid)
-            self.table.setItem(row, 0, name_item)
-            self.table.setItem(row, 1, QTableWidgetItem(nick))
-        self.table.clearSelection()
-        self._current_id = None
-        self._set_state(False)
-
-    def _on_selection(self):
-        sel = self.table.selectionModel().selectedRows()
-        if not sel:
-            self._current_id = None
-            self._set_state(False)
+        try:
+            delete_teilnehmer(self._current_id)
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Löschen fehlgeschlagen: {e}")
             return
-        r = sel[0].row()
-        name_item = self.table.item(r, 0)
-        nick_item = self.table.item(r, 1)
-        self._current_id = int(name_item.data(Qt.ItemDataRole.UserRole))
-        self.name_input.setText(name_item.text())
-        self.nick_input.setText(nick_item.text() if nick_item else "")
-        self._set_state(True)
-
-    def _clear_form(self):
-        self._current_id = None
-        self.name_input.clear()
-        self.nick_input.clear()
-        self.table.clearSelection()
-        self._set_state(False)
-
-    def _set_state(self, has_selection: bool):
-        self.update_btn.setEnabled(has_selection)
-        self.delete_btn.setEnabled(has_selection)
+        self._reload()
