@@ -1,268 +1,278 @@
-# IBU Turniere – Dart Turnier Verwaltungs Tool (v0.9.6)
+# IBU Turniere (ibu\_sw)
 
-Windows‑Desktop‑App zur Verwaltung von Dartturnieren inkl. Gruppen‑ und KO‑Phase, **Bronze‑Spiel**, **Meisterschaften** und **Ranglisten**. GUI mit **PyQt6**, lokale Datenhaltung in **SQLite** (`./data/ibu.sqlite`).
-
-> **Sicherheit:** Alle **Löschaktionen** (Turniere, Teilnehmer, Meisterschaften, Pläne, Dartscheiben) sind mit dem Passwort **6460** geschützt. In Spielplänen sind **nur Ergebnisse (S1/S2)** editierbar – Spielerfelder sind gesperrt.
+PyQt6 Desktop-App zur Verwaltung von Dartturnieren mit Gruppenphase, KO-Phase und Meisterschaften.
+Speichert lokal in **SQLite** (`./data/ibu.sqlite`), läuft unter Windows (10/11).
+Ziel: schnelles, stabiles Turnier-Handling inkl. Exporten (CSV/PDF) und Meisterschafts-Rangliste.
 
 ---
 
 ## Inhalt
 
-* [Highlights v0.9.6](#highlights-v096)
-* [Projektstruktur](#projektstruktur)
+* [Überblick](#überblick)
+* [Features](#features)
 * [Systemvoraussetzungen](#systemvoraussetzungen)
-* [Installation](#installation)
-* [Start](#start)
+* [Quickstart (Entwicklung)](#quickstart-entwicklung)
+* [Build & Release (Windows)](#build--release-windows)
+* [Ordnerstruktur](#ordnerstruktur)
+* [Datenbank, Backup & Restore](#datenbank-backup--restore)
 * [Bedienung (Tabs)](#bedienung-tabs)
-* [Datenbank](#datenbank)
-* [Workflow – Kurz & knackig](#workflow--kurz--knackig)
-* [Build – EXE & Installer](#build--exe--installer)
-* [Release / Git‑Cheatsheet](#release--git-cheatsheet)
-* [Known Issues & Hinweise](#known-issues--hinweise)
-* [Lizenz & Support](#lizenz--support)
-
-## Highlights v0.9.6
-
-**Teilnehmer – Scolia‑ID**
-
-* **Neues Feld „Scolia‑ID“** in der Teilnehmer‑Erfassung und ‑Bearbeitung.
-* Anzeige der Scolia‑ID in der Teilnehmer‑Tabelle.
-* **DB‑Erweiterung automatisch** beim Öffnen der Teilnehmer‑Ansicht (Spalte `scolia_id` wird angelegt, falls nicht vorhanden).
-
-**Gruppen & KO – Nur Resultat‑Felder editierbar (aus v0.9.5)**
-
-* In **Gruppenphase** und **KO‑Phase** sind **ausschließlich** die Felder **S1/S2** editierbar.
-* **Spieler**, **Runde** und **Dartscheibe** sind **read‑only**.
-* **Validierung:** Unentschieden sind nicht erlaubt (Speichern wird verhindert).
-
-> Vorversionen: v0.9.5 (Nur Resultat‑Felder), v0.9.4 (Ranglisten‑Modi, Dartscheiben‑Verwaltung & faire Zuweisung, KO‑Fixes inkl. Halbfinale bei 4 Qualifikanten), v0.9.3 (Bugfixes Turnier/KO‑Register & Initial‑Ladeverhalten), v0.9.2 (Backups & Einstellungen), v0.9.1 (PDF‑Fix), v0.9.0 (Exporte), v0.8 (Meisterschafts‑Rangliste & Bronze‑Spiel).
+* [Exporte](#exporte)
+* [Changelog](#changelog)
+* [Git-Flow (Rebase & Tagging)](#git-flow-rebase--tagging)
+* [Fehler melden / Support](#fehler-melden--support)
 
 ---
 
-## Projektstruktur
+## Überblick
 
-```
-ibu_sw/
-├─ data/                 # SQLite‑DB (ibu.sqlite) – wird automatisch angelegt
-├─ backups/              # Backups
-├─ exports/              # Exportziel (anpassbar in Einstellungen)
-├─ build/
-│  ├─ build_exe.bat      # PyInstaller Build‑Skript (OneFile EXE)
-│  └─ installer.iss      # Inno Setup Script (Installer)
-├─ database/
-│  ├─ models.py          # gesamte Datenlogik/SQL
-│  └─ scolia_support.py  # NEU (v0.9.6): Scolia‑ID Schema & Helper
-├─ utils/
-│  ├─ exporter.py        # CSV/PDF Exporte (ohne externe Libs)
-│  ├─ backup.py          # Backup/Restore
-│  ├─ settings.py        # App‑Settings (Export‑Ordner)
-│  └─ ui.py              # MessageBox‑Helfer
-├─ views/
-│  ├─ main_window.py
-│  ├─ teilnehmer_view.py # v0.9.6: mit Feld „Scolia‑ID“
-│  ├─ turnier_view.py
-│  ├─ turnier_start_view.py
-│  ├─ gruppenphase_view.py
-│  ├─ ko_phase_view.py
-│  ├─ export_view.py
-│  ├─ settings_view.py
-│  └─ settings_boards.py # Dartscheiben‑Verwaltung (Einstellungen)
-└─ main.py               # Einstiegspunkt (setzt Pfade auch im EXE‑Build)
-```
+**IBU Turniere** ist ein leichtgewichtiges Turnier-Tool für Dart-Vereine und -Events.
+Die App verwaltet Spieler, Turniere (Gruppenphase + KO), Punkteschemata für Meisterschaften und erstellt Exporte.
+
+**Technik**
+
+* **Python 3.10+**, **PyQt6**, **SQLite** (Datei: `./data/ibu.sqlite`)
+* Portable EXE via **PyInstaller**, Windows-Installer via **Inno Setup**
+
+---
+
+## Features
+
+* **Turniere**
+
+  * Turnier anlegen, Teilnehmer zuweisen
+  * **Gruppenphase**: Round-Robin-Spielplan erzeugen, Ergebnisse erfassen, Rangliste
+  * **KO-Phase**: Baum aus Gruppenplatzierungen, Bronze-Spiel (Runde `99`), Final-Logik
+* **Meisterschaften**
+
+  * **Meisterschaften-Tab** mit **Neu/Bearbeiten/Löschen**
+  * Turniere zuweisen, **Punkteschema** pflegen
+  * Aggregierte **Rangliste** über zugewiesene Turniere
+* **Teilnehmer**
+
+  * Erfassung inkl. optionaler **Scolia ID**
+* **Exporte**
+
+  * CSV/PDF (u. a. Teilnehmer inkl. Scolia ID)
+* **Einstellungen**
+
+  * Backup/Restore, Export-Ordner konfigurieren
+* **Qualität**
+
+  * Ergebnisfelder (S1/S2) editierbar, Metadaten read-only
+  * Auto-Refresh der Turnierlisten in **Turnier starten**, **Gruppenphase** und **KO-Phase**
 
 ---
 
 ## Systemvoraussetzungen
 
 * Windows 10/11
-* (Nur für Source‑Run/Build) Python **3.10+**
-* Pip‑Pakete: **PyQt6** (alles andere nur Stdlib)
+* Python **3.10+** (für Entwicklung)
+* Abhängigkeiten: siehe `requirements.txt`
 
 ---
 
-## Installation
-
-### A) Mit Installer (empfohlen)
-
-* `build/output/IBU_Turniere_v0.9.6_setup.exe` ausführen.
-* Start über Startmenü/Shortcut **IBU Turniere**.
-
-### B) Portable EXE
-
-* `dist/IBU Turniere.exe` direkt starten (keine Installation nötig).
-
-### C) Aus dem Quellcode (Entwicklung)
+## Quickstart (Entwicklung)
 
 ```bash
+  # 1) Repository klonen
+  git clone https://github.com/goksche/ibu_sw.git
+  cd ibu_sw
+
+  # 2) Python venv & Abhängigkeiten
   python -m venv .venv
-  .venv\Scripts\activate
-  pip install --upgrade pip
-  pip install PyQt6
+  # Windows PowerShell:
+  .\.venv\Scripts\Activate.ps1
+  pip install -r requirements.txt
+
+  # 3) Start der Anwendung
+  python .\main.py
 ```
 
 ---
 
-## Start
+## Build & Release (Windows)
 
-```bash
-  # im aktivierten venv (Quellcode-Modus)
-  python main.py
-```
-
-Beim ersten Start wird `./data/ibu.sqlite` automatisch erstellt.
-
----
-
-## Bedienung (Tabs)
-
-### 1) Turniere
-
-* **CRUD**: Turniere anlegen/ändern/löschen (Löschen mit PW **6460**).
-* Felder: *Name*, *Datum*, *Modus* (Gruppen, KO, Gruppen+KO), *Meisterschaftsrelevant*.
-
-### 2) Teilnehmer
-
-* **CRUD** + **Zuweisung** zu einem Turnier (ersetzt bestehende Liste).
-* **Scolia‑ID**: optionales Feld in Erfassung/Änderung; Anzeige in der Tabelle.
-* Löschen mit PW **6460**.
-
-### 3) Turnier starten
-
-* Spieler einem Turnier zuweisen, Gruppen (A, B, …) anlegen/füllen, speichern.
-
-### 4) Gruppenphase
-
-* **Round‑Robin** generieren, Ergebnisse eintragen (**nur S1/S2 editierbar**).
-* **Ranglisten‑Modus**: Punkte / Differenz / Siege wählbar.
-* **Tie‑Breaks** je Modus (inkl. **3er‑Tabelle**), **Fallback Stichmatch**. Hinweis **erst nach Speichern**.
-* **Scheiben neu verteilen**: faire, turnierweite Board‑Verteilung.
-* **Plan löschen/überschreiben** nur ohne Ergebnisse; **Löschen mit PW 6460**.
-
-### 5) KO‑Phase
-
-* Start abhängig von Qualifikanten: 4 ⇒ **Halbfinale**, 8 ⇒ **Viertelfinale**, … (Anzeige **dynamisch**).
-* **6 Teilnehmer**: 8er‑Baum + **2 BYEs** (zufällig) im Viertelfinale.
-* Ergebnisse speichern → **Sieger werden automatisch weitergetragen**.
-* **Bronze‑Spiel** erscheint automatisch (Runde *„Bronze“* / `99`).
-* Button **„KO‑Plan löschen“** (PW 6460).
-* **Champion** wird **nur** aus dem **Finale** ermittelt.
-* **Scheiben zuweisen**: faire Zuweisung pro Runde.
-
-### 6) Meisterschaften
-
-* **CRUD** (Löschen mit PW **6460**), Turniere per Checkbox zuweisen.
-* Punkteschema bearbeiten oder **„Standard‑Schema“** anwenden (1=30, 2=24, 3=18, 4=15, **ab 5=5**).
-* **Rangliste**: *alle* Spieler aus allen zugewiesenen Turnieren, inkl. Spieler außerhalb Top‑4 (je 5 Punkte).
-* **Neu berechnen**: per Button oder automatisch nach Final‑Speicherung / Schema‑ bzw. Zuweisungsänderungen.
-
-### 7) Exporte
-
-* Meisterschafts‑Rangliste (CSV/PDF), Gruppen‑Spielplan & ‑Tabellen (CSV/PDF), KO‑Übersicht (CSV/PDF), Gesamt‑Übersicht & Teilnehmerliste (CSV/PDF).
-* **Dartscheiben** sind in den Spielplan‑Exporten enthalten.
-* Zielordner in **Einstellungen → Export‑Ordner**.
-
-### 8) Einstellungen
-
-* **Dartscheiben verwalten**: Nummer, Name, Aktiv (Löschen mit PW **6460**).
-* **Backup erstellen / wiederherstellen** (`./backups/`).
-* **Export‑Ordner** ändern/zurücksetzen.
-
----
-
-## Datenbank
-
-* Datei: `./data/ibu.sqlite` (automatisch angelegt).
-* **Neue/erweiterte Felder (v0.9.6)**:
-
-  * Tabelle `teilnehmer`: **Spalte `scolia_id` (TEXT)**.
-* **Bestehende Felder (seit v0.9.4)**:
-
-  * Tabelle `dartscheiben` (id, nummer, name, aktiv).
-  * Spalte `board_id` in `spiele` **und** `ko_spiele`.
-  * Spalte `group_rank_mode` in `turniere` (`punkte` | `differenz` | `siege`).
-* **Abwärtskompatibel**:
-
-  * Alte DBs mit `spiele.runde` statt `spieltag` funktionieren ohne Migration.
-  * Ergebnisse sowohl über `sets1/sets2` als auch `s1/s2` werden unterstützt.
-  * Meisterschafts‑Flag akzeptiert `Ja/Nein` (intern robust als `0/1`).
-
-> **Backup‑Tipp:** Für manuelle Backups genügt das Kopieren von `data/ibu.sqlite`. Komfortabel über **Einstellungen → Backup**.
-
----
-
-## Workflow – Kurz & knackig
-
-1. **Einstellungen → Dartscheiben**: Boards anlegen/aktivieren.
-2. **Teilnehmer** anlegen (optional **Scolia‑ID** mitgeben).
-3. **Turnier** erstellen (Modus z. B. *Gruppen und KO*).
-4. In **Turnier starten**: Spieler zuweisen, Gruppen anlegen, speichern.
-5. **Gruppenphase**: Plan generieren, **Scheiben neu verteilen**, Ergebnisse eintragen.
-6. **KO‑Phase**: Qualifikanten wählen, Plan erzeugen (4 ⇒ Halbfinale; 6 ⇒ BYEs), **Runde mit Scheiben** belegen, Ergebnisse eintragen.
-7. (Optional) **Meisterschaft**: Turniere zuweisen, Schema prüfen, Rangliste ansehen/neu berechnen.
-8. **Exporte** oder **Backup** nutzen.
-
----
-
-## Build – EXE & Installer
-
-### Portable EXE erzeugen
+### Portable EXE (PyInstaller)
 
 ```bat
 build\build_exe.bat
 ```
 
-* Ergebnis: `dist\IBU Turniere.exe` (Explorer öffnet automatisch und markiert die Datei).
+* erzeugt eine **onefile**-EXE für Tests/Verteilung
 
-### Installer erzeugen (Inno Setup)
+### Installer (Inno Setup)
 
-1. Inno Setup installieren.
-2. `build/installer.iss` in Inno Setup öffnen → **Compile**.
-3. Ergebnis: `build/output/IBU_Turniere_v0.9.6_setup.exe`.
+1. `build\installer.iss` öffnen und Version auf **0.9.6.1** setzen (`AppVersion`, Ausgabename).
+2. Im **Inno Setup Compiler**: **Compile**.
+3. Ergebnis: `build\output\IBU_Turniere_v0.9.6.1_setup.exe`
 
-> Installer installiert nach `%LOCALAPPDATA%\ibu_sw` (kein Admin nötig).
+**Hinweis:** Der App-Fenstertitel lautet **IBU Turniere**.
 
 ---
 
-## Release / Git‑Cheatsheet
+## Ordnerstruktur
+
+```
+ibu_sw/
+├─ build/                 # Build-Skripte (PyInstaller, Inno Setup)
+├─ data/
+│  └─ ibu.sqlite          # SQLite-Datenbank (wird automatisch erstellt)
+├─ database/
+│  └─ models.py           # DB-Logik
+├─ views/
+│  ├─ main_window.py      # Hauptfenster
+│  ├─ turnier_start_view.py
+│  ├─ gruppenphase_view.py
+│  ├─ ko_phase_view.py
+│  └─ meisterschaft_view.py
+├─ export/                # (konfigurierbar) Zielordner für CSV/PDF
+├─ README.md
+└─ main.py                # App-Start
+```
+
+---
+
+## Datenbank, Backup & Restore
+
+* **Pfad:** `./data/ibu.sqlite`
+* **Backup:** Tab **Einstellungen** → Backup erstellen
+* **Restore:** Tab **Einstellungen** → Backup einspielen
+* **Wichtig:** Beim manuellen Kopieren die App vorher schließen.
+
+---
+
+## Bedienung (Tabs)
+
+### Teilnehmer
+
+* Teilnehmer anlegen/bearbeiten/löschen
+* Optional **Scolia ID** erfassen
+
+### Turniere
+
+* **Turnier starten**
+
+  * Turnier wählen (Liste aktualisiert sich beim Öffnen und alle 5s)
+  * Teilnehmer zuweisen/entfernen, Liste speichern
+  * Gruppen automatisch verteilen und **Gruppierung speichern**
+  * Bestehende Gruppierung kann (mit Passwort **6460**) überschrieben werden
+* **Gruppenphase**
+
+  * Spielplan (Round-Robin) erzeugen/löschen
+  * S1/S2 eintragen, Rangliste wird aktualisiert
+  * Faire Board-Zuordnung je Gruppe verfügbar
+* **KO-Phase**
+
+  * Aus Gruppenplatzierungen generiert
+  * S1/S2 eintragen, Sieger propagiert automatisch
+  * **Bronze-Spiel** (Runde **99**) aus Halbfinals erzeugen
+  * **Champion** aus dem Finale
+
+### Meisterschaften
+
+* **Neu**, **Bearbeiten**, **Löschen**, **Neu laden**
+* Turniere zuweisen (Checkbox-Liste)
+* Punkteschema pflegen (Platz → Punkte)
+* **Rangliste** über alle zugewiesenen Turniere neu berechnen
+
+### Exporte
+
+* CSV/PDF, einheitliche Spalten (inkl. Scolia ID bei Teilnehmern)
+
+### Einstellungen
+
+* Backup/Restore
+* Export-Ordner festlegen
+
+---
+
+## Exporte
+
+* **Teilnehmer**: inkl. `Scolia ID`
+* **Turniere/Ergebnisse**: CSV/PDF je nach Ansicht
+* Export-Ordner unter **Einstellungen** konfigurierbar
+* Sonderzeichen/Leerzeichen in Pfaden werden sauber behandelt
+
+---
+
+## Changelog
+
+### v0.9.6.1 – Bugfix Release
+
+**Kurz:** Meisterschaften-CRUD ergänzt, Listen aktualisieren sich automatisch, KO-Ansicht zeigt nur aktuelle Turniere.
+
+**Fixes & Verbesserungen**
+
+* **Meisterschaften**
+
+  * Tab mit **Neu/Bearbeiten/Löschen/Neu laden**
+  * Turnierzuweisung und Punkteschema-Editor überarbeitet
+* **Turnier starten**
+
+  * **Auto-Refresh** (alle 5s) und **Neu laden**
+  * Auswahl bleibt beim Reload erhalten
+* **Gruppenphase**
+
+  * Auto-Refresh und Reload auf Tab-Anzeige
+  * S1/S2 sind editierbar, Spieler/Metadaten read-only
+* **KO-Phase**
+
+  * Nur aktuelle Turniere sichtbar (gelöschte verschwinden)
+  * Auto-Refresh und Reload auf Tab-Anzeige
+  * Bronze (Runde 99) aus Halbfinals erzeugbar; Champion aus dem Finale
+* **Teilnehmer**
+
+  * **Scolia ID** optional, in Listen/Exporten sichtbar
+* **Exporte**
+
+  * Einheitliche Spalten, Umlaute/Sonderzeichen robuster
+* **Datenbank**
+
+  * Schema-Sanity-Checks beim Start (abwärtskompatibel)
+
+### v0.9.6
+
+* UI-Verbesserungen, Bronze-Spiel (Runde 99), Exporte, Einstellungen mit Backup/Restore, Export-Ordner konfigurierbar
+
+### v0.9.2
+
+* Stabiler Release-Stand mit Grundfunktionen (Tabs, SQLite, Exporte)
+
+---
+
+## Git-Flow (Rebase & Tagging)
+
+Empfohlener Ablauf für Releases:
 
 ```bash
-  # Änderungen sichern
+  # Änderungen committen
   git add -A
-  git commit -m "WIP"
+  git commit -m "v0.9.6.1: Bugfixes (Meisterschaften-CRUD, Auto-Refresh, KO-Filter, Exporte, Scolia ID)"
 
-  # Upstream holen & lokalen main rebasen
+  # Upstream holen und rebasen
   git fetch origin
   git rebase origin/main
-  # (Konflikte -> git add <Dateien> ; git rebase --continue)
+  # ggf. Konflikte lösen:
+  # git add <file>
+  # git rebase --continue
 
   # Push
   git push origin main
 
-  # Tag setzen (annotiert) & pushen
-  git tag -a v0.9.6 -m "Release v0.9.6 – Teilnehmer mit Scolia-ID"
-  git push origin v0.9.6
-```
-
-Weitere nützliche Befehle:
-
-```bash
-  git push --tags           # alle Tags pushen
-  git tag -d vX.Y.Z         # lokalen Tag löschen
-  git push origin :refs/tags/vX.Y.Z   # Remote-Tag löschen
+  # Release-Tag setzen (annotiert) und pushen
+  git tag -a v0.9.6.1 -m "Release v0.9.6.1 – Meisterschaften-CRUD, Auto-Refresh, KO-Filter, Exporte, Scolia ID"
+  git push origin v0.9.6.1
 ```
 
 ---
 
-## Known Issues & Hinweise
+## Fehler melden / Support
 
-* **Stichmatch-Hinweis** erscheint nur nach **Ergebnisse speichern**; beim Start bleibt der Tab still.
-* **Bronze/Finale**: Siegeranzeige bezieht sich ausschließlich auf das **Finale** – Bronze wird korrekt ignoriert.
-* **PDF‑Export**: Stabil; bei Layoutproblemen sicherstellen, dass `utils/exporter.py` aktuell ist.
-* **Löschen**: Irreversibel (PW **6460** erforderlich).
+* Bitte **klare Repro-Schritte** angeben (was, wo, welche Daten)
+* Screenshots/Logs helfen (Fehlermeldungen aus der Konsole)
+* Bei DB-Themen ggf. eine **Kopie von `data/ibu.sqlite`** (ohne personenbezogene Daten) bereitstellen
 
 ---
 
-## Lizenz & Support
-
-Interne Anwendung – keine öffentliche Lizenz.
-Issues bitte mit **Fehlermeldung + Screenshot** und kurzer Repro‑Beschreibung anlegen.
+**Hinweis zur Sicherheit:**
+Aktionen wie **Löschen/Überschreiben** geschützt (z. B. Gruppierung überschreiben: Passwort **6460**). Bitte nur autorisierten Personen zugänglich machen.

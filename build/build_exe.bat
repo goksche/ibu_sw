@@ -1,77 +1,67 @@
 @echo off
-REM v0.9.3 – Build-Skript für portable EXE (PyInstaller), robust für PyQt6
-REM Öffnet nach dem Build den Explorer und markiert die EXE.
-REM Aufruf: Doppelklick oder: build\build_exe.bat
+setlocal EnableExtensions EnableDelayedExpansion
 
-setlocal
-cd /d "%~dp0\.."
+REM ==============================================================
+REM  IBU Turniere – Build-Skript (v0.9.6)
+REM  Erzeugt eine portable OneFile-EXE mit PyInstaller.
+REM ==============================================================
 
-echo [1/5] Python venv prüfen/anlegen ...
-if not exist ".venv\Scripts\python.exe" (
-  python -m venv .venv
-)
+set "APP_NAME=IBU Turniere"
+set "APP_VERSION=0.9.6"
+set "ENTRY=main.py"
 
-echo [2/5] venv aktivieren und Abhängigkeiten installieren ...
-call .venv\Scripts\activate
-python -m pip install --upgrade pip
-python -m pip install PyQt6 pyinstaller
+REM Verzeichnisse relativ zu diesem Skript
+set "SCRIPT_DIR=%~dp0"
+set "REPO_ROOT=%SCRIPT_DIR%..\"
+set "DIST_DIR=%REPO_ROOT%dist"
+set "WORK_DIR=%REPO_ROOT%build\pyinstaller"
+set "ICON_PATH=%REPO_ROOT%assets\ibu.ico"
 
-echo [3/5] Verzeichnisse sicherstellen ...
-if not exist data mkdir data
-if not exist exports mkdir exports
-if not exist backups mkdir backups
+if not exist "%DIST_DIR%" mkdir "%DIST_DIR%"
+if not exist "%WORK_DIR%" mkdir "%WORK_DIR%"
 
-echo [4/5] PyInstaller-Build (onefile, sammelt PyQt6-Ressourcen) ...
-pyinstaller ^
-  --onefile ^
-  --windowed ^
-  --noconsole ^
+REM Optionales Icon-Flag
+set "ICON_FLAG="
+if exist "%ICON_PATH%" set ICON_FLAG=--icon "%ICON_PATH%"
+
+pushd "%REPO_ROOT%"
+
+echo [1/3] Aufräumen…
+if exist "%WORK_DIR%" rmdir /s /q "%WORK_DIR%"
+
+REM Hinweis: --collect-all PyQt6 sammelt Plugins/Qt-Ressourcen zuverlässig ein
+REM         --hidden-import PyQt6.sip fix für manche Umgebungen
+
+echo [2/3] Baue EXE mit PyInstaller…
+py -m PyInstaller ^
   --noconfirm ^
   --clean ^
-  --name "IBU Turniere" ^
+  --onefile ^
+  --windowed ^
+  --name "%APP_NAME%" ^
+  %ICON_FLAG% ^
+  --optimize 1 ^
   --collect-all PyQt6 ^
-  --add-data "data;data" ^
-  --add-data "exports;exports" ^
-  --add-data "backups;backups" ^
-  main.py
+  --hidden-import PyQt6.sip ^
+  --distpath "%DIST_DIR%" ^
+  --workpath "%WORK_DIR%" ^
+  "%ENTRY%"
 
-echo [5/5] Suche nach der erzeugten EXE ...
-set "ROOT=%CD%"
-set "DISTDIR=%ROOT%\dist"
-set "TARGET="
-
-REM 1) One-File (Standard)
-if exist "%DISTDIR%\IBU Turniere.exe" (
-  set "TARGET=%DISTDIR%\IBU Turniere.exe"
+if errorlevel 1 (
+  echo *** FEHLER: PyInstaller Build fehlgeschlagen. ***
+  popd
+  pause
+  exit /b 1
 )
 
-REM 2) One-Folder (falls PyInstaller nicht onefile gebaut hat)
-if not defined TARGET if exist "%DISTDIR%\IBU Turniere\IBU Turniere.exe" (
-  set "TARGET=%DISTDIR%\IBU Turniere\IBU Turniere.exe"
-)
-
-REM 3) Notfall: im gesamten Repo suchen
-if not defined TARGET (
-  for /r "%ROOT%" %%F in ("IBU Turniere.exe") do (
-    set "TARGET=%%~fF"
-    goto :found
-  )
-)
-
-:found
-if defined TARGET (
-  echo [INFO] EXE gefunden:
-  echo     %TARGET%
-  echo.
-  echo Explorer wird geöffnet ...
-  start "" explorer.exe /select,"%TARGET%"
+echo [3/3] Fertig. Oeffne Explorer…
+set "EXE=%DIST_DIR%\%APP_NAME%.exe"
+if exist "%EXE%" (
+  explorer /select,"%EXE%"
+  echo Gebaut: %EXE%
 ) else (
-  echo [WARN] Keine EXE gefunden. Bitte Build-Output oben prüfen.
-  echo Erwartete Pfade:
-  echo   %DISTDIR%\IBU Turniere.exe
-  echo   %DISTDIR%\IBU Turniere\IBU Turniere.exe
+  echo WARNUNG: EXE nicht gefunden in %DIST_DIR%.
 )
 
-echo.
-echo Fertig. Druecke eine Taste zum Schliessen.
+popd
 pause
