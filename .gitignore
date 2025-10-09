@@ -13,3 +13,8 @@ __pycache__/
 *.sqlite
 *.db
 *.log
+dist/
+build/
+installer/build/
+*.exe
+*.pkg
