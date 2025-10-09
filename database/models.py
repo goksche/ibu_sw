@@ -1,8 +1,11 @@
 # database/models.py
 from __future__ import annotations
-import os, math, sqlite3
+import os, math, sqlite3, random
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+# ---------------------------------------------------------------------------
+# Pfade / Datenbank
+# ---------------------------------------------------------------------------
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -11,9 +14,9 @@ DB_PATH = os.path.join(DATA_DIR, "ibu.sqlite")
 BRONZE_ROUND = 99  # internes Kennzeichen für „Kleines Finale“
 
 
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # DB / Helpers
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def _connect() -> sqlite3.Connection:
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
@@ -36,9 +39,24 @@ def _to_int_bool(v: Any) -> int:
         return 0
 
 
+def _col_exists(con: sqlite3.Connection, table: str, col: str) -> bool:
+    try:
+        rows = con.execute(f"PRAGMA table_info({table})").fetchall()
+        return any(str(r["name"]).lower() == col.lower() for r in rows)
+    except Exception:
+        return False
+
+
 def _init_db():
+    """
+    Tabellen anlegen + Migration:
+    - sorgt dafür, dass 'spiele.runde' existiert
+    - übernimmt alte Werte aus 'spieltag' nach 'runde'
+    """
     with _connect() as con:
         c = con.cursor()
+
+        # Kern-Tabellen
         c.execute("""
         CREATE TABLE IF NOT EXISTS turniere(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,18 +89,22 @@ def _init_db():
             teilnehmer_id INTEGER NOT NULL,
             UNIQUE(gruppe_id, teilnehmer_id)
         )""")
+
+        # Spiele – CREATE deckt beide Spalten ab, ändert aber bestehende Tabellen nicht
         c.execute("""
         CREATE TABLE IF NOT EXISTS spiele(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             turnier_id INTEGER NOT NULL,
             gruppe_id INTEGER NOT NULL,
-            spieltag INTEGER,            -- frühere Version: 'runde'
+            spieltag INTEGER,            -- ältere DBs
+            runde INTEGER,               -- neue Spalte (Migration s.u.)
             match_no INTEGER,
             p1_id INTEGER,
             p2_id INTEGER,
             s1 INTEGER,
             s2 INTEGER
         )""")
+
         c.execute("""
         CREATE TABLE IF NOT EXISTS ko_spiele(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,6 +145,15 @@ def _init_db():
         )""")
         con.commit()
 
+        # --- Migration: 'runde' hinzufügen und aus 'spieltag' übernehmen -----
+        if not _col_exists(con, "spiele", "runde"):
+            c.execute("ALTER TABLE spiele ADD COLUMN runde INTEGER")
+            try:
+                c.execute("UPDATE spiele SET runde = spieltag WHERE runde IS NULL")
+            except Exception:
+                pass
+            con.commit()
+
 
 def init_db():
     _init_db()
@@ -145,26 +176,9 @@ def _log2_int(x: int) -> int:
     return int(round(math.log2(x))) if x > 0 else 0
 
 
-def _col_exists(con: sqlite3.Connection, table: str, col: str) -> bool:
-    try:
-        rows = con.execute(f"PRAGMA table_info({table})").fetchall()
-        return any(str(r["name"]).lower() == col.lower() for r in rows)
-    except Exception:
-        return False
-
-
-def _group_round_col(con: sqlite3.Connection) -> Optional[str]:
-    """Ermittelt, ob die Spalte für die Gruppen-Runden 'spieltag' (neu) oder 'runde' (alt) heißt."""
-    if _col_exists(con, "spiele", "spieltag"):
-        return "spieltag"
-    if _col_exists(con, "spiele", "runde"):
-        return "runde"
-    return None
-
-
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Turniere CRUD
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def insert_turnier(name: str, datum: str, modus: str, meisterschaft: int = 0) -> int:
     with _connect() as con:
         cur = con.execute(
@@ -212,9 +226,9 @@ def delete_turnier(turnier_id: int) -> None:
         con.commit()
 
 
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Teilnehmer & Zuweisungen
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def insert_teilnehmer(name: str, spitzname: str = "") -> int:
     with _connect() as con:
         cur = con.execute("INSERT INTO teilnehmer(name, spitzname) VALUES(?,?)", (name, spitzname))
@@ -281,9 +295,9 @@ def fetch_turnier_teilnehmer(turnier_id: int) -> List[Tuple[int, str]]:
         return [(int(r[0]), str(r[1])) for r in rows]
 
 
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Gruppenphase
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def has_grouping(turnier_id: int) -> bool:
     with _connect() as con:
         return con.execute("SELECT 1 FROM gruppen WHERE turnier_id=? LIMIT 1", (turnier_id,)).fetchone() is not None
@@ -403,9 +417,9 @@ def _round_robin_rounds(ids: List[int]) -> List[List[Tuple[int, int]]]:
 
 
 def generate_group_round_robin(turnier_id: int) -> None:
+    """Erzeugt Round-Robin je Gruppe. Schreibt sowohl 'runde' als auch 'spieltag'."""
     with _connect() as con:
         con.execute("DELETE FROM spiele WHERE turnier_id=?", (turnier_id,))
-        rcol = _group_round_col(con) or "spieltag"
         groups = con.execute("SELECT id FROM gruppen WHERE turnier_id=? ORDER BY name ASC", (turnier_id,)).fetchall()
         for g in groups:
             gid = int(g[0])
@@ -415,9 +429,9 @@ def generate_group_round_robin(turnier_id: int) -> None:
             for r_idx, pairs in enumerate(rr, start=1):
                 for p1, p2 in pairs:
                     con.execute(
-                        f"INSERT INTO spiele(turnier_id,gruppe_id,{rcol},match_no,p1_id,p2_id,s1,s2) "
-                        "VALUES(?,?,?,?,?,?,NULL,NULL)",
-                        (turnier_id, gid, r_idx, match_no, p1, p2),
+                        "INSERT INTO spiele(turnier_id,gruppe_id,spieltag,runde,match_no,p1_id,p2_id,s1,s2) "
+                        "VALUES(?,?,?,?,?,?,?,NULL,NULL)",
+                        (turnier_id, gid, r_idx, r_idx, match_no, p1, p2),
                     )
                     match_no += 1
         con.commit()
@@ -426,34 +440,24 @@ def generate_group_round_robin(turnier_id: int) -> None:
 def fetch_group_matches(
     turnier_id: int, gruppe_id: int
 ) -> List[Tuple[int, int, int, str, str, Optional[int], Optional[int]]]:
+    """Runde wird kompatibel gelesen: COALESCE(runde, spieltag)."""
     with _connect() as con:
-        rcol = _group_round_col(con)
-        if rcol:
-            sql = f"""
-                SELECT sp.id, COALESCE(sp.{rcol},1) AS runde, COALESCE(sp.match_no,1) AS match_no,
-                       COALESCE(NULLIF(TRIM(t1.spitzname),''), t1.name) AS n1,
-                       COALESCE(NULLIF(TRIM(t2.spitzname),''), t2.name) AS n2,
-                       sp.s1, sp.s2
-                FROM spiele sp
-                LEFT JOIN teilnehmer t1 ON t1.id=sp.p1_id
-                LEFT JOIN teilnehmer t2 ON t2.id=sp.p2_id
-                WHERE sp.turnier_id=? AND sp.gruppe_id=?
-                ORDER BY runde ASC, match_no ASC
+        rows = con.execute(
             """
-        else:
-            # Fallback (sollte praktisch nie eintreten)
-            sql = """
-                SELECT sp.id, 1 AS runde, COALESCE(sp.match_no,1) AS match_no,
-                       COALESCE(NULLIF(TRIM(t1.spitzname),''), t1.name) AS n1,
-                       COALESCE(NULLIF(TRIM(t2.spitzname),''), t2.name) AS n2,
-                       sp.s1, sp.s2
-                FROM spiele sp
-                LEFT JOIN teilnehmer t1 ON t1.id=sp.p1_id
-                LEFT JOIN teilnehmer t2 ON t2.id=sp.p2_id
-                WHERE sp.turnier_id=? AND sp.gruppe_id=?
-                ORDER BY match_no ASC
-            """
-        rows = con.execute(sql, (turnier_id, gruppe_id)).fetchall()
+            SELECT sp.id,
+                   COALESCE(sp.runde, sp.spieltag) AS runde,
+                   COALESCE(sp.match_no, 1)        AS match_no,
+                   COALESCE(NULLIF(TRIM(t1.spitzname),''), t1.name) AS n1,
+                   COALESCE(NULLIF(TRIM(t2.spitzname),''), t2.name) AS n2,
+                   sp.s1, sp.s2
+            FROM spiele sp
+            LEFT JOIN teilnehmer t1 ON t1.id=sp.p1_id
+            LEFT JOIN teilnehmer t2 ON t2.id=sp.p2_id
+            WHERE sp.turnier_id=? AND sp.gruppe_id=?
+            ORDER BY runde ASC, match_no ASC, sp.id ASC
+            """,
+            (turnier_id, gruppe_id),
+        ).fetchall()
         return [(int(r[0]), int(r[1]), int(r[2]), str(r[3] or ""), str(r[4] or ""), r[5], r[6]) for r in rows]
 
 
@@ -463,7 +467,62 @@ def save_match_result(match_id: int, s1: Optional[int], s2: Optional[int]) -> No
         con.commit()
 
 
+# --------- Ranglisten-Helpers (Head-to-Head / Mini-Tabelle) -----------------
+def _head_to_head_winner(con: sqlite3.Connection, turnier_id: int, gruppe_id: int, a: int, b: int) -> Optional[int]:
+    """Gibt die Spieler-ID des Gewinners im direkten Duell zurück (falls eindeutig), sonst None."""
+    row = con.execute(
+        """
+        SELECT p1_id, p2_id, s1, s2
+        FROM spiele
+        WHERE turnier_id=? AND gruppe_id=? AND
+              ((p1_id=? AND p2_id=?) OR (p1_id=? AND p2_id=?))
+        """,
+        (turnier_id, gruppe_id, a, b, b, a),
+    ).fetchone()
+    if not row or row["s1"] is None or row["s2"] is None or row["s1"] == row["s2"]:
+        return None
+    p1, p2, s1, s2 = int(row["p1_id"]), int(row["p2_id"]), int(row["s1"]), int(row["s2"])
+    if s1 == s2:
+        return None
+    return p1 if s1 > s2 else p2
+
+
+def _mini_table_diff(con: sqlite3.Connection, turnier_id: int, gruppe_id: int, ids: List[int]) -> Dict[int, int]:
+    """
+    Liefert für jeden Spieler die Differenz NUR aus Direktbegegnungen innerhalb 'ids'.
+    """
+    if not ids:
+        return {}
+    placeholders = ",".join(["?"] * len(ids))
+    params = [turnier_id, gruppe_id] + ids + ids
+    rows = con.execute(
+        f"""
+        SELECT p1_id, p2_id, s1, s2
+        FROM spiele
+        WHERE turnier_id=? AND gruppe_id=?
+          AND p1_id IN ({placeholders})
+          AND p2_id IN ({placeholders})
+        """,
+        params,
+    ).fetchall()
+    diff: Dict[int, int] = {pid: 0 for pid in ids}
+    for r in rows:
+        p1, p2, s1, s2 = int(r["p1_id"]), int(r["p2_id"]), r["s1"], r["s2"]
+        if s1 is None or s2 is None or s1 == s2:
+            continue
+        diff[p1] += int(s1) - int(s2)
+        diff[p2] += int(s2) - int(s1)
+    return diff
+
+
 def compute_group_table(turnier_id: int, gruppe_id: int) -> List[Dict[str, Any]]:
+    """
+    Rangliste NUR nach Differenz.
+    Ties:
+      - genau 2 Spieler -> Direktduell entscheidet
+      - >=3 Spieler -> Mini-Tabelle (Differenz nur aus Direktbegegnungen)
+      - bleibt absolute Gleichheit -> Gleichstand beibehalten
+    """
     with _connect() as con:
         mem = con.execute(
             """
@@ -484,8 +543,8 @@ def compute_group_table(turnier_id: int, gruppe_id: int) -> List[Dict[str, Any]]
                 "niederlagen": 0,
                 "lf": 0,
                 "la": 0,
-                "diff": 0,
-                "pkt": 0,
+                "diff": 0,   # einziges Primärkriterium
+                "pkt": 0,    # nicht mehr relevant, bleibt für Abwärtskompatibilität erhalten
             }
             for pid in ids
         }
@@ -503,13 +562,44 @@ def compute_group_table(turnier_id: int, gruppe_id: int) -> List[Dict[str, Any]]
                 tab[p1]["lf"] += s1; tab[p1]["la"] += s2
                 tab[p2]["lf"] += s2; tab[p2]["la"] += s1
                 if s1 > s2:
-                    tab[p1]["siege"] += 1; tab[p2]["niederlagen"] += 1; tab[p1]["pkt"] += 2
+                    tab[p1]["siege"] += 1; tab[p2]["niederlagen"] += 1
+                    tab[p1]["pkt"] += 2
                 else:
-                    tab[p2]["siege"] += 1; tab[p1]["niederlagen"] += 1; tab[p2]["pkt"] += 2
+                    tab[p2]["siege"] += 1; tab[p1]["niederlagen"] += 1
+                    tab[p2]["pkt"] += 2
         for pid in tab:
             tab[pid]["diff"] = int(tab[pid]["lf"]) - int(tab[pid]["la"])
-        rows = list(tab.values())
-        rows.sort(key=lambda d: (-int(d["pkt"]), -int(d["diff"]), -int(d["lf"]), d["spieler"].lower()))
+
+        # 1) Diff-Buckets
+        buckets: Dict[int, List[int]] = {}
+        for pid, row in tab.items():
+            buckets.setdefault(int(row["diff"]), []).append(pid)
+        diffs_sorted = sorted(buckets.keys(), reverse=True)
+
+        result_ids: List[int] = []
+        for d in diffs_sorted:
+            group_ids = buckets[d]
+            if len(group_ids) == 1:
+                result_ids.extend(group_ids)
+                continue
+
+            # 2) Ties
+            if len(group_ids) == 2:
+                a, b = group_ids[0], group_ids[1]
+                winner = _head_to_head_winner(con, turnier_id, gruppe_id, a, b)
+                if winner == a:
+                    ordered = [a, b]
+                elif winner == b:
+                    ordered = [b, a]
+                else:
+                    ordered = sorted(group_ids, key=lambda pid: tab[pid]["spieler"].lower())
+                result_ids.extend(ordered)
+            else:
+                mt_diff = _mini_table_diff(con, turnier_id, gruppe_id, group_ids)
+                ordered = sorted(group_ids, key=lambda pid: (-mt_diff.get(pid, 0), tab[pid]["spieler"].lower()))
+                result_ids.extend(ordered)
+
+        rows = [tab[pid] for pid in result_ids]
         return rows
 
 
@@ -517,9 +607,9 @@ def compute_group_ranking_ids(turnier_id: int, gruppe_id: int) -> List[int]:
     return [int(r["teilnehmer_id"]) for r in compute_group_table(turnier_id, gruppe_id)]
 
 
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # KO-Phase (+ Bronze)
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def has_ko_matches(turnier_id: int) -> bool:
     with _connect() as con:
         return con.execute("SELECT 1 FROM ko_spiele WHERE turnier_id=? LIMIT 1", (turnier_id,)).fetchone() is not None
@@ -732,9 +822,290 @@ def fetch_ko_champion(turnier_id: int) -> Optional[Tuple[int, str]]:
         return winner, _display_name_by_id(con, winner)
 
 
-# ------------------------------------------------------------
-# Meisterschaften & Rangliste (v0.8)
-# ------------------------------------------------------------
+# --------------------- Einfache Auto-KO (bestehend) --------------------
+def _all_group_matches_completed(turnier_id: int) -> Tuple[bool, str]:
+    """Prüft, ob ALLE Gruppenspiele Ergebnisse haben."""
+    with _connect() as con:
+        row = con.execute(
+            """
+            SELECT COUNT(*) AS open_cnt
+            FROM spiele
+            WHERE turnier_id=? AND (s1 IS NULL OR s2 IS NULL)
+            """,
+            (turnier_id,),
+        ).fetchone()
+        open_cnt = int(row["open_cnt"]) if row and row["open_cnt"] is not None else 0
+        if open_cnt > 0:
+            return False, f"{open_cnt} Gruppenspiele ohne Ergebnis."
+        return True, ""
+
+
+def _insert_ko_match(con: sqlite3.Connection, tid: int, runde: int, match_no: int,
+                     p1_id: Optional[int], p2_id: Optional[int]) -> None:
+    con.execute(
+        "INSERT INTO ko_spiele(turnier_id,runde,match_no,p1_id,p2_id,s1,s2) VALUES(?,?,?,?,?,NULL,NULL)",
+        (tid, runde, match_no, p1_id, p2_id),
+    )
+
+
+def generate_ko_from_groups(turnier_id: int) -> Tuple[bool, str]:
+    """
+    Einfache Auto-Erzeugung (2/4 Gruppen).
+    """
+    if has_ko_matches(turnier_id):
+        return False, "KO existiert bereits."
+    ok, reason = _all_group_matches_completed(turnier_id)
+    if not ok:
+        return False, f"Gruppenphase unvollständig: {reason}"
+    groups = fetch_groups(turnier_id)
+    if not groups:
+        return False, "Keine Gruppen vorhanden."
+    ordered = sorted(groups, key=lambda x: x[1])
+    gcount = len(ordered)
+
+    with _connect() as con:
+        if gcount == 2:
+            (ga, _), (gb, _) = ordered
+            A = int(ga); B = int(gb)
+            A1, A2 = compute_group_ranking_ids(turnier_id, A)[:2]
+            B1, B2 = compute_group_ranking_ids(turnier_id, B)[:2]
+            _insert_ko_match(con, turnier_id, 1, 1, A1, B2)
+            _insert_ko_match(con, turnier_id, 1, 2, B1, A2)
+            _insert_ko_match(con, turnier_id, 2, 1, None, None)
+            con.commit()
+            return True, "KO (Halbfinale+Finale) aus 2 Gruppen erzeugt."
+        if gcount == 4:
+            gids = [int(gid) for gid, _ in ordered]
+            A, B, C, D = gids
+            A1, A2 = compute_group_ranking_ids(turnier_id, A)[:2]
+            B1, B2 = compute_group_ranking_ids(turnier_id, B)[:2]
+            C1, C2 = compute_group_ranking_ids(turnier_id, C)[:2]
+            D1, D2 = compute_group_ranking_ids(turnier_id, D)[:2]
+            _insert_ko_match(con, turnier_id, 1, 1, A1, D2)
+            _insert_ko_match(con, turnier_id, 1, 2, B1, C2)
+            _insert_ko_match(con, turnier_id, 1, 3, C1, B2)
+            _insert_ko_match(con, turnier_id, 1, 4, D1, A2)
+            _insert_ko_match(con, turnier_id, 2, 1, None, None)
+            _insert_ko_match(con, turnier_id, 2, 2, None, None)
+            _insert_ko_match(con, turnier_id, 3, 1, None, None)
+            con.commit()
+            return True, "KO (Viertel->Halb->Finale) aus 4 Gruppen erzeugt."
+        total_q = gcount * 2
+        if total_q and (total_q & (total_q - 1)) == 0:
+            generate_ko_bracket_total(turnier_id, total_q)
+            return True, f"KO mit {total_q} Qualifikanten generisch erzeugt."
+        return False, f"Nicht unterstützte Gruppenzahl ({gcount})."
+
+
+# --------------------- Fortgeschrittene KO-Erzeugung (angepasst) -------------------------
+def _auto_advance_byes(con: sqlite3.Connection, turnier_id: int) -> None:
+    """Sofortiges Weiterstellen bei BYEs (wenn p1_id XOR p2_id gesetzt ist)."""
+    rounds = con.execute(
+        "SELECT DISTINCT runde FROM ko_spiele WHERE turnier_id=? AND runde<>? ORDER BY runde ASC",
+        (turnier_id, BRONZE_ROUND),
+    ).fetchall()
+    for rr in [int(r[0]) for r in rounds]:
+        matches = con.execute(
+            "SELECT id,match_no,p1_id,p2_id FROM ko_spiele WHERE turnier_id=? AND runde=? ORDER BY match_no",
+            (turnier_id, rr),
+        ).fetchall()
+        for m in matches:
+            mid = int(m["id"]); p1 = m["p1_id"]; p2 = m["p2_id"]
+            if (p1 is None) ^ (p2 is None):
+                winner = p1 if p2 is None else p2
+                target_m, slot = _next_round_slot_for(int(m["match_no"]))
+                con.execute(
+                    f"UPDATE ko_spiele SET {'p1_id' if slot == 1 else 'p2_id'}=? WHERE turnier_id=? AND runde=? AND match_no=?",
+                    (winner, turnier_id, rr + 1, target_m),
+                )
+                con.execute("UPDATE ko_spiele SET s1=?, s2=? WHERE id=?", (1 if p1 else 0, 0 if p1 else 1, mid))
+    con.commit()
+
+
+def generate_ko_from_groups_advanced(
+    turnier_id: int,
+    qualifiers_per_group: int,     # erwartete Werte abhängig von TopGesamt & Gruppenzahl
+    first_round_size: int,         # 4 / 8 / 16
+    mode: str,                     # 'cross' oder 'draw'
+    rematch_block: bool = True,
+    rng_seed: Optional[int] = None,
+) -> Tuple[bool, str]:
+    """
+    Exakte Setzlogik gemäß Skizze:
+      Cross:
+        - 2 Gruppen:
+            Top4: A1–B2, B1–A2
+            Top8: A1–B4, A2–B3, A3–B2, A4–B1
+        - 4 Gruppen (Paarfamilien A↔D und B↔C):
+            Top4:  A1–D1, B1–C1
+            Top8:  A1–D2, B1–C2, C1–B2, D1–A2
+            Top16: A1–D4, B1–C4, A2–D3, B2–C3, A3–D2, B3–C2, A4–D1, B4–C1
+        - 8 Gruppen:
+            Top8:  (A–H, B–G, C–F, D–E) jeweils 1. vs 1.
+            Top16: je Paar 1. vs 2. (gespiegelt)
+      Auslosung: zufällig.
+    """
+    if first_round_size not in (4, 8, 16):
+        return False, "Ungültige Größe für erste KO-Runde (erlaubt: 4/8/16)."
+
+    groups = fetch_groups(turnier_id)
+    if not groups:
+        return False, "Keine Gruppen vorhanden."
+    ordered = sorted(groups, key=lambda x: x[1])  # Namen A,B,C,D,E,F,G,H …
+    gcount = len(ordered)
+
+    # --- Erwartetes K je Gruppe abhängig von Fall ---
+    expected_k = None
+    if mode == "cross":
+        if gcount == 2 and first_round_size == 4:
+            expected_k = 2
+        elif gcount == 2 and first_round_size == 8:
+            expected_k = 4
+        elif gcount == 4 and first_round_size == 4:
+            expected_k = 1
+        elif gcount == 4 and first_round_size == 8:
+            expected_k = 2
+        elif gcount == 4 and first_round_size == 16:
+            expected_k = 4
+        elif gcount == 8 and first_round_size == 8:
+            expected_k = 1
+        elif gcount == 8 and first_round_size == 16:
+            expected_k = 2
+        else:
+            return False, f"Cross Top {first_round_size}: nicht unterstützte Kombination bei {gcount} Gruppen."
+    else:  # draw
+        if first_round_size in (4, 8, 16) and gcount in (2, 4, 8):
+            if first_round_size % gcount != 0:
+                return False, "Top-Gesamt nicht durch Anzahl Gruppen teilbar."
+            expected_k = first_round_size // gcount
+        else:
+            return False, f"Auslosung Top {first_round_size}: nicht unterstützte Gruppenzahl ({gcount})."
+
+    if qualifiers_per_group != expected_k:
+        return False, f"Erwartet: {expected_k} Qualifikanten pro Gruppe (erhalten: {qualifiers_per_group})."
+
+    # Top-Listen je Gruppe holen
+    tops_map: Dict[int, List[int]] = {}
+    for gid, _name in ordered:
+        tops = compute_group_ranking_ids(turnier_id, gid)[:expected_k]
+        if len(tops) < expected_k:
+            return False, "Nicht jede Gruppe hat genügend Qualifikanten."
+        tops_map[int(gid)] = tops
+
+    with _connect() as con:
+        con.execute("DELETE FROM ko_spiele WHERE turnier_id=?", (turnier_id,))
+
+        if mode == "cross":
+            def add(match_no: int, p1: Optional[int], p2: Optional[int]) -> None:
+                con.execute(
+                    "INSERT INTO ko_spiele(turnier_id,runde,match_no,p1_id,p2_id,s1,s2) VALUES(?,?,?,?,?,NULL,NULL)",
+                    (turnier_id, 1, match_no, p1, p2),
+                )
+
+            # 2 Gruppen
+            if gcount == 2 and first_round_size == 4:
+                (gidA, _), (gidB, _) = ordered
+                A = tops_map[gidA]; B = tops_map[gidB]
+                add(1, A[0], B[1])
+                add(2, B[0], A[1])
+
+            elif gcount == 2 and first_round_size == 8:
+                (gidA, _), (gidB, _) = ordered
+                A = tops_map[gidA]; B = tops_map[gidB]
+                add(1, A[0], B[3])
+                add(2, A[1], B[2])
+                add(3, A[2], B[1])
+                add(4, A[3], B[0])
+
+            # 4 Gruppen (Paare A–D und B–C)
+            elif gcount == 4 and first_round_size == 4:
+                (gidA, _), (gidB, _), (gidC, _), (gidD, _) = ordered
+                A = tops_map[gidA]; B = tops_map[gidB]; C = tops_map[gidC]; D = tops_map[gidD]
+                add(1,  A[0], D[0])  # A1–D1
+                add(2,  B[0], C[0])  # B1–C1
+
+            elif gcount == 4 and first_round_size == 8:
+                (gidA, _), (gidB, _), (gidC, _), (gidD, _) = ordered
+                A = tops_map[gidA]; B = tops_map[gidB]; C = tops_map[gidC]; D = tops_map[gidD]
+                add(1,  A[0], D[1])  # A1–D2
+                add(2,  B[0], C[1])  # B1–C2
+                add(3,  C[0], B[1])  # C1–B2
+                add(4,  D[0], A[1])  # D1–A2
+
+            elif gcount == 4 and first_round_size == 16:
+                (gidA, _), (gidB, _), (gidC, _), (gidD, _) = ordered
+                A = tops_map[gidA]; B = tops_map[gidB]; C = tops_map[gidC]; D = tops_map[gidD]
+                add(1,  A[0], D[3])  # A1–D4
+                add(2,  B[0], C[3])  # B1–C4
+                add(3,  A[1], D[2])  # A2–D3
+                add(4,  B[1], C[2])  # B2–C3
+                add(5,  A[2], D[1])  # A3–D2
+                add(6,  B[2], C[1])  # B3–C2
+                add(7,  A[3], D[0])  # A4–D1
+                add(8,  B[3], C[0])  # B4–C1
+
+            # 8 Gruppen (Paare A–H, B–G, C–F, D–E)
+            elif gcount == 8 and first_round_size == 8:
+                gids = [gid for gid, _ in ordered]  # A..H
+                pairs = [(gids[0], gids[7]), (gids[1], gids[6]), (gids[2], gids[5]), (gids[3], gids[4])]
+                m = 1
+                for g1, g2 in pairs:
+                    L1 = tops_map[g1]  # [1.]
+                    L2 = tops_map[g2]  # [1.]
+                    add(m, L1[0], L2[0]); m += 1
+
+            elif gcount == 8 and first_round_size == 16:
+                gids = [gid for gid, _ in ordered]  # A..H
+                pairs = [(gids[0], gids[7]), (gids[1], gids[6]), (gids[2], gids[5]), (gids[3], gids[4])]
+                m = 1
+                for g1, g2 in pairs:
+                    L1 = tops_map[g1]  # [1.,2.]
+                    L2 = tops_map[g2]  # [1.,2.]
+                    # 1 vs 2
+                    add(m, L1[0], L2[1]); m += 1
+                    # gespiegelt
+                    add(m, L2[0], L1[1]); m += 1
+
+            else:
+                return False, "Kombination nicht unterstützt."
+
+        else:
+            # Auslosung: alle Top-K je Gruppe in Pool, mischen, paaren
+            pool: List[int] = []
+            for gid, _ in ordered:
+                pool.extend(tops_map[gid])
+            if rng_seed is not None:
+                random.seed(int(rng_seed))
+            random.shuffle(pool)
+            match_no = 1
+            for i in range(0, min(len(pool), first_round_size), 2):
+                p1 = pool[i]
+                p2 = pool[i + 1] if i + 1 < first_round_size else None
+                con.execute(
+                    "INSERT INTO ko_spiele(turnier_id,runde,match_no,p1_id,p2_id,s1,s2) VALUES(?,?,?,?,?,NULL,NULL)",
+                    (turnier_id, 1, match_no, p1, p2),
+                )
+                match_no += 1
+
+        # Folge-Runden anlegen
+        rounds_total = _log2_int(first_round_size)
+        for r in range(2, rounds_total + 1):
+            mcount = max(1, first_round_size // (2 ** r))
+            for m in range(1, mcount + 1):
+                con.execute(
+                    "INSERT INTO ko_spiele(turnier_id,runde,match_no,p1_id,p2_id,s1,s2) VALUES(?, ?, ?, NULL, NULL, NULL, NULL)",
+                    (turnier_id, r, m),
+                )
+
+        _auto_advance_byes(con, turnier_id)
+        con.commit()
+
+    return True, "KO nach Einstellungen erzeugt."
+
+
+# ---------------------------------------------------------------------------
+# Meisterschaften & Rangliste (Gesamt)
+# ---------------------------------------------------------------------------
 def insert_meisterschaft(name: str, saison: str) -> int:
     with _connect() as con:
         cur = con.execute("INSERT INTO meisterschaften(name,saison) VALUES(?,?)", (name, saison))
@@ -828,9 +1199,10 @@ def _ensure_turnier_platzierungen_from_ko(turnier_id: int) -> None:
         r = con.execute(
             "SELECT MAX(runde) AS r_final FROM ko_spiele WHERE turnier_id=? AND runde<>?", (turnier_id, BRONZE_ROUND)
         ).fetchone()
-        if not r or r["r_final"] is None:
-            return
-        final_r = int(r["r_final"])
+    if not r or r["r_final"] is None:
+        return
+    final_r = int(r["r_final"])
+    with _connect() as con:
         fm = con.execute(
             "SELECT p1_id,p2_id,s1,s2 FROM ko_spiele WHERE turnier_id=? AND runde=? LIMIT 1", (turnier_id, final_r)
         ).fetchone()
