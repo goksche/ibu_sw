@@ -1,10 +1,11 @@
  ; =============================================================
-;  IBU Turniere – Inno Setup Script (v0.9.6)
+;  IBU Turniere – Inno Setup Script (v1.1.0)
+;  Stabilität & Sicherheit: Exception Handling, Logging, Validation
 ;  ROBUST: Pfade relativ zur .iss, Icon optional, Verzeichnisse via [Dirs]
 ; =============================================================
 
 #define MyAppName      "IBU Turniere"
-#define MyAppVersion   "0.9.6"
+#define MyAppVersion   "1.1.0"
 #define MyAppPublisher "IBU"
 #define MyAppExeName   "IBU Turniere.exe"
 

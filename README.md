@@ -35,6 +35,15 @@ Die App verwaltet **Spieler**, **Turniere** (Gruppenphase + KO), **Punkteschemat
 
 ## Highlights in dieser Version
 
+### v1.1.0 - Stabilität & Sicherheit
+- **🔒 Robuste Fehlerbehandlung**: Spezifische Exceptions für alle Fehlerszenarien
+- **📊 Strukturiertes Logging**: Detaillierte Logs für besseres Debugging
+- **🔗 Datenintegrität**: Foreign Key Constraints verhindern Waisen-Datensätze
+- **✅ Input Validation**: Alle Eingaben werden validiert und bereinigt
+- **🧠 Memory Management**: Automatische Ressourcenbereinigung, keine Memory Leaks
+- **🔄 Automatische Migration**: Nahtlose Aktualisierung von v1.0.0 Datenbanken
+
+### v1.0.0 - Turnier-Features
 - **KO-Phase – neue Cross-Setzlogik** gemäss Schema:
   - **2 Gruppen**
     - *Top 4*: `A1–B2`, `B1–A2`

@@ -1,5 +1,5 @@
 # main.py
-# v0.9.4 – User-Daten in benutzerschreibbaren Ordner (AppData) statt Program Files.
+# v1.1.0 – Stabilität & Sicherheit: Exception Handling, Logging, Validation, Memory Management
 from __future__ import annotations
 
 import os

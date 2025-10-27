@@ -3,6 +3,12 @@ from __future__ import annotations
 import os, math, sqlite3, random
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+# Import der neuen Validators
+from app.validators import (
+    validate_tournament_data, validate_participant_data, 
+    validate_group_match_data, validate_ko_match_data
+)
+
 # ---------------------------------------------------------------------------
 # Pfade / Datenbank
 # ---------------------------------------------------------------------------
@@ -11,16 +17,26 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_PATH = os.path.join(DATA_DIR, "ibu.sqlite")
 
-BRONZE_ROUND = 99  # internes Kennzeichen für „Kleines Finale“
+# Import der neuen Exception- und Logging-Funktionalitäten
+from app.core import (
+    DatabaseError, ValidationError, TournamentNotFoundError, 
+    ParticipantNotFoundError, GroupNotFoundError, MatchNotFoundError,
+    get_logger
+)
 
 
-# ---------------------------------------------------------------------------
-# DB / Helpers
-# ---------------------------------------------------------------------------
+# Logger-Instanz für dieses Modul
+logger = get_logger("database.models")
 def _connect() -> sqlite3.Connection:
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
-    return con
+    """Erstellt eine Datenbankverbindung mit Fehlerbehandlung."""
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.row_factory = sqlite3.Row
+        logger.debug("Database connection established", db_path=DB_PATH)
+        return con
+    except sqlite3.Error as e:
+        logger.error("Failed to connect to database", exception=e, db_path=DB_PATH)
+        raise DatabaseError(f"Failed to connect to database: {e}", operation="connect")
 
 
 def _to_int_bool(v: Any) -> int:
@@ -40,10 +56,14 @@ def _to_int_bool(v: Any) -> int:
 
 
 def _col_exists(con: sqlite3.Connection, table: str, col: str) -> bool:
+    """Prüft ob eine Spalte in einer Tabelle existiert."""
     try:
         rows = con.execute(f"PRAGMA table_info({table})").fetchall()
-        return any(str(r["name"]).lower() == col.lower() for r in rows)
-    except Exception:
+        exists = any(str(r["name"]).lower() == col.lower() for r in rows)
+        logger.debug(f"Column check: {col} in {table} = {exists}")
+        return exists
+    except sqlite3.Error as e:
+        logger.warning(f"Failed to check column existence: {e}", table=table, column=col)
         return False
 
 
@@ -52,107 +72,128 @@ def _init_db():
     Tabellen anlegen + Migration:
     - sorgt dafür, dass 'spiele.runde' existiert
     - übernimmt alte Werte aus 'spieltag' nach 'runde'
+    - aktiviert Foreign Key Constraints
     """
-    with _connect() as con:
-        c = con.cursor()
+    try:
+        logger.info("Initializing database schema")
+        with _connect() as con:
+            # Foreign Key Constraints aktivieren
+            con.execute("PRAGMA foreign_keys = ON")
+            logger.info("Foreign Key Constraints enabled")
+            
+            c = con.cursor()
 
-        # Kern-Tabellen
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS turniere(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            datum TEXT,
-            modus TEXT,
-            meisterschaft INTEGER DEFAULT 0
-        )""")
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS teilnehmer(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            spitzname TEXT
-        )""")
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS turnier_teilnehmer(
-            turnier_id INTEGER NOT NULL,
-            teilnehmer_id INTEGER NOT NULL,
-            UNIQUE(turnier_id, teilnehmer_id)
-        )""")
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS gruppen(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            turnier_id INTEGER NOT NULL,
-            name TEXT NOT NULL
-        )""")
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS gruppen_teilnehmer(
-            gruppe_id INTEGER NOT NULL,
-            teilnehmer_id INTEGER NOT NULL,
-            UNIQUE(gruppe_id, teilnehmer_id)
-        )""")
+            # Kern-Tabellen
+            logger.debug("Creating core tables")
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS turniere(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                datum TEXT,
+                modus TEXT,
+                meisterschaft INTEGER DEFAULT 0
+            )""")
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS teilnehmer(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                spitzname TEXT
+            )""")
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS turnier_teilnehmer(
+                turnier_id INTEGER NOT NULL,
+                teilnehmer_id INTEGER NOT NULL,
+                UNIQUE(turnier_id, teilnehmer_id)
+            )""")
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS gruppen(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                turnier_id INTEGER NOT NULL,
+                name TEXT NOT NULL
+            )""")
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS gruppen_teilnehmer(
+                gruppe_id INTEGER NOT NULL,
+                teilnehmer_id INTEGER NOT NULL,
+                UNIQUE(gruppe_id, teilnehmer_id)
+            )""")
 
-        # Spiele – CREATE deckt beide Spalten ab, ändert aber bestehende Tabellen nicht
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS spiele(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            turnier_id INTEGER NOT NULL,
-            gruppe_id INTEGER NOT NULL,
-            spieltag INTEGER,            -- ältere DBs
-            runde INTEGER,               -- neue Spalte (Migration s.u.)
-            match_no INTEGER,
-            p1_id INTEGER,
-            p2_id INTEGER,
-            s1 INTEGER,
-            s2 INTEGER
-        )""")
+            # Spiele – CREATE deckt beide Spalten ab, ändert aber bestehende Tabellen nicht
+            logger.debug("Creating game tables")
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS spiele(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                turnier_id INTEGER NOT NULL,
+                gruppe_id INTEGER NOT NULL,
+                spieltag INTEGER,            -- ältere DBs
+                runde INTEGER,               -- neue Spalte (Migration s.u.)
+                match_no INTEGER,
+                p1_id INTEGER,
+                p2_id INTEGER,
+                s1 INTEGER,
+                s2 INTEGER
+            )""")
 
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS ko_spiele(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            turnier_id INTEGER NOT NULL,
-            runde INTEGER,
-            match_no INTEGER,
-            p1_id INTEGER,
-            p2_id INTEGER,
-            s1 INTEGER,
-            s2 INTEGER
-        )""")
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS turnier_platzierungen(
-            turnier_id INTEGER NOT NULL,
-            teilnehmer_id INTEGER NOT NULL,
-            platz INTEGER NOT NULL,
-            UNIQUE(turnier_id, teilnehmer_id)
-        )""")
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS meisterschaften(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            saison TEXT,
-            punkteschema TEXT
-        )""")
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS meisterschaft_turniere(
-            meisterschaft_id INTEGER NOT NULL,
-            turnier_id INTEGER NOT NULL,
-            UNIQUE(meisterschaft_id, turnier_id)
-        )""")
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS meisterschaft_punkteschema(
-            meisterschaft_id INTEGER NOT NULL,
-            platz INTEGER NOT NULL,
-            punkte INTEGER NOT NULL,
-            UNIQUE(meisterschaft_id, platz)
-        )""")
-        con.commit()
-
-        # --- Migration: 'runde' hinzufügen und aus 'spieltag' übernehmen -----
-        if not _col_exists(con, "spiele", "runde"):
-            c.execute("ALTER TABLE spiele ADD COLUMN runde INTEGER")
-            try:
-                c.execute("UPDATE spiele SET runde = spieltag WHERE runde IS NULL")
-            except Exception:
-                pass
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS ko_spiele(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                turnier_id INTEGER NOT NULL,
+                runde INTEGER,
+                match_no INTEGER,
+                p1_id INTEGER,
+                p2_id INTEGER,
+                s1 INTEGER,
+                s2 INTEGER
+            )""")
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS turnier_platzierungen(
+                turnier_id INTEGER NOT NULL,
+                teilnehmer_id INTEGER NOT NULL,
+                platz INTEGER NOT NULL,
+                UNIQUE(turnier_id, teilnehmer_id)
+            )""")
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS meisterschaften(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                saison TEXT,
+                punkteschema TEXT
+            )""")
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS meisterschaft_turniere(
+                meisterschaft_id INTEGER NOT NULL,
+                turnier_id INTEGER NOT NULL,
+                UNIQUE(meisterschaft_id, turnier_id)
+            )""")
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS meisterschaft_punkteschema(
+                meisterschaft_id INTEGER NOT NULL,
+                platz INTEGER NOT NULL,
+                punkte INTEGER NOT NULL,
+                UNIQUE(meisterschaft_id, platz)
+            )""")
             con.commit()
+
+            # --- Migration: 'runde' hinzufügen und aus 'spieltag' übernehmen -----
+            logger.debug("Checking for migration: 'runde' column")
+            if not _col_exists(con, "spiele", "runde"):
+                logger.info("Adding 'runde' column to spiele table")
+                c.execute("ALTER TABLE spiele ADD COLUMN runde INTEGER")
+                try:
+                    c.execute("UPDATE spiele SET runde = spieltag WHERE runde IS NULL")
+                    logger.info("Migrated 'spieltag' values to 'runde' column")
+                except sqlite3.Error as e:
+                    logger.warning(f"Failed to migrate spieltag to runde: {e}")
+                con.commit()
+            
+            logger.info("Database schema initialization completed successfully")
+            
+    except sqlite3.Error as e:
+        logger.error("Failed to initialize database schema", exception=e)
+        raise DatabaseError(f"Failed to initialize database schema: {e}", operation="init_db")
+    except Exception as e:
+        logger.error("Unexpected error during database initialization", exception=e)
+        raise DatabaseError(f"Unexpected error during database initialization: {e}", operation="init_db")
 
 
 def init_db():
@@ -180,81 +221,191 @@ def _log2_int(x: int) -> int:
 # Turniere CRUD
 # ---------------------------------------------------------------------------
 def insert_turnier(name: str, datum: str, modus: str, meisterschaft: int = 0) -> int:
-    with _connect() as con:
-        cur = con.execute(
-            "INSERT INTO turniere(name,datum,modus,meisterschaft) VALUES(?,?,?,?)",
-            (name, datum, modus, _to_int_bool(meisterschaft)),
-        )
-        con.commit()
-        return int(cur.lastrowid)
+    """Erstellt ein neues Turnier mit Validierung."""
+    # Input Validation mit Tournament Validator
+    tournament_data = validate_tournament_data({
+        "name": name,
+        "datum": datum,
+        "modus": modus,
+        "meisterschaft": meisterschaft
+    })
+    
+    try:
+        logger.info("Creating new tournament", tournament_name=tournament_data["name"])
+        with _connect() as con:
+            cur = con.execute(
+                "INSERT INTO turniere(name,datum,modus,meisterschaft) VALUES(?,?,?,?)",
+                (tournament_data["name"], tournament_data["datum"], tournament_data["modus"], tournament_data["meisterschaft"]),
+            )
+            con.commit()
+            tournament_id = int(cur.lastrowid)
+            logger.log_database_operation("INSERT", "turniere", True, tournament_id=tournament_id)
+            return tournament_id
+    except sqlite3.Error as e:
+        logger.log_database_operation("INSERT", "turniere", False, error=str(e))
+        raise DatabaseError(f"Failed to create tournament: {e}", operation="insert_turnier", sql_error=str(e))
 
 
 def fetch_turniere() -> List[Tuple[int, str, str, str, int]]:
-    with _connect() as con:
-        rows = con.execute(
-            "SELECT id,name,COALESCE(datum,''),COALESCE(modus,''), meisterschaft "
-            "FROM turniere ORDER BY COALESCE(datum,'' ) DESC, id DESC"
-        ).fetchall()
-        return [
-            (int(r[0]), str(r[1]), str(r[2]), str(r[3]), _to_int_bool(r[4]))
-            for r in rows
-        ]
+    """Lädt alle Turniere mit Fehlerbehandlung."""
+    try:
+        logger.debug("Fetching all tournaments")
+        with _connect() as con:
+            rows = con.execute(
+                "SELECT id,name,COALESCE(datum,''),COALESCE(modus,''), meisterschaft "
+                "FROM turniere ORDER BY COALESCE(datum,'' ) DESC, id DESC"
+            ).fetchall()
+            tournaments = [
+                (int(r[0]), str(r[1]), str(r[2]), str(r[3]), _to_int_bool(r[4]))
+                for r in rows
+            ]
+            logger.debug(f"Retrieved {len(tournaments)} tournaments")
+            return tournaments
+    except sqlite3.Error as e:
+        logger.log_database_operation("SELECT", "turniere", False, error=str(e))
+        raise DatabaseError(f"Failed to fetch tournaments: {e}", operation="fetch_turniere", sql_error=str(e))
 
 
 def update_turnier(turnier_id: int, name: str, datum: str, modus: str, meisterschaft: int = 0) -> None:
-    with _connect() as con:
-        con.execute(
-            "UPDATE turniere SET name=?, datum=?, modus=?, meisterschaft=? WHERE id=?",
-            (name, datum, modus, _to_int_bool(meisterschaft), int(turnier_id)),
-        )
-        con.commit()
+    """Aktualisiert ein Turnier mit Validierung."""
+    # Input Validation mit Tournament Validator
+    tournament_data = validate_tournament_data({
+        "name": name,
+        "datum": datum,
+        "modus": modus,
+        "meisterschaft": meisterschaft
+    })
+    
+    try:
+        logger.info("Updating tournament", tournament_id=turnier_id, tournament_name=tournament_data["name"])
+        with _connect() as con:
+            # Prüfe ob Turnier existiert
+            existing = con.execute("SELECT id FROM turniere WHERE id=?", (int(turnier_id),)).fetchone()
+            if not existing:
+                raise TournamentNotFoundError(int(turnier_id))
+            
+            con.execute(
+                "UPDATE turniere SET name=?, datum=?, modus=?, meisterschaft=? WHERE id=?",
+                (tournament_data["name"], tournament_data["datum"], tournament_data["modus"], tournament_data["meisterschaft"], int(turnier_id)),
+            )
+            con.commit()
+            logger.log_database_operation("UPDATE", "turniere", True, tournament_id=turnier_id)
+    except sqlite3.Error as e:
+        logger.log_database_operation("UPDATE", "turniere", False, error=str(e), tournament_id=turnier_id)
+        raise DatabaseError(f"Failed to update tournament: {e}", operation="update_turnier", sql_error=str(e))
 
 
 def delete_turnier(turnier_id: int) -> None:
-    with _connect() as con:
-        con.execute("DELETE FROM turnier_teilnehmer WHERE turnier_id=?", (turnier_id,))
-        con.execute(
-            "DELETE FROM gruppen_teilnehmer WHERE gruppe_id IN (SELECT id FROM gruppen WHERE turnier_id=?)",
-            (turnier_id,),
-        )
-        con.execute("DELETE FROM spiele WHERE turnier_id=?", (turnier_id,))
-        con.execute("DELETE FROM gruppen WHERE turnier_id=?", (turnier_id,))
-        con.execute("DELETE FROM ko_spiele WHERE turnier_id=?", (turnier_id,))
-        con.execute("DELETE FROM turnier_platzierungen WHERE turnier_id=?", (turnier_id,))
-        con.execute("DELETE FROM meisterschaft_turniere WHERE turnier_id=?", (turnier_id,))
-        con.execute("DELETE FROM turniere WHERE id=?", (turnier_id,))
-        con.commit()
+    """Löscht ein Turnier und alle zugehörigen Daten mit Fehlerbehandlung."""
+    try:
+        logger.info("Deleting tournament", tournament_id=turnier_id)
+        with _connect() as con:
+            # Prüfe ob Turnier existiert
+            existing = con.execute("SELECT id FROM turniere WHERE id=?", (int(turnier_id),)).fetchone()
+            if not existing:
+                raise TournamentNotFoundError(int(turnier_id))
+            
+            # Lösche alle zugehörigen Daten (Cascade wird später durch FK Constraints übernommen)
+            con.execute("DELETE FROM turnier_teilnehmer WHERE turnier_id=?", (turnier_id,))
+            con.execute(
+                "DELETE FROM gruppen_teilnehmer WHERE gruppe_id IN (SELECT id FROM gruppen WHERE turnier_id=?)",
+                (turnier_id,),
+            )
+            con.execute("DELETE FROM spiele WHERE turnier_id=?", (turnier_id,))
+            con.execute("DELETE FROM gruppen WHERE turnier_id=?", (turnier_id,))
+            con.execute("DELETE FROM ko_spiele WHERE turnier_id=?", (turnier_id,))
+            con.execute("DELETE FROM turnier_platzierungen WHERE turnier_id=?", (turnier_id,))
+            con.execute("DELETE FROM meisterschaft_turniere WHERE turnier_id=?", (turnier_id,))
+            con.execute("DELETE FROM turniere WHERE id=?", (turnier_id,))
+            con.commit()
+            logger.log_database_operation("DELETE", "turniere", True, tournament_id=turnier_id)
+    except sqlite3.Error as e:
+        logger.log_database_operation("DELETE", "turniere", False, error=str(e), tournament_id=turnier_id)
+        raise DatabaseError(f"Failed to delete tournament: {e}", operation="delete_turnier", sql_error=str(e))
 
 
 # ---------------------------------------------------------------------------
 # Teilnehmer & Zuweisungen
 # ---------------------------------------------------------------------------
 def insert_teilnehmer(name: str, spitzname: str = "") -> int:
-    with _connect() as con:
-        cur = con.execute("INSERT INTO teilnehmer(name, spitzname) VALUES(?,?)", (name, spitzname))
-        con.commit()
-        return int(cur.lastrowid)
+    """Erstellt einen neuen Teilnehmer mit Validierung."""
+    # Input Validation mit Participant Validator
+    participant_data = validate_participant_data({
+        "name": name,
+        "spitzname": spitzname
+    })
+    
+    try:
+        logger.info("Creating new participant", participant_name=participant_data["name"])
+        with _connect() as con:
+            cur = con.execute("INSERT INTO teilnehmer(name, spitzname) VALUES(?,?)", (participant_data["name"], participant_data["spitzname"]))
+            con.commit()
+            participant_id = int(cur.lastrowid)
+            logger.log_database_operation("INSERT", "teilnehmer", True, participant_id=participant_id)
+            return participant_id
+    except sqlite3.Error as e:
+        logger.log_database_operation("INSERT", "teilnehmer", False, error=str(e))
+        raise DatabaseError(f"Failed to create participant: {e}", operation="insert_teilnehmer", sql_error=str(e))
 
 
 def fetch_teilnehmer() -> List[Tuple[int, str, str]]:
-    with _connect() as con:
-        rows = con.execute("SELECT id,name,COALESCE(spitzname,'') FROM teilnehmer ORDER BY name ASC").fetchall()
-        return [(int(r[0]), str(r[1]), str(r[2])) for r in rows]
+    """Lädt alle Teilnehmer mit Fehlerbehandlung."""
+    try:
+        logger.debug("Fetching all participants")
+        with _connect() as con:
+            rows = con.execute("SELECT id,name,COALESCE(spitzname,'') FROM teilnehmer ORDER BY name ASC").fetchall()
+            participants = [(int(r[0]), str(r[1]), str(r[2])) for r in rows]
+            logger.debug(f"Retrieved {len(participants)} participants")
+            return participants
+    except sqlite3.Error as e:
+        logger.log_database_operation("SELECT", "teilnehmer", False, error=str(e))
+        raise DatabaseError(f"Failed to fetch participants: {e}", operation="fetch_teilnehmer", sql_error=str(e))
 
 
 def update_teilnehmer(teilnehmer_id: int, name: str, spitzname: str = "") -> None:
-    with _connect() as con:
-        con.execute("UPDATE teilnehmer SET name=?, spitzname=? WHERE id=?", (name, spitzname, int(teilnehmer_id)))
-        con.commit()
+    """Aktualisiert einen Teilnehmer mit Validierung."""
+    # Input Validation mit Participant Validator
+    participant_data = validate_participant_data({
+        "name": name,
+        "spitzname": spitzname
+    })
+    
+    try:
+        logger.info("Updating participant", participant_id=teilnehmer_id, participant_name=participant_data["name"])
+        with _connect() as con:
+            # Prüfe ob Teilnehmer existiert
+            existing = con.execute("SELECT id FROM teilnehmer WHERE id=?", (int(teilnehmer_id),)).fetchone()
+            if not existing:
+                raise ParticipantNotFoundError(int(teilnehmer_id))
+            
+            con.execute("UPDATE teilnehmer SET name=?, spitzname=? WHERE id=?", (participant_data["name"], participant_data["spitzname"], int(teilnehmer_id)))
+            con.commit()
+            logger.log_database_operation("UPDATE", "teilnehmer", True, participant_id=teilnehmer_id)
+    except sqlite3.Error as e:
+        logger.log_database_operation("UPDATE", "teilnehmer", False, error=str(e), participant_id=teilnehmer_id)
+        raise DatabaseError(f"Failed to update participant: {e}", operation="update_teilnehmer", sql_error=str(e))
 
 
 def delete_teilnehmer(teilnehmer_id: int) -> None:
-    with _connect() as con:
-        con.execute("DELETE FROM turnier_teilnehmer WHERE teilnehmer_id=?", (teilnehmer_id,))
-        con.execute("DELETE FROM gruppen_teilnehmer WHERE teilnehmer_id=?", (teilnehmer_id,))
-        con.execute("DELETE FROM turnier_platzierungen WHERE teilnehmer_id=?", (teilnehmer_id,))
-        con.execute("DELETE FROM teilnehmer WHERE id=?", (teilnehmer_id,))
-        con.commit()
+    """Löscht einen Teilnehmer und alle zugehörigen Daten mit Fehlerbehandlung."""
+    try:
+        logger.info("Deleting participant", participant_id=teilnehmer_id)
+        with _connect() as con:
+            # Prüfe ob Teilnehmer existiert
+            existing = con.execute("SELECT id FROM teilnehmer WHERE id=?", (int(teilnehmer_id),)).fetchone()
+            if not existing:
+                raise ParticipantNotFoundError(int(teilnehmer_id))
+            
+            # Lösche alle zugehörigen Daten
+            con.execute("DELETE FROM turnier_teilnehmer WHERE teilnehmer_id=?", (teilnehmer_id,))
+            con.execute("DELETE FROM gruppen_teilnehmer WHERE teilnehmer_id=?", (teilnehmer_id,))
+            con.execute("DELETE FROM turnier_platzierungen WHERE teilnehmer_id=?", (teilnehmer_id,))
+            con.execute("DELETE FROM teilnehmer WHERE id=?", (teilnehmer_id,))
+            con.commit()
+            logger.log_database_operation("DELETE", "teilnehmer", True, participant_id=teilnehmer_id)
+    except sqlite3.Error as e:
+        logger.log_database_operation("DELETE", "teilnehmer", False, error=str(e), participant_id=teilnehmer_id)
+        raise DatabaseError(f"Failed to delete participant: {e}", operation="delete_teilnehmer", sql_error=str(e))
 
 
 def add_turnier_teilnehmer(turnier_id: int, teilnehmer_id: int) -> None:
@@ -1300,3 +1451,150 @@ def compute_meisterschaft_rangliste(ms_id: int) -> List[Dict[str, Any]]:
         d["rank"] = rank
 
     return rows
+
+
+# ---------------------------------------------------------------------------
+# Group Management Functions
+# ---------------------------------------------------------------------------
+
+def insert_gruppe(turnier_id: int, name: str) -> int:
+    """Insert a new group and return its ID."""
+    try:
+        with _connect() as con:
+            cursor = con.execute("INSERT INTO gruppen(turnier_id, name) VALUES(?, ?)", (turnier_id, name))
+            con.commit()
+            group_id = cursor.lastrowid
+            logger.log_database_operation("INSERT", "gruppen", True, group_id=group_id, tournament_id=turnier_id)
+            return group_id
+    except sqlite3.Error as e:
+        logger.log_database_operation("INSERT", "gruppen", False, error=str(e), tournament_id=turnier_id)
+        raise DatabaseError(f"Failed to create group: {e}", operation="insert_gruppe", sql_error=str(e))
+
+
+def fetch_gruppen(turnier_id: int) -> List[Dict[str, Any]]:
+    """Fetch all groups for a tournament."""
+    try:
+        with _connect() as con:
+            rows = con.execute("SELECT id, name FROM gruppen WHERE turnier_id=? ORDER BY name", (turnier_id,)).fetchall()
+            groups = [{"id": int(row["id"]), "name": str(row["name"])} for row in rows]
+            logger.log_database_operation("SELECT", "gruppen", True, tournament_id=turnier_id, count=len(groups))
+            return groups
+    except sqlite3.Error as e:
+        logger.log_database_operation("SELECT", "gruppen", False, error=str(e), tournament_id=turnier_id)
+        raise DatabaseError(f"Failed to fetch groups: {e}", operation="fetch_gruppen", sql_error=str(e))
+
+
+def delete_gruppe(group_id: int) -> None:
+    """Delete a group and all its related data."""
+    try:
+        with _connect() as con:
+            con.execute("DELETE FROM gruppen WHERE id=?", (group_id,))
+            con.commit()
+            logger.log_database_operation("DELETE", "gruppen", True, group_id=group_id)
+    except sqlite3.Error as e:
+        logger.log_database_operation("DELETE", "gruppen", False, error=str(e), group_id=group_id)
+        raise DatabaseError(f"Failed to delete group: {e}", operation="delete_gruppe", sql_error=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Group-Participant Management Functions
+# ---------------------------------------------------------------------------
+
+def insert_gruppen_teilnehmer(gruppe_id: int, teilnehmer_id: int) -> None:
+    """Add a participant to a group."""
+    try:
+        with _connect() as con:
+            con.execute("INSERT OR IGNORE INTO gruppen_teilnehmer(gruppe_id, teilnehmer_id) VALUES(?, ?)", (gruppe_id, teilnehmer_id))
+            con.commit()
+            logger.log_database_operation("INSERT", "gruppen_teilnehmer", True, group_id=gruppe_id, participant_id=teilnehmer_id)
+    except sqlite3.Error as e:
+        logger.log_database_operation("INSERT", "gruppen_teilnehmer", False, error=str(e), group_id=gruppe_id, participant_id=teilnehmer_id)
+        raise DatabaseError(f"Failed to add participant to group: {e}", operation="insert_gruppen_teilnehmer", sql_error=str(e))
+
+
+def fetch_gruppen_teilnehmer(gruppe_id: int) -> List[Dict[str, Any]]:
+    """Fetch all participants in a group."""
+    try:
+        with _connect() as con:
+            rows = con.execute("""
+                SELECT gt.teilnehmer_id, t.name, t.spitzname 
+                FROM gruppen_teilnehmer gt 
+                JOIN teilnehmer t ON t.id = gt.teilnehmer_id 
+                WHERE gt.gruppe_id = ? 
+                ORDER BY t.name
+            """, (gruppe_id,)).fetchall()
+            participants = [{"teilnehmer_id": int(row["teilnehmer_id"]), "name": str(row["name"]), "spitzname": str(row["spitzname"])} for row in rows]
+            logger.log_database_operation("SELECT", "gruppen_teilnehmer", True, group_id=gruppe_id, count=len(participants))
+            return participants
+    except sqlite3.Error as e:
+        logger.log_database_operation("SELECT", "gruppen_teilnehmer", False, error=str(e), group_id=gruppe_id)
+        raise DatabaseError(f"Failed to fetch group participants: {e}", operation="fetch_gruppen_teilnehmer", sql_error=str(e))
+
+
+def delete_gruppen_teilnehmer(gruppe_id: int, teilnehmer_id: int) -> None:
+    """Remove a participant from a group."""
+    try:
+        with _connect() as con:
+            con.execute("DELETE FROM gruppen_teilnehmer WHERE gruppe_id=? AND teilnehmer_id=?", (gruppe_id, teilnehmer_id))
+            con.commit()
+            logger.log_database_operation("DELETE", "gruppen_teilnehmer", True, group_id=gruppe_id, participant_id=teilnehmer_id)
+    except sqlite3.Error as e:
+        logger.log_database_operation("DELETE", "gruppen_teilnehmer", False, error=str(e), group_id=gruppe_id, participant_id=teilnehmer_id)
+        raise DatabaseError(f"Failed to remove participant from group: {e}", operation="delete_gruppen_teilnehmer", sql_error=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Championship Management Functions
+# ---------------------------------------------------------------------------
+
+def insert_meisterschaft(name: str, saison: str, punkteschema: str) -> int:
+    """Insert a new championship and return its ID."""
+    try:
+        with _connect() as con:
+            cursor = con.execute("INSERT INTO meisterschaften(name, saison, punkteschema) VALUES(?, ?, ?)", (name, saison, punkteschema))
+            con.commit()
+            meisterschaft_id = cursor.lastrowid
+            logger.log_database_operation("INSERT", "meisterschaften", True, meisterschaft_id=meisterschaft_id)
+            return meisterschaft_id
+    except sqlite3.Error as e:
+        logger.log_database_operation("INSERT", "meisterschaften", False, error=str(e))
+        raise DatabaseError(f"Failed to create championship: {e}", operation="insert_meisterschaft", sql_error=str(e))
+
+
+def fetch_meisterschaften() -> List[Dict[str, Any]]:
+    """Fetch all championships."""
+    try:
+        with _connect() as con:
+            rows = con.execute("SELECT id, name, saison, punkteschema FROM meisterschaften ORDER BY name", ()).fetchall()
+            championships = [{"id": int(row["id"]), "name": str(row["name"]), "saison": str(row["saison"]), "punkteschema": str(row["punkteschema"])} for row in rows]
+            logger.log_database_operation("SELECT", "meisterschaften", True, count=len(championships))
+            return championships
+    except sqlite3.Error as e:
+        logger.log_database_operation("SELECT", "meisterschaften", False, error=str(e))
+        raise DatabaseError(f"Failed to fetch championships: {e}", operation="fetch_meisterschaften", sql_error=str(e))
+
+
+def delete_meisterschaft(meisterschaft_id: int) -> None:
+    """Delete a championship and all its related data."""
+    try:
+        with _connect() as con:
+            con.execute("DELETE FROM meisterschaften WHERE id=?", (meisterschaft_id,))
+            con.commit()
+            logger.log_database_operation("DELETE", "meisterschaften", True, meisterschaft_id=meisterschaft_id)
+    except sqlite3.Error as e:
+        logger.log_database_operation("DELETE", "meisterschaften", False, error=str(e), meisterschaft_id=meisterschaft_id)
+        raise DatabaseError(f"Failed to delete championship: {e}", operation="delete_meisterschaft", sql_error=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Tournament-Participant Management Functions (Aliases for compatibility)
+# ---------------------------------------------------------------------------
+
+def insert_turnier_teilnehmer(turnier_id: int, teilnehmer_id: int) -> None:
+    """Add a participant to a tournament."""
+    add_turnier_teilnehmer(turnier_id, teilnehmer_id)
+
+
+def delete_turnier_teilnehmer(turnier_id: int, teilnehmer_id: int) -> None:
+    """Remove a participant from a tournament."""
+    remove_turnier_teilnehmer(turnier_id, teilnehmer_id)

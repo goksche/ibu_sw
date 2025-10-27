@@ -2,12 +2,13 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 REM ==============================================================
-REM  IBU Turniere – Build-Skript (v0.9.6)
+REM  IBU Turniere – Build-Skript (v1.1.0)
 REM  Erzeugt eine portable OneFile-EXE mit PyInstaller.
+REM  Stabilität & Sicherheit: Exception Handling, Logging, Validation
 REM ==============================================================
 
 set "APP_NAME=IBU Turniere"
-set "APP_VERSION=0.9.6"
+set "APP_VERSION=1.1.0"
 set "ENTRY=main.py"
 
 REM Verzeichnisse relativ zu diesem Skript
