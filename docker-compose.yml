@@ -1,0 +1,87 @@
+# IBU Turniere - Docker Compose Configuration
+# v1.2.0-alpha.1
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ibu_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ibu_turniere}
+      POSTGRES_USER: ${POSTGRES_USER:-ibu_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ibu_admin} -d ${POSTGRES_DB:-ibu_turniere}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ibu_network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ibu_backend
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-ibu_turniere}
+      POSTGRES_USER: ${POSTGRES_USER:-ibu_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      SECRET_KEY: ${SECRET_KEY:-changeme-change-me-in-production}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - backend_logs:/app/logs
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ibu_network
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ibu_frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0
+    depends_on:
+      - backend
+    networks:
+      - ibu_network
+
+# Named Volumes
+volumes:
+  postgres_data:
+    driver: local
+  backend_logs:
+    driver: local
+
+# Network
+networks:
+  ibu_network:
+    driver: bridge
+
