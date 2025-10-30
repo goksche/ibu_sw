@@ -78,18 +78,28 @@ async def import_participants_csv(
             last_name = row.get('Nachname', '').strip()
             email = row.get('E-Mail', '').strip()
             nickname = row.get('Spitzname', '').strip()
+            # Try different possible column names for Scolia ID
+            scolia_id = (row.get('[Id]', '') or row.get('Id', '') or row.get('Scolia ID', '') or row.get('scolia_id', '')).strip()
             
             # Skip if missing required fields
             if not first_name or not last_name:
                 skipped_count += 1
                 continue
             
-            # Check if participant already exists (by name)
-            existing = db.query(Participant).filter(
+            # Check if participant already exists (by name or scolia_id if provided)
+            query = db.query(Participant).filter(
                 Participant.first_name == first_name,
                 Participant.last_name == last_name
-            ).first()
+            )
             
+            if scolia_id:
+                # Also check by Scolia ID
+                query_by_id = db.query(Participant).filter(Participant.scolia_id == scolia_id).first()
+                if query_by_id:
+                    skipped_count += 1
+                    continue
+            
+            existing = query.first()
             if existing:
                 skipped_count += 1
                 continue
@@ -101,7 +111,7 @@ async def import_participants_csv(
                 email=email if email else None,
                 nickname=nickname if nickname else None,
                 club=None,  # Not in CSV
-                scolia_id=None  # Not in CSV
+                scolia_id=scolia_id if scolia_id else None
             )
             db.add(participant)
             imported_count += 1
