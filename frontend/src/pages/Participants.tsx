@@ -10,7 +10,10 @@ export default function Participants() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showImportForm, setShowImportForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{imported: number, skipped: number, errors: string[]} | null>(null);
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -108,18 +111,61 @@ export default function Participants() {
     resetForm();
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    setImportResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('http://localhost:8000/api/v1/participants/import', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Import fehlgeschlagen');
+      }
+
+      const result = await response.json();
+      setImportResult(result);
+      loadParticipants();
+    } catch (err) {
+      console.error('Failed to import participants:', err);
+      alert('Fehler beim Importieren der Teilnehmer');
+    } finally {
+      setImporting(false);
+      // Reset file input
+      e.target.value = '';
+    }
+  };
+
   if (loading) return <div style={{ padding: '2rem' }}>Wird geladen...</div>;
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
         <h1>Teilnehmer-Verwaltung</h1>
-        <div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button 
             onClick={() => navigate('/dashboard')}
-            style={{ marginRight: '1rem', padding: '0.5rem 1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+            style={{ padding: '0.5rem 1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
           >
             Zurück
+          </button>
+          <button 
+            onClick={() => { setShowImportForm(true); }}
+            disabled={importing}
+            style={{ padding: '0.5rem 1rem', background: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.5 : 1 }}
+          >
+            📥 CSV Import
           </button>
           <button 
             onClick={() => { setShowCreateForm(true); setEditingId(null); resetForm(); }}
@@ -231,6 +277,53 @@ export default function Participants() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {showImportForm && (
+        <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#e7f3ff', border: '1px solid #86cfff', borderRadius: '8px' }}>
+          <h2>CSV Import</h2>
+          <p style={{ marginBottom: '1rem', color: '#666' }}>
+            Importieren Sie eine CSV-Datei mit Teilnehmerdaten. Erforderliche Felder: Vorname, Nachname. Optionale Felder: E-Mail, Spitzname.
+          </p>
+          
+          <input
+            type="file"
+            accept=".csv"
+            onChange={handleFileChange}
+            style={{ marginBottom: '1rem', padding: '0.5rem', fontSize: '1rem' }}
+          />
+          
+          {importing && (
+            <div style={{ padding: '1rem', background: '#fff3cd', borderRadius: '4px' }}>
+              ⏳ Wird importiert...
+            </div>
+          )}
+          
+          {importResult && (
+            <div style={{ padding: '1rem', background: importResult.errors.length > 0 ? '#fff3cd' : '#d4edda', borderRadius: '4px', marginBottom: '1rem' }}>
+              <h3 style={{ marginBottom: '0.5rem' }}>Import abgeschlossen</h3>
+              <p>✅ Importiert: {importResult.imported} Teilnehmer</p>
+              <p>⏭️ Übersprungen: {importResult.skipped} (bereits vorhanden oder ungültig)</p>
+              {importResult.errors.length > 0 && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <strong>Fehler ({importResult.errors.length}):</strong>
+                  <ul>
+                    {importResult.errors.map((error, idx) => (
+                      <li key={idx}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <button
+            onClick={() => { setShowImportForm(false); setImportResult(null); }}
+            style={{ padding: '0.75rem 2rem', fontSize: '1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Schließen
+          </button>
         </div>
       )}
 

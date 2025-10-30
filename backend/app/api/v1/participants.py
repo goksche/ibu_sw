@@ -1,9 +1,11 @@
 # Participant API Endpoints
 # v1.2.0-alpha.2
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
+import csv
+import io
 
 from app.core.database import get_db
 from app.schemas.participant import ParticipantCreate, ParticipantUpdate, ParticipantResponse
@@ -51,6 +53,72 @@ async def create_participant(
     return participant
 
 
+@router.post("/import", status_code=status.HTTP_201_CREATED)
+async def import_participants_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Import participants from CSV file"""
+    
+    # Read file content
+    contents = await file.read()
+    
+    # Parse CSV (Semicolon-separated, UTF-8)
+    decoded = contents.decode('utf-8')
+    csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=';')
+    
+    imported_count = 0
+    skipped_count = 0
+    errors = []
+    
+    for row_idx, row in enumerate(csv_reader, start=2):  # Start at 2 (row 1 is header)
+        try:
+            # Map CSV columns to our fields
+            first_name = row.get('Vorname', '').strip()
+            last_name = row.get('Nachname', '').strip()
+            email = row.get('E-Mail', '').strip()
+            nickname = row.get('Spitzname', '').strip()
+            
+            # Skip if missing required fields
+            if not first_name or not last_name:
+                skipped_count += 1
+                continue
+            
+            # Check if participant already exists (by name)
+            existing = db.query(Participant).filter(
+                Participant.first_name == first_name,
+                Participant.last_name == last_name
+            ).first()
+            
+            if existing:
+                skipped_count += 1
+                continue
+            
+            # Create participant
+            participant = Participant(
+                first_name=first_name,
+                last_name=last_name,
+                email=email if email else None,
+                nickname=nickname if nickname else None,
+                club=None,  # Not in CSV
+                scolia_id=None  # Not in CSV
+            )
+            db.add(participant)
+            imported_count += 1
+            
+        except Exception as e:
+            errors.append(f"Row {row_idx}: {str(e)}")
+    
+    # Commit all participants
+    db.commit()
+    
+    return {
+        "imported": imported_count,
+        "skipped": skipped_count,
+        "errors": errors
+    }
+
+
 @router.put("/{participant_id}", response_model=ParticipantResponse)
 async def update_participant(
     participant_id: int,
@@ -91,4 +159,3 @@ async def delete_participant(
     db.delete(participant)
     db.commit()
     return None
-
