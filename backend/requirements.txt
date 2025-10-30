@@ -1,5 +1,5 @@
 # IBU Turniere Backend Dependencies
-# v1.2.0-alpha.1
+# v1.2.0
 
 # Web Framework
 fastapi==0.110.0

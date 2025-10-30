@@ -5,6 +5,27 @@ Alle wichtigen Änderungen an IBU Turniere werden in dieser Datei dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-01-27
+
+### Hinzugefügt
+- **Web Interface** mit Docker-Unterstützung
+- **Backend**: FastAPI + PostgreSQL + SQLAlchemy
+- **Frontend**: React + TypeScript + Vite
+- **User Authentication**: JWT-basierte Authentifizierung
+- **Tournament Management**: CRUD für Tournaments über API
+- **Participant Management**: CRUD für Participants über API
+- **Protected Routes**: Authentifizierte Bereiche im Frontend
+- **Swagger UI**: Interaktive API-Dokumentation
+- **Docker Compose**: PostgreSQL, Backend, Frontend in Containern
+- **Pydantic Settings**: Typisierte Configuration Management
+- **Strukturiertes Logging**: JSON-basiertes Backend-Logging
+
+### Technische Details
+- **Docker-basiert**: PostgreSQL, FastAPI, React
+- **Multi-Platform**: x86, ARM (Raspberry Pi)
+- **Cloud-ready**: Docker Compose Deployment
+- **Swagger UI**: http://localhost:8000/docs
+
 ## [1.1.0] - 2025-10-28
 
 ### Hinzugefügt
@@ -99,8 +120,9 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## Release-Status
 
-- **v1.1.0**: ✅ Release Candidate - Stabilität & Sicherheit
-- **v1.0.0**: ✅ Stable - Turnier-Features
+- **v1.2.0**: ✅ Initial Release - Web Interface
+- **v1.1.0**: ✅ Stable - Desktop App (Stabilität & Sicherheit)
+- **v1.0.0**: ✅ Stable - Desktop App (Turnier-Features)
 
 ## Bekannte Probleme
 
@@ -110,5 +132,6 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## Upgrade-Pfad
 
-- **v1.0.0 → v1.1.0**: Automatische Migration, vollständig rückwärtskompatibel
-- **v1.1.0 → v1.2.0**: Geplant - Web-Interface für Raspberry Pi
+- **v1.0.0 → v1.1.0**: Automatische Migration, vollständig rückwärtskompatibel (Desktop App)
+- **v1.2.0**: Initial Release - Web Interface (unabhängig von Desktop App)
+- **v1.3.0**: Geplant - Vollständiges Tournament Management im Web

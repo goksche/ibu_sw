@@ -1,4 +1,4 @@
-# IBU Turniere - Web Interface (v1.2.0-alpha.1)
+# IBU Turniere - Web Interface (v1.2.0)
 
 ## Überblick
 
