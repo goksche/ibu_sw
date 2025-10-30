@@ -89,6 +89,7 @@ export default function Dashboard() {
               <th style={{ padding: '0.75rem', textAlign: 'left' }}>Startdatum</th>
               <th style={{ padding: '0.75rem', textAlign: 'left' }}>Status</th>
               <th style={{ padding: '0.75rem', textAlign: 'left' }}>Modus</th>
+              <th style={{ padding: '0.75rem', textAlign: 'left' }}>Aktionen</th>
             </tr>
           </thead>
           <tbody>
@@ -98,6 +99,16 @@ export default function Dashboard() {
                 <td style={{ padding: '0.75rem' }}>{tournament.start_date}</td>
                 <td style={{ padding: '0.75rem' }}>{tournament.status}</td>
                 <td style={{ padding: '0.75rem' }}>{tournament.mode}</td>
+                <td style={{ padding: '0.75rem' }}>
+                  {tournament.has_group_phase && (
+                    <button
+                      onClick={() => navigate(`/tournaments/${tournament.id}/groups`)}
+                      style={{ padding: '0.25rem 0.75rem', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
+                    >
+                      Gruppen
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

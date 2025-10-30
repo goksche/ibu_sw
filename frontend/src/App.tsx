@@ -3,6 +3,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import CreateTournament from './pages/CreateTournament';
 import Participants from './pages/Participants';
+import TournamentGroups from './pages/TournamentGroups';
 import { authService } from './services/authService';
 
 function App() {
@@ -35,6 +36,16 @@ function App() {
           element={
             authService.isAuthenticated() ? (
               <Participants />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        <Route 
+          path="/tournaments/:id/groups" 
+          element={
+            authService.isAuthenticated() ? (
+              <TournamentGroups />
             ) : (
               <Navigate to="/login" replace />
             )

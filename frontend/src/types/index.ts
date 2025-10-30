@@ -57,3 +57,40 @@ export interface AuthResponse {
   token_type: string;
 }
 
+export interface Group {
+  id: number;
+  tournament_id: number;
+  name: string;
+}
+
+export interface GroupWithParticipants extends Group {
+  participants: Array<{
+    id: number;
+    first_name: string;
+    last_name: string;
+  }>;
+}
+
+export interface GroupMatch {
+  id: number;
+  tournament_id: number;
+  group_id: number;
+  participant1_id: number;
+  participant2_id: number;
+  score1: number | null;
+  score2: number | null;
+  is_completed: boolean;
+}
+
+export interface KnockoutMatch {
+  id: number;
+  tournament_id: number;
+  round: number;
+  match_number: number;
+  participant1_id: number | null;
+  participant2_id: number | null;
+  score1: number | null;
+  score2: number | null;
+  is_completed: boolean;
+  is_bronze_match: boolean;
+}
