@@ -1,11 +1,28 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import { authService } from './services/authService';
+
 function App() {
   return (
-    <div style={{ padding: '2rem' }}>
-      <h1>IBU Turniere v1.2.0-alpha.1</h1>
-      <p>Frontend wird bald verfügbar sein.</p>
-    </div>
-  )
+    <Router>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route 
+          path="/dashboard" 
+          element={
+            authService.isAuthenticated() ? (
+              <Dashboard />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        <Route path="/" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </Router>
+  );
 }
 
-export default App
+export default App;
 
