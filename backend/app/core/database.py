@@ -33,6 +33,6 @@ def get_db():
 def init_db():
     """Initialize database tables"""
     # Import all models
-    from app.models import user, tournament, participant
+    from app.models import user, tournament, participant, group, match
     Base.metadata.create_all(bind=engine)
 

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.api.v1 import auth, tournaments, participants
+from app.api.v1 import auth, tournaments, participants, groups, matches
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -29,6 +29,8 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(tournaments.router, prefix="/api/v1")
 app.include_router(participants.router, prefix="/api/v1")
+app.include_router(groups.router, prefix="/api/v1/groups", tags=["Groups"])
+app.include_router(matches.router, prefix="/api/v1/matches", tags=["Matches"])
 
 # Initialize Database on Startup
 @app.on_event("startup")
