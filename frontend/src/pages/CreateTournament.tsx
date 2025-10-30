@@ -57,33 +57,36 @@ export default function CreateTournament() {
   // Modus-Erklärungen
   const modeExplanations = {
     round_robin: {
-      title: "Round Robin",
-      description: "Jeder spielt gegen jeden in der Gruppe.",
+      title: "Round Robin (Nur Gruppenphase)",
+      description: "Jeder spielt gegen jeden - KEINE KO-Phase.",
       features: [
         "Alle Teilnehmer spielen gegeneinander",
         "Gruppenphase mit vollständiger Round-Robin-Paarung",
-        "Qualifikation basierend auf Punkten und Differenz",
-        "Geeignet für kleine bis mittlere Teilnehmerzahlen"
+        "Rangliste basierend auf Punkten und Differenz",
+        "KEINE KO-Phase, KEIN Finale",
+        "Geeignet für Liga-Meisterschaften oder kleine Turniere"
       ]
     },
     knockout: {
-      title: "KO-Phase",
-      description: "Direkte Ausscheidungsrunde ohne Gruppenphase.",
+      title: "KO-Phase (Ohne Gruppenphase)",
+      description: "Direkte Ausscheidungsrunde - KEINE Gruppenphase.",
       features: [
-        "Direkte Ausscheidungsrunde",
+        "Direkte Ausscheidungsrunde ohne Gruppenphase",
         "Verlierer scheiden aus",
         "Schnelles Turnier mit klarem Gewinner",
+        "Bronze-Match für Platz 3 verfügbar",
         "Geeignet für 4, 8, 16 oder 32 Teilnehmer"
       ]
     },
     combined: {
-      title: "Kombiniert",
-      description: "Gruppenphase gefolgt von KO-Phase.",
+      title: "Kombiniert (Klassisches Turnier)",
+      description: "Gruppenphase + KO-Phase - wie WM, EM, etc.",
       features: [
-        "Gruppenphase mit Round-Robin",
+        "Phase 1: Gruppenphase mit Round-Robin",
         "Top-Teams qualifizieren sich für KO-Phase",
+        "Phase 2: KO-Phase mit Finale",
         "Bronze-Match für Platz 3 verfügbar",
-        "Geeignet für größere Turniere mit vielen Teilnehmern"
+        "Geeignet für große Turniere mit vielen Teilnehmern"
       ]
     }
   };
