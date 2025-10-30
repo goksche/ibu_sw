@@ -119,12 +119,20 @@ export default function TournamentGroups() {
           <h1>{tournament.name}</h1>
           <p style={{ color: '#666', marginTop: '0.5rem' }}>Gruppenverwaltung</p>
         </div>
-        <button 
-          onClick={() => navigate('/dashboard')}
-          style={{ padding: '0.5rem 1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-        >
-          Zurück
-        </button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button 
+            onClick={() => navigate(`/tournaments/${tournamentId}/matches`)}
+            style={{ padding: '0.5rem 1rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Spiele
+          </button>
+          <button 
+            onClick={() => navigate('/dashboard')}
+            style={{ padding: '0.5rem 1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Zurück
+          </button>
+        </div>
       </div>
 
       {!tournament.has_group_phase && (
