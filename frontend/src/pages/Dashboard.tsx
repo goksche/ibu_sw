@@ -44,7 +44,22 @@ export default function Dashboard() {
         <button onClick={handleLogout}>Logout</button>
       </div>
 
-      <h2>Turniere ({tournaments.length})</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <h2>Turniere ({tournaments.length})</h2>
+        <button 
+          onClick={() => navigate('/tournaments/create')}
+          style={{
+            padding: '0.5rem 1rem',
+            background: '#28a745',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          + Neues Turnier
+        </button>
+      </div>
       
       {tournaments.length === 0 ? (
         <p>Noch keine Turniere vorhanden.</p>

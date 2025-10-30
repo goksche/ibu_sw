@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import CreateTournament from './pages/CreateTournament';
 import { authService } from './services/authService';
 
 function App() {
@@ -13,6 +14,16 @@ function App() {
           element={
             authService.isAuthenticated() ? (
               <Dashboard />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        <Route 
+          path="/tournaments/create" 
+          element={
+            authService.isAuthenticated() ? (
+              <CreateTournament />
             ) : (
               <Navigate to="/login" replace />
             )
