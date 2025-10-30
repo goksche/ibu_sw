@@ -16,7 +16,7 @@ export default function Participants() {
     first_name: '',
     last_name: '',
     club: '',
-    license_number: '',
+    scolia_id: '',
     email: '',
     phone: '',
   });
@@ -69,7 +69,7 @@ export default function Participants() {
       first_name: '',
       last_name: '',
       club: '',
-      license_number: '',
+      scolia_id: '',
       email: '',
       phone: '',
     });
@@ -81,7 +81,7 @@ export default function Participants() {
       first_name: participant.first_name,
       last_name: participant.last_name,
       club: participant.club || '',
-      license_number: participant.license_number || '',
+      scolia_id: participant.scolia_id || '',
       email: participant.email || '',
       phone: participant.phone || '',
     });
@@ -178,12 +178,12 @@ export default function Participants() {
 
             <div>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Lizenznummer
+                Scolia ID
               </label>
               <input
                 type="text"
-                name="license_number"
-                value={formData.license_number}
+                name="scolia_id"
+                value={formData.scolia_id}
                 onChange={handleChange}
                 style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
               />
@@ -245,7 +245,7 @@ export default function Participants() {
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>ID</th>
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Name</th>
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Verein</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Lizenznr.</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Scolia ID</th>
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>E-Mail</th>
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Telefon</th>
                 <th style={{ padding: '0.75rem', textAlign: 'right' }}>Aktionen</th>
@@ -259,7 +259,7 @@ export default function Participants() {
                     {participant.first_name} {participant.last_name}
                   </td>
                   <td style={{ padding: '0.75rem' }}>{participant.club || '-'}</td>
-                  <td style={{ padding: '0.75rem' }}>{participant.license_number || '-'}</td>
+                  <td style={{ padding: '0.75rem' }}>{participant.scolia_id || '-'}</td>
                   <td style={{ padding: '0.75rem' }}>{participant.email || '-'}</td>
                   <td style={{ padding: '0.75rem' }}>{participant.phone || '-'}</td>
                   <td style={{ padding: '0.75rem', textAlign: 'right' }}>

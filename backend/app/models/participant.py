@@ -21,8 +21,8 @@ class Participant(Base):
     
     # Optional Fields
     club = Column(String(200), nullable=True)
-    license_number = Column(String(50), nullable=True, index=True)
-    email = Column(String(100), nullable=True)
+    scolia_id = Column(String(50), nullable=True, index=True)  # Renamed from license_number
+    email = Column(String(200), nullable=True)
     phone = Column(String(50), nullable=True)
     
     # Timestamps

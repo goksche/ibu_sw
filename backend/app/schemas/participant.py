@@ -11,7 +11,7 @@ class ParticipantBase(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     club: str | None = Field(default=None, max_length=200)
-    license_number: str | None = Field(default=None, max_length=50)
+    scolia_id: str | None = Field(default=None, max_length=50, description="Scolia ID")
     email: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=50)
     
@@ -40,7 +40,7 @@ class ParticipantUpdate(BaseModel):
     first_name: str | None = Field(default=None, min_length=1, max_length=100)
     last_name: str | None = Field(default=None, min_length=1, max_length=100)
     club: str | None = None
-    license_number: str | None = None
+    scolia_id: str | None = None
     email: str | None = Field(default=None, max_length=200)
     phone: str | None = None
 

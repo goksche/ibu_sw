@@ -33,7 +33,7 @@ export interface Participant {
   first_name: string;
   last_name: string;
   club: string | null;
-  license_number: string | null;
+  scolia_id: string | null;
   email: string | null;
   phone: string | null;
   created_at: string;
