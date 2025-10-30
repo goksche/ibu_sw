@@ -5,6 +5,23 @@ Alle wichtigen Änderungen an IBU Turniere werden in dieser Datei dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-01-27
+
+### Hinzugefügt
+- **Group Management**: Vollständige CRUD-API für Tournament-Gruppen
+- **Match Management**: GroupMatch & KnockoutMatch Models & API
+- **Group Schemas**: Pydantic-Validierung für Groups
+- **Match Schemas**: Pydantic-Validierung für Matches
+- **Group-Participant Assignment**: Teilnehmer zu Gruppen hinzufügen/entfernen
+- **Score Management**: Punkte-Eintrag und -Updates für Matches
+- **API Endpoints**: 14 neue Endpoints für Groups & Matches
+
+### Technische Details
+- **Neue Models**: Group, GroupParticipant, GroupMatch, KnockoutMatch
+- **Neue Tabellen**: groups, group_participants, group_matches, knockout_matches
+- **Foreign Keys**: CASCADE Deletes implementiert
+- **Swagger UI**: Alle neuen Endpoints dokumentiert
+
 ## [1.2.0] - 2025-01-27
 
 ### Hinzugefügt
@@ -120,7 +137,8 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## Release-Status
 
-- **v1.2.0**: ✅ Initial Release - Web Interface
+- **v1.3.0**: 🔄 Development - Group & Match Management Backend
+- **v1.2.0**: ✅ Stable - Web Interface Initial Release
 - **v1.1.0**: ✅ Stable - Desktop App (Stabilität & Sicherheit)
 - **v1.0.0**: ✅ Stable - Desktop App (Turnier-Features)
 
@@ -134,4 +152,5 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - **v1.0.0 → v1.1.0**: Automatische Migration, vollständig rückwärtskompatibel (Desktop App)
 - **v1.2.0**: Initial Release - Web Interface (unabhängig von Desktop App)
-- **v1.3.0**: Geplant - Vollständiges Tournament Management im Web
+- **v1.3.0**: Development - Group & Match Management Backend
+- **v1.3.1**: Geplant - Tournament & Participant Management UI
