@@ -18,7 +18,7 @@ export default function Participants() {
     club: '',
     scolia_id: '',
     email: '',
-    phone: '',
+    nickname: '',
   });
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export default function Participants() {
       club: '',
       scolia_id: '',
       email: '',
-      phone: '',
+      nickname: '',
     });
   };
 
@@ -83,7 +83,7 @@ export default function Participants() {
       club: participant.club || '',
       scolia_id: participant.scolia_id || '',
       email: participant.email || '',
-      phone: participant.phone || '',
+      nickname: participant.nickname || '',
     });
     setShowCreateForm(true);
   };
@@ -204,12 +204,12 @@ export default function Participants() {
 
             <div>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Telefon
+                Nickname
               </label>
               <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
+                type="text"
+                name="nickname"
+                value={formData.nickname}
                 onChange={handleChange}
                 style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
               />
@@ -247,7 +247,7 @@ export default function Participants() {
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Verein</th>
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Scolia ID</th>
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>E-Mail</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Telefon</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Nickname</th>
                 <th style={{ padding: '0.75rem', textAlign: 'right' }}>Aktionen</th>
               </tr>
             </thead>
@@ -261,7 +261,7 @@ export default function Participants() {
                   <td style={{ padding: '0.75rem' }}>{participant.club || '-'}</td>
                   <td style={{ padding: '0.75rem' }}>{participant.scolia_id || '-'}</td>
                   <td style={{ padding: '0.75rem' }}>{participant.email || '-'}</td>
-                  <td style={{ padding: '0.75rem' }}>{participant.phone || '-'}</td>
+                  <td style={{ padding: '0.75rem' }}>{participant.nickname || '-'}</td>
                   <td style={{ padding: '0.75rem', textAlign: 'right' }}>
                     <button
                       onClick={() => handleEdit(participant)}

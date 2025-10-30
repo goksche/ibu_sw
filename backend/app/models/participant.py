@@ -23,7 +23,7 @@ class Participant(Base):
     club = Column(String(200), nullable=True)
     scolia_id = Column(String(50), nullable=True, index=True)  # Renamed from license_number
     email = Column(String(200), nullable=True)
-    phone = Column(String(50), nullable=True)
+    nickname = Column(String(50), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

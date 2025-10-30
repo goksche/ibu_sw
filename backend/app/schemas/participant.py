@@ -13,7 +13,7 @@ class ParticipantBase(BaseModel):
     club: str | None = Field(default=None, max_length=200)
     scolia_id: str | None = Field(default=None, max_length=50, description="Scolia ID")
     email: str | None = Field(default=None, max_length=200)
-    phone: str | None = Field(default=None, max_length=50)
+    nickname: str | None = Field(default=None, max_length=50)
     
     @field_validator('email')
     @classmethod
@@ -42,7 +42,7 @@ class ParticipantUpdate(BaseModel):
     club: str | None = None
     scolia_id: str | None = None
     email: str | None = Field(default=None, max_length=200)
-    phone: str | None = None
+    nickname: str | None = None
 
 
 class ParticipantResponse(ParticipantBase):

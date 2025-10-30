@@ -35,7 +35,7 @@ export interface Participant {
   club: string | null;
   scolia_id: string | null;
   email: string | null;
-  phone: string | null;
+  nickname: string | null;
   created_at: string;
   updated_at: string;
 }
