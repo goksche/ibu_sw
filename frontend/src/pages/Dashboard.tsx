@@ -44,6 +44,24 @@ export default function Dashboard() {
         <button onClick={handleLogout}>Logout</button>
       </div>
 
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+        <button 
+          onClick={() => navigate('/participants')}
+          style={{
+            padding: '0.75rem 1.5rem',
+            background: '#17a2b8',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '1rem',
+            fontWeight: 'bold'
+          }}
+        >
+          👥 Teilnehmer-Verwaltung
+        </button>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h2>Turniere ({tournaments.length})</h2>
         <button 

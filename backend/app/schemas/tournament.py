@@ -21,7 +21,10 @@ class TournamentCreate(TournamentBase):
     """Schema for creating a new tournament"""
     groups_count: int = Field(default=0, ge=0)
     participants_per_group: int | None = Field(default=None, ge=2)
+    group_distribution: str = Field(default='random', pattern='^(random|seeded)$')
     ko_participants: int = Field(default=0, ge=0)
+    ko_first_round_size: int | None = Field(default=4, ge=4, le=16)
+    ko_distribution: str | None = Field(default='cross', pattern='^(cross|draw)$')
     show_matches: bool = True
     show_tables: bool = True
 
@@ -43,7 +46,10 @@ class TournamentResponse(TournamentBase):
     status: TournamentStatus
     groups_count: int
     participants_per_group: int | None
+    group_distribution: str
     ko_participants: int
+    ko_first_round_size: int | None
+    ko_distribution: str | None
     show_matches: bool
     show_tables: bool
     created_at: datetime

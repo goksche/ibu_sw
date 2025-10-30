@@ -17,8 +17,11 @@ export default function CreateTournament() {
     mode: 'round_robin' as 'round_robin' | 'knockout' | 'combined',
     has_group_phase: true,
     groups_count: 2,
+    group_distribution: 'random' as 'random' | 'seeded',
     has_ko_phase: false,
     ko_participants: 4,
+    ko_first_round_size: 4,
+    ko_distribution: 'cross' as 'cross' | 'draw',
   });
 
   useEffect(() => {
@@ -45,6 +48,8 @@ export default function CreateTournament() {
         ...formData,
         groups_count: parseInt(formData.groups_count.toString()),
         ko_participants: parseInt(formData.ko_participants.toString()),
+        ko_first_round_size: formData.has_ko_phase ? parseInt(formData.ko_first_round_size.toString()) : undefined,
+        ko_distribution: formData.has_ko_phase ? formData.ko_distribution : undefined,
       });
       navigate('/dashboard');
     } catch (err: any) {
@@ -205,6 +210,19 @@ export default function CreateTournament() {
               min={1}
               style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
             />
+            
+            <label style={{ display: 'block', marginTop: '1rem', marginBottom: '0.5rem' }}>
+              Auslosungsart
+            </label>
+            <select
+              name="group_distribution"
+              value={formData.group_distribution}
+              onChange={handleChange}
+              style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
+            >
+              <option value="random">Zufällig (Random)</option>
+              <option value="seeded">Gesetzt (Seeded)</option>
+            </select>
           </div>
         )}
 
@@ -233,6 +251,33 @@ export default function CreateTournament() {
               min={1}
               style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
             />
+            
+            <label style={{ display: 'block', marginTop: '1rem', marginBottom: '0.5rem' }}>
+              Erste KO-Runde (Teilnehmer)
+            </label>
+            <select
+              name="ko_first_round_size"
+              value={formData.ko_first_round_size}
+              onChange={handleChange}
+              style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
+            >
+              <option value="4">Top 4</option>
+              <option value="8">Top 8</option>
+              <option value="16">Top 16</option>
+            </select>
+            
+            <label style={{ display: 'block', marginTop: '1rem', marginBottom: '0.5rem' }}>
+              KO-Auslosung
+            </label>
+            <select
+              name="ko_distribution"
+              value={formData.ko_distribution}
+              onChange={handleChange}
+              style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
+            >
+              <option value="cross">Cross (Überkreuz)</option>
+              <option value="draw">Draw (Auslosung)</option>
+            </select>
           </div>
         )}
 

@@ -44,10 +44,13 @@ class Tournament(Base):
     has_group_phase = Column(Boolean, default=True, nullable=False)
     groups_count = Column(Integer, default=0, nullable=False)
     participants_per_group = Column(Integer, nullable=True)
+    group_distribution = Column(String(20), default='random', nullable=False)  # 'random' or 'seeded'
     
     # KO Phase Settings
     has_ko_phase = Column(Boolean, default=False, nullable=False)
     ko_participants = Column(Integer, default=0, nullable=False)  # Wie viele aus Gruppenphase
+    ko_first_round_size = Column(Integer, default=4, nullable=True)  # 4, 8, 16
+    ko_distribution = Column(String(20), default='cross', nullable=True)  # 'cross' or 'draw'
     
     # Settings
     show_matches = Column(Boolean, default=True, nullable=False)
