@@ -63,8 +63,16 @@ async def import_participants_csv(
     # Read file content
     contents = await file.read()
     
-    # Parse CSV (Semicolon-separated, UTF-8)
-    decoded = contents.decode('utf-8')
+    # Parse CSV (Semicolon-separated, try different encodings)
+    # First try UTF-8, then Windows-1252 (common for German CSV exports)
+    try:
+        decoded = contents.decode('utf-8')
+    except UnicodeDecodeError:
+        try:
+            decoded = contents.decode('latin-1')
+        except UnicodeDecodeError:
+            decoded = contents.decode('utf-8', errors='replace')
+    
     csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=';')
     
     imported_count = 0
