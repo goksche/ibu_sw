@@ -1,18 +1,16 @@
-// Tournament Groups Page
+// Tournament Groups Content (for Tab)
 import { useState, useEffect } from 'react';
-import { authService } from '../services/authService';
-import { tournamentService } from '../services/tournamentService';
-import { participantService } from '../services/participantService';
-import { groupService, GroupWithParticipants } from '../services/groupService';
-import { Tournament, Participant } from '../types';
-import { useNavigate, useParams } from 'react-router-dom';
+import { tournamentService } from '../../services/tournamentService';
+import { participantService } from '../../services/participantService';
+import { groupService, GroupWithParticipants } from '../../services/groupService';
+import { Tournament, Participant } from '../../types';
 
-export default function TournamentGroups() {
-  const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
-  const tournamentId = id ? parseInt(id) : 0;
+interface TournamentGroupsContentProps {
+  tournamentId: number;
+  tournament: Tournament;
+}
 
-  const [tournament, setTournament] = useState<Tournament | null>(null);
+export default function TournamentGroupsContent({ tournamentId, tournament }: TournamentGroupsContentProps) {
   const [groups, setGroups] = useState<GroupWithParticipants[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,24 +23,15 @@ export default function TournamentGroups() {
   const [generateResult, setGenerateResult] = useState<{message: string, groups_processed?: number, matches_created?: number, groups_created?: number, participants_assigned?: number, distribution_method?: string} | null>(null);
 
   useEffect(() => {
-    if (!authService.isAuthenticated()) {
-      navigate('/login');
-      return;
-    }
-    if (tournamentId) {
-      loadData();
-    }
-  }, [tournamentId, navigate]);
+    loadData();
+  }, [tournamentId]);
 
   const loadData = async () => {
     try {
-      const [tournamentData, groupsData, participantsData] = await Promise.all([
-        tournamentService.getById(tournamentId),
+      const [groupsData, participantsData] = await Promise.all([
         groupService.getGroups(tournamentId),
         participantService.getAll(),
       ]);
-      setTournament(tournamentData);
-      setGroups(groupsData.map(async (g) => await groupService.getGroup(g.id)));
       const fullGroups = await Promise.all(
         groupsData.map(async (g) => await groupService.getGroup(g.id))
       );
@@ -152,32 +141,10 @@ export default function TournamentGroups() {
     }
   };
 
-  if (loading) return <div style={{ padding: '2rem' }}>Wird geladen...</div>;
-  if (!tournament) return <div style={{ padding: '2rem' }}>Turnier nicht gefunden.</div>;
+  if (loading) return <div>Wird geladen...</div>;
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
-        <div>
-          <h1>{tournament.name}</h1>
-          <p style={{ color: '#666', marginTop: '0.5rem' }}>Gruppenverwaltung</p>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button 
-            onClick={() => navigate(`/tournaments/${tournamentId}/matches`)}
-            style={{ padding: '0.5rem 1rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
-            Spiele
-          </button>
-          <button 
-            onClick={() => navigate('/dashboard')}
-            style={{ padding: '0.5rem 1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
-            Zurück
-          </button>
-        </div>
-      </div>
-
+    <div>
       {!tournament.has_group_phase && (
         <div style={{ padding: '1rem', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '4px', marginBottom: '2rem' }}>
           ⚠️ Dieses Turnier hat keine Gruppenphase konfiguriert.
@@ -186,7 +153,7 @@ export default function TournamentGroups() {
 
       {showCreateForm && (
         <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '8px' }}>
-          <h2>Neue Gruppe erstellen</h2>
+          <h3>Neue Gruppe erstellen</h3>
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>

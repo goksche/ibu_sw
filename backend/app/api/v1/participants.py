@@ -9,7 +9,8 @@ import io
 
 from app.core.database import get_db
 from app.schemas.participant import ParticipantCreate, ParticipantUpdate, ParticipantResponse
-from app.models.participant import Participant
+from app.models.participant import Participant, TournamentParticipant
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/participants", tags=["Participants"])
 
@@ -78,6 +79,7 @@ async def import_participants_csv(
     imported_count = 0
     skipped_count = 0
     errors = []
+    skipped_items = []
     
     for row_idx, row in enumerate(csv_reader, start=2):  # Start at 2 (row 1 is header)
         try:
@@ -92,6 +94,11 @@ async def import_participants_csv(
             # Skip if missing required fields
             if not first_name or not last_name:
                 skipped_count += 1
+                skipped_items.append({
+                    'row': row_idx,
+                    'name': f"{first_name} {last_name}".strip() or 'Unbekannt',
+                    'reason': 'Fehlende Pflichtfelder (Vorname/Nachname)'
+                })
                 continue
             
             # Check if participant already exists (by name or scolia_id if provided)
@@ -105,11 +112,23 @@ async def import_participants_csv(
                 query_by_id = db.query(Participant).filter(Participant.scolia_id == scolia_id).first()
                 if query_by_id:
                     skipped_count += 1
+                    skipped_items.append({
+                        'row': row_idx,
+                        'name': f"{first_name} {last_name}",
+                        'scolia_id': scolia_id,
+                        'reason': 'Bereits vorhanden (Scolia ID existiert bereits)'
+                    })
                     continue
             
             existing = query.first()
             if existing:
                 skipped_count += 1
+                skipped_items.append({
+                    'row': row_idx,
+                    'name': f"{first_name} {last_name}",
+                    'scolia_id': scolia_id if scolia_id else 'Keine',
+                    'reason': 'Bereits vorhanden (Name existiert bereits)'
+                })
                 continue
             
             # Create participant
@@ -133,7 +152,8 @@ async def import_participants_csv(
     return {
         "imported": imported_count,
         "skipped": skipped_count,
-        "errors": errors
+        "errors": errors,
+        "skipped_items": skipped_items
     }
 
 
@@ -175,5 +195,92 @@ async def delete_participant(
         )
     
     db.delete(participant)
+    db.commit()
+    return None
+
+
+class TournamentParticipantRequest(BaseModel):
+    """Request to add participant to tournament"""
+    participant_ids: List[int]
+
+
+@router.post("/tournament/{tournament_id}/add", status_code=status.HTTP_201_CREATED)
+async def add_tournament_participants(
+    tournament_id: int,
+    request: TournamentParticipantRequest,
+    db: Session = Depends(get_db)
+):
+    """Add participants to a tournament"""
+    added_count = 0
+    skipped_count = 0
+    
+    for participant_id in request.participant_ids:
+        # Check if already exists
+        existing = db.query(TournamentParticipant).filter(
+            TournamentParticipant.tournament_id == tournament_id,
+            TournamentParticipant.participant_id == participant_id
+        ).first()
+        
+        if existing:
+            skipped_count += 1
+            continue
+        
+        # Add to tournament
+        tp = TournamentParticipant(
+            tournament_id=tournament_id,
+            participant_id=participant_id
+        )
+        db.add(tp)
+        added_count += 1
+    
+    db.commit()
+    
+    return {
+        "message": "Participants added to tournament",
+        "added": added_count,
+        "skipped": skipped_count
+    }
+
+
+@router.get("/tournament/{tournament_id}", response_model=List[ParticipantResponse])
+async def get_tournament_participants(
+    tournament_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get all participants in a tournament"""
+    # Get tournament participant IDs
+    tournament_participants = db.query(TournamentParticipant).filter(
+        TournamentParticipant.tournament_id == tournament_id
+    ).all()
+    
+    participant_ids = [tp.participant_id for tp in tournament_participants]
+    
+    # Get participants
+    participants = db.query(Participant).filter(
+        Participant.id.in_(participant_ids)
+    ).all()
+    
+    return participants
+
+
+@router.delete("/tournament/{tournament_id}/{participant_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_tournament_participant(
+    tournament_id: int,
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Remove a participant from a tournament"""
+    tp = db.query(TournamentParticipant).filter(
+        TournamentParticipant.tournament_id == tournament_id,
+        TournamentParticipant.participant_id == participant_id
+    ).first()
+    
+    if not tp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Participant not found in tournament"
+        )
+    
+    db.delete(tp)
     db.commit()
     return None

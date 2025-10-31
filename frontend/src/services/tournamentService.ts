@@ -31,5 +31,21 @@ export const tournamentService = {
   async delete(id: number): Promise<void> {
     await api.delete(`/tournaments/${id}`);
   },
+
+  // Generate groups
+  async generateGroups(id: number): Promise<{message: string, groups_created: number, participants_assigned: number, distribution_method: string}> {
+    const response = await api.post<{message: string, groups_created: number, participants_assigned: number, distribution_method: string}>(
+      `/tournaments/${id}/generate-groups`
+    );
+    return response.data;
+  },
+
+  // Generate Round Robin matches
+  async generateRoundRobin(id: number): Promise<{message: string, groups_processed: number, matches_created: number}> {
+    const response = await api.post<{message: string, groups_processed: number, matches_created: number}>(
+      `/tournaments/${id}/generate-round-robin`
+    );
+    return response.data;
+  },
 };
 

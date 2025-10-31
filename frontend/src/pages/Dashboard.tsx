@@ -100,24 +100,12 @@ export default function Dashboard() {
                 <td style={{ padding: '0.75rem' }}>{tournament.status}</td>
                 <td style={{ padding: '0.75rem' }}>{tournament.mode}</td>
                 <td style={{ padding: '0.75rem' }}>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {tournament.has_group_phase && (
-                      <>
-                        <button
-                          onClick={() => navigate(`/tournaments/${tournament.id}/groups`)}
-                          style={{ padding: '0.25rem 0.75rem', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
-                        >
-                          Gruppen
-                        </button>
-                        <button
-                          onClick={() => navigate(`/tournaments/${tournament.id}/matches`)}
-                          style={{ padding: '0.25rem 0.75rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
-                        >
-                          Spiele
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  <button
+                    onClick={() => navigate(`/tournaments/${tournament.id}`)}
+                    style={{ padding: '0.25rem 0.75rem', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
+                  >
+                    Öffnen
+                  </button>
                 </td>
               </tr>
             ))}

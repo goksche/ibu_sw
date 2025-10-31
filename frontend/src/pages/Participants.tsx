@@ -13,7 +13,8 @@ export default function Participants() {
   const [showImportForm, setShowImportForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{imported: number, skipped: number, errors: string[]} | null>(null);
+  const [importResult, setImportResult] = useState<{imported: number, skipped: number, errors: string[], skipped_items?: Array<{row: number, name: string, scolia_id?: string, reason: string}>} | null>(null);
+  const [showSkippedItems, setShowSkippedItems] = useState(false);
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -161,7 +162,7 @@ export default function Participants() {
             Zurück
           </button>
           <button 
-            onClick={() => { setShowImportForm(true); }}
+            onClick={() => { setShowImportForm(true); setShowSkippedItems(false); }}
             disabled={importing}
             style={{ padding: '0.5rem 1rem', background: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.5 : 1 }}
           >
@@ -305,6 +306,43 @@ export default function Participants() {
               <h3 style={{ marginBottom: '0.5rem' }}>Import abgeschlossen</h3>
               <p>✅ Importiert: {importResult.imported} Teilnehmer</p>
               <p>⏭️ Übersprungen: {importResult.skipped} (bereits vorhanden oder ungültig)</p>
+              
+              {importResult.skipped > 0 && importResult.skipped_items && (
+                <div style={{ marginTop: '1rem' }}>
+                  <button
+                    onClick={() => setShowSkippedItems(!showSkippedItems)}
+                    style={{ padding: '0.5rem 1rem', background: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                  >
+                    {showSkippedItems ? '▼' : '▶'} Übersprungene Details anzeigen
+                  </button>
+                  
+                  {showSkippedItems && (
+                    <div style={{ marginTop: '1rem', background: 'white', padding: '1rem', borderRadius: '4px', border: '1px solid #ddd' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid #ddd' }}>
+                            <th style={{ padding: '0.5rem', textAlign: 'left' }}>Zeile</th>
+                            <th style={{ padding: '0.5rem', textAlign: 'left' }}>Name</th>
+                            <th style={{ padding: '0.5rem', textAlign: 'left' }}>Scolia ID</th>
+                            <th style={{ padding: '0.5rem', textAlign: 'left' }}>Grund</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importResult.skipped_items.map((item, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                              <td style={{ padding: '0.5rem' }}>{item.row}</td>
+                              <td style={{ padding: '0.5rem' }}>{item.name}</td>
+                              <td style={{ padding: '0.5rem' }}>{item.scolia_id || '-'}</td>
+                              <td style={{ padding: '0.5rem', color: '#666' }}>{item.reason}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+              
               {importResult.errors.length > 0 && (
                 <div style={{ marginTop: '0.5rem' }}>
                   <strong>Fehler ({importResult.errors.length}):</strong>
@@ -319,7 +357,7 @@ export default function Participants() {
           )}
           
           <button
-            onClick={() => { setShowImportForm(false); setImportResult(null); }}
+            onClick={() => { setShowImportForm(false); setImportResult(null); setShowSkippedItems(false); }}
             style={{ padding: '0.75rem 2rem', fontSize: '1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
           >
             Schließen

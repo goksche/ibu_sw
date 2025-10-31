@@ -31,5 +31,23 @@ export const participantService = {
   async delete(id: number): Promise<void> {
     await api.delete(`/participants/${id}`);
   },
+
+  // Tournament participants
+  async getTournamentParticipants(tournamentId: number): Promise<Participant[]> {
+    const response = await api.get<Participant[]>(`/participants/tournament/${tournamentId}`);
+    return response.data;
+  },
+
+  async addTournamentParticipants(tournamentId: number, participantIds: number[]): Promise<{message: string, added: number, skipped: number}> {
+    const response = await api.post<{message: string, added: number, skipped: number}>(
+      `/participants/tournament/${tournamentId}/add`,
+      { participant_ids: participantIds }
+    );
+    return response.data;
+  },
+
+  async removeTournamentParticipant(tournamentId: number, participantId: number): Promise<void> {
+    await api.delete(`/participants/tournament/${tournamentId}/${participantId}`);
+  },
 };
 
