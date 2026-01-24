@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
+from app.core.dependencies import require_user_or_admin, require_viewer_or_above
 from app.models import Group, GroupParticipant, Tournament, Participant
 from app.schemas.group import (
     GroupCreate, GroupUpdate, GroupResponse, GroupWithParticipants,
@@ -30,6 +31,7 @@ def check_tournament_access(db: Session, tournament_id: int):
 @router.get("/", response_model=List[GroupResponse])
 def get_groups(
     tournament_id: int,
+    current_user = Depends(require_viewer_or_above),
     db: Session = Depends(get_db)
 ):
     """Get all groups for a tournament"""
@@ -42,6 +44,7 @@ def get_groups(
 @router.post("/", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
 def create_group(
     group: GroupCreate,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db),
 ):
     """Create a new group for a tournament"""
@@ -69,6 +72,7 @@ def create_group(
 @router.get("/{group_id}", response_model=GroupWithParticipants)
 def get_group(
     group_id: int,
+    current_user = Depends(require_viewer_or_above),
     db: Session = Depends(get_db),
 ):
     """Get a specific group with participants"""
@@ -96,6 +100,7 @@ def get_group(
 def update_group(
     group_id: int,
     group_update: GroupUpdate,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db),
 ):
     """Update a group"""
@@ -122,6 +127,7 @@ def update_group(
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_group(
     group_id: int,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db),
 ):
     """Delete a group"""
@@ -144,6 +150,7 @@ def delete_group(
 def add_participant_to_group(
     group_id: int,
     participant_add: GroupParticipantAdd,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db),
 ):
     """Add a participant to a group"""
@@ -199,6 +206,7 @@ def add_participant_to_group(
 def remove_participant_from_group(
     group_id: int,
     participant_id: int,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db),
 ):
     """Remove a participant from a group"""

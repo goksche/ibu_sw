@@ -1,19 +1,32 @@
 // Tournament Participants Content (for Tab)
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { participantService } from '../../services/participantService';
 import { Participant } from '../../types';
+import { theme } from '../../theme/theme';
+import { Button, Card, Input } from '../ui';
 
 interface TournamentParticipantsContentProps {
   tournamentId: number;
 }
 
 export default function TournamentParticipantsContent({ tournamentId }: TournamentParticipantsContentProps) {
+  const { canEdit } = useAuth();
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
   const [tournamentParticipants, setTournamentParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showManualForm, setShowManualForm] = useState(false);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<number[]>([]);
   const [adding, setAdding] = useState(false);
+  const [manualFormData, setManualFormData] = useState({
+    first_name: '',
+    last_name: '',
+    club: '',
+    scolia_id: '',
+    email: '',
+    nickname: ''
+  });
 
   useEffect(() => {
     loadData();
@@ -80,7 +93,50 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
     }
   };
 
-  if (loading) return <div>Wird geladen...</div>;
+  const handleManualFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setManualFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddManualParticipant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!manualFormData.first_name.trim() || !manualFormData.last_name.trim()) {
+      alert('Bitte geben Sie mindestens Vor- und Nachname ein.');
+      return;
+    }
+
+    setAdding(true);
+
+    try {
+      await participantService.addManualTournamentParticipant(tournamentId, {
+        first_name: manualFormData.first_name.trim(),
+        last_name: manualFormData.last_name.trim(),
+        club: manualFormData.club.trim() || undefined,
+        scolia_id: manualFormData.scolia_id.trim() || undefined,
+        email: manualFormData.email.trim() || undefined,
+        nickname: manualFormData.nickname.trim() || undefined,
+      });
+      setShowManualForm(false);
+      setManualFormData({
+        first_name: '',
+        last_name: '',
+        club: '',
+        scolia_id: '',
+        email: '',
+        nickname: ''
+      });
+      loadData();
+      alert('Teilnehmer erfolgreich hinzugefügt!');
+    } catch (err: any) {
+      console.error('Failed to add manual participant:', err);
+      alert(err.response?.data?.detail || 'Fehler beim Hinzufügen des Teilnehmers');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  if (loading) return <div style={{ color: theme.colors.text.primary }}>Wird geladen...</div>;
 
   // Get participants that are not yet in the tournament
   const availableParticipants = allParticipants.filter(
@@ -90,123 +146,264 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h2>Turnier-Teilnehmer ({tournamentParticipants.length})</h2>
-        {!showAddForm && (
-          <button 
-            onClick={() => setShowAddForm(true)}
-            style={{ padding: '0.5rem 1rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
-            + Teilnehmer hinzufügen
-          </button>
+        <h2 style={{ color: theme.colors.text.primary }}>Turnier-Teilnehmer ({tournamentParticipants.length})</h2>
+        {canEdit && !showAddForm && !showManualForm && (
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <Button 
+              variant="success"
+              onClick={() => setShowAddForm(true)}
+            >
+              + Aus Liste hinzufügen
+            </Button>
+            <Button 
+              variant="info"
+              onClick={() => setShowManualForm(true)}
+            >
+              + Manuell eintragen
+            </Button>
+          </div>
         )}
       </div>
 
       {showAddForm && (
-        <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#e7f3ff', border: '1px solid #86cfff', borderRadius: '8px' }}>
-          <h3>Teilnehmer hinzufügen</h3>
+        <Card style={{ marginBottom: '2rem', background: theme.colors.background.card, border: `1px solid ${theme.colors.border.standard}` }}>
+          <h3 style={{ color: theme.colors.text.primary, marginTop: 0 }}>Teilnehmer hinzufügen</h3>
           
           {availableParticipants.length === 0 ? (
-            <p>Alle Teilnehmer sind bereits für dieses Turnier registriert.</p>
+            <p style={{ color: theme.colors.text.secondary }}>Alle Teilnehmer sind bereits für dieses Turnier registriert.</p>
           ) : (
             <>
-              <p style={{ marginBottom: '1rem', color: '#666' }}>
+              <p style={{ marginBottom: '1rem', color: theme.colors.text.secondary }}>
                 Wählen Sie Teilnehmer aus ({selectedParticipantIds.length} ausgewählt):
               </p>
               
-              <div style={{ maxHeight: '300px', overflowY: 'auto', background: 'white', border: '1px solid #ddd', borderRadius: '4px', padding: '1rem' }}>
+              <div style={{ 
+                maxHeight: '300px', 
+                overflowY: 'auto', 
+                background: theme.colors.background.secondary, 
+                border: `1px solid ${theme.colors.border.standard}`, 
+                borderRadius: theme.borderRadius.card, 
+                padding: '1rem' 
+              }}>
                 {availableParticipants.map(participant => (
                   <label 
                     key={participant.id}
                     style={{ 
                       display: 'flex', 
                       alignItems: 'center', 
-                      padding: '0.5rem',
+                      padding: '0.75rem',
                       cursor: 'pointer',
-                      borderBottom: '1px solid #eee'
+                      borderBottom: `1px solid ${theme.colors.border.standard}`,
+                      color: theme.colors.text.primary
                     }}
                   >
                     <input
                       type="checkbox"
                       checked={selectedParticipantIds.includes(participant.id)}
                       onChange={() => handleToggleParticipant(participant.id)}
-                      style={{ marginRight: '0.75rem', cursor: 'pointer' }}
+                      style={{ marginRight: '0.75rem', cursor: 'pointer', width: '16px', height: '16px' }}
                     />
                     <span>
                       <strong>{participant.first_name} {participant.last_name}</strong>
-                      {participant.club && <span style={{ color: '#666', marginLeft: '0.5rem' }}>({participant.club})</span>}
+                      {participant.club && <span style={{ color: theme.colors.text.secondary, marginLeft: '0.5rem' }}>({participant.club})</span>}
                     </span>
                   </label>
                 ))}
               </div>
               
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                <button
+                <Button
+                  variant="primary"
                   onClick={handleAddParticipants}
                   disabled={adding || selectedParticipantIds.length === 0}
-                  style={{
-                    padding: '0.75rem 2rem',
-                    fontSize: '1rem',
-                    background: adding || selectedParticipantIds.length === 0 ? '#6c757d' : '#007bff',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: adding || selectedParticipantIds.length === 0 ? 'not-allowed' : 'pointer'
-                  }}
                 >
                   {adding ? 'Hinzufügen...' : 'Ausgewählte hinzufügen'}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
                   onClick={() => { setShowAddForm(false); setSelectedParticipantIds([]); }}
-                  style={{
-                    padding: '0.75rem 2rem',
-                    fontSize: '1rem',
-                    background: '#6c757d',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
                 >
                   Abbrechen
-                </button>
+                </Button>
               </div>
             </>
           )}
-        </div>
+        </Card>
+      )}
+
+      {showManualForm && (
+        <Card style={{ marginBottom: '2rem', background: theme.colors.background.card, border: `1px solid ${theme.colors.accent.warning}` }}>
+          <h3 style={{ color: theme.colors.text.primary, marginTop: 0 }}>Teilnehmer manuell eintragen</h3>
+          <p style={{ marginBottom: '1rem', color: theme.colors.text.secondary, fontSize: '0.9rem' }}>
+            Geben Sie die Daten des Teilnehmers ein. Dieser wird nur für dieses Turnier erstellt.
+          </p>
+          
+          <form onSubmit={handleAddManualParticipant}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+                  Vorname *
+                </label>
+                <Input
+                  type="text"
+                  name="first_name"
+                  value={manualFormData.first_name}
+                  onChange={handleManualFormChange}
+                  required
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+                  Nachname *
+                </label>
+                <Input
+                  type="text"
+                  name="last_name"
+                  value={manualFormData.last_name}
+                  onChange={handleManualFormChange}
+                  required
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: theme.colors.text.primary }}>
+                  Verein
+                </label>
+                <Input
+                  type="text"
+                  name="club"
+                  value={manualFormData.club}
+                  onChange={handleManualFormChange}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: theme.colors.text.primary }}>
+                  Scolia ID
+                </label>
+                <Input
+                  type="text"
+                  name="scolia_id"
+                  value={manualFormData.scolia_id}
+                  onChange={handleManualFormChange}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: theme.colors.text.primary }}>
+                  E-Mail
+                </label>
+                <Input
+                  type="email"
+                  name="email"
+                  value={manualFormData.email}
+                  onChange={handleManualFormChange}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: theme.colors.text.primary }}>
+                  Spitzname
+                </label>
+                <Input
+                  type="text"
+                  name="nickname"
+                  value={manualFormData.nickname}
+                  onChange={handleManualFormChange}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+              <Button
+                type="submit"
+                variant="info"
+                disabled={adding}
+              >
+                {adding ? 'Hinzufügen...' : 'Teilnehmer hinzufügen'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setShowManualForm(false);
+                  setManualFormData({
+                    first_name: '',
+                    last_name: '',
+                    club: '',
+                    scolia_id: '',
+                    email: '',
+                    nickname: ''
+                  });
+                }}
+                disabled={adding}
+              >
+                Abbrechen
+              </Button>
+            </div>
+          </form>
+        </Card>
       )}
 
       {tournamentParticipants.length === 0 ? (
-        <p>Noch keine Teilnehmer für dieses Turnier registriert.</p>
+        <p style={{ color: theme.colors.text.secondary }}>Noch keine Teilnehmer für dieses Turnier registriert.</p>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #ddd', background: '#f8f9fa' }}>
-              <th style={{ padding: '0.75rem', textAlign: 'left' }}>Name</th>
-              <th style={{ padding: '0.75rem', textAlign: 'left' }}>Verein</th>
-              <th style={{ padding: '0.75rem', textAlign: 'left' }}>Scolia ID</th>
-              <th style={{ padding: '0.75rem', textAlign: 'right' }}>Aktionen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tournamentParticipants.map(participant => (
-              <tr key={participant.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '0.75rem', fontWeight: 'bold' }}>
-                  {participant.first_name} {participant.last_name}
-                </td>
-                <td style={{ padding: '0.75rem' }}>{participant.club || '-'}</td>
-                <td style={{ padding: '0.75rem' }}>{participant.scolia_id || '-'}</td>
-                <td style={{ padding: '0.75rem', textAlign: 'right' }}>
-                  <button
-                    onClick={() => handleRemoveParticipant(participant.id)}
-                    style={{ padding: '0.25rem 0.75rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                  >
-                    Entfernen
-                  </button>
-                </td>
+        <div style={{
+          background: theme.colors.background.card,
+          border: `1px solid ${theme.colors.border.standard}`,
+          borderRadius: theme.borderRadius.card,
+          overflow: 'hidden'
+        }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ 
+                borderBottom: `2px solid ${theme.colors.border.standard}`, 
+                background: theme.colors.background.secondary 
+              }}>
+                <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary, fontWeight: '600' }}>Name</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary, fontWeight: '600' }}>Verein</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary, fontWeight: '600' }}>Scolia ID</th>
+                <th style={{ padding: '0.75rem', textAlign: 'right', color: theme.colors.text.primary, fontWeight: '600' }}>Aktionen</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {tournamentParticipants.map(participant => (
+                <tr 
+                  key={participant.id} 
+                  style={{ 
+                    borderBottom: `1px solid ${theme.colors.border.standard}`,
+                    background: theme.colors.background.card
+                  }}
+                >
+                  <td style={{ padding: '0.75rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+                    {participant.first_name} {participant.last_name}
+                  </td>
+                  <td style={{ padding: '0.75rem', color: theme.colors.text.secondary }}>{participant.club || '-'}</td>
+                  <td style={{ padding: '0.75rem', color: theme.colors.text.secondary }}>{participant.scolia_id || '-'}</td>
+                  <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                    {canEdit && (
+                      <Button
+                        variant="danger"
+                        onClick={() => handleRemoveParticipant(participant.id)}
+                        style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                      >
+                        Entfernen
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

@@ -29,7 +29,7 @@ export const tournamentService = {
 
   // Delete tournament
   async delete(id: number): Promise<void> {
-    await api.delete(`/tournaments/${id}`);
+    await api.post(`/tournaments/${id}/delete`);
   },
 
   // Generate groups
@@ -45,6 +45,50 @@ export const tournamentService = {
     const response = await api.post<{message: string, groups_processed: number, matches_created: number}>(
       `/tournaments/${id}/generate-round-robin`
     );
+    return response.data;
+  },
+
+  // Generate KO Bracket
+  async generateKOBracket(id: number): Promise<{message: string, matches_created: number, first_round_size: number, mode: string}> {
+    const response = await api.post<{message: string, matches_created: number, first_round_size: number, mode: string}>(
+      `/tournaments/${id}/generate-ko-bracket`
+    );
+    return response.data;
+  },
+
+  // Duplicate tournament
+  async duplicate(id: number): Promise<Tournament> {
+    const response = await api.post<Tournament>(`/tournaments/${id}/duplicate`);
+    return response.data;
+  },
+
+  // Set tournament as template
+  async setAsTemplate(id: number, isTemplate: boolean): Promise<Tournament> {
+    const response = await api.post<Tournament>(`/tournaments/${id}/set-template`, null, {
+      params: { is_template: isTemplate }
+    });
+    return response.data;
+  },
+
+  // Get templates
+  async getTemplates(): Promise<Tournament[]> {
+    try {
+      const response = await api.get<Tournament[]>('/tournaments/templates');
+      return response.data;
+    } catch (err: any) {
+      throw err;
+    }
+  },
+
+  // Set seeded participants
+  async setSeededParticipants(id: number, participantIds: number[]): Promise<Tournament> {
+    const response = await api.post<Tournament>(`/tournaments/${id}/set-seeded-participants`, participantIds);
+    return response.data;
+  },
+
+  // Get seeded participants
+  async getSeededParticipants(id: number): Promise<{tournament_id: number, seeded_participant_ids: number[]}> {
+    const response = await api.get<{tournament_id: number, seeded_participant_ids: number[]}>(`/tournaments/${id}/seeded-participants`);
     return response.data;
   },
 };

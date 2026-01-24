@@ -5,6 +5,27 @@ Alle wichtigen Änderungen an IBU Turniere werden in dieser Datei dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-01-27
+
+### Hinzugefügt
+- **Tournament Creation Logic**: Dynamische Aktivierung/Deaktivierung von Gruppenphase und KO-Phase basierend auf Turnier-Modus
+  - Round Robin: Nur Gruppenphase aktiv
+  - KO-Phase: Nur KO-Phase aktiv
+  - Kombiniert: Beide Phasen aktiv
+- **Tournament Deletion**: Turniere können gelöscht werden (mit "Ja"-Bestätigung)
+  - Löschen-Button im Dashboard und in der Turnier-Detailansicht
+  - Sichere Löschung mit Bestätigungsdialog
+- **Manual Participant Entry**: Manueller Eintrag von Teilnehmern direkt für ein Turnier
+  - Neuer Button "Manuell eintragen" neben "Aus Liste hinzufügen"
+  - Teilnehmer werden erstellt und direkt dem Turnier zugeordnet
+- **UI Improvements**: Button "Round Robin generieren" wurde zu "Spielplan generieren" umbenannt
+- **Version Display**: Versionsnummer wird im Dashboard angezeigt
+
+### Technische Details
+- Backend API: `/api/v1/info/version` Endpoint für Versionsinformationen
+- Frontend: Versionsanzeige im Dashboard-Header
+- Synchronisierte Versionierung: Backend und Frontend verwenden v1.4.0
+
 ## [1.3.0] - 2025-01-27
 
 ### Hinzugefügt
@@ -137,7 +158,8 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## Release-Status
 
-- **v1.3.0**: 🔄 Development - Group & Match Management Backend
+- **v1.4.0**: ✅ Stable - Tournament Management Improvements
+- **v1.3.0**: ✅ Stable - Group & Match Management Backend
 - **v1.2.0**: ✅ Stable - Web Interface Initial Release
 - **v1.1.0**: ✅ Stable - Desktop App (Stabilität & Sicherheit)
 - **v1.0.0**: ✅ Stable - Desktop App (Turnier-Features)

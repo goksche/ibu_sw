@@ -40,4 +40,41 @@ class User(Base):
     
     # Relationships
     # tournaments = relationship("Tournament", back_populates="creator")
+    app_permissions = relationship("UserAppPermission", foreign_keys="[UserAppPermission.user_id]", back_populates="user", cascade="all, delete-orphan")
+    feedbacks = relationship("Feedback", back_populates="user", cascade="all, delete-orphan")
+    feedback_comments = relationship("FeedbackComment", back_populates="user", cascade="all, delete-orphan")
+
+
+class OTPCode(Base):
+    """OTP Code Model for Email-based Authentication"""
+
+    __tablename__ = "otp_codes"
+
+    # Primary Key
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Foreign Key to User
+    user_id = Column(Integer, index=True, nullable=False)
+
+    # OTP Information
+    email = Column(String(100), nullable=False)
+    otp_code = Column(String(6), nullable=False)
+    purpose = Column(String(20), default="login", nullable=False)  # login, password_reset, etc.
+
+    # Expiration
+    expires_at = Column(DateTime, nullable=False)
+
+    # Status
+    is_used = Column(Boolean, default=False, nullable=False)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def is_expired(self) -> bool:
+        """Check if OTP code is expired"""
+        return datetime.utcnow() > self.expires_at
+
+    def is_valid(self) -> bool:
+        """Check if OTP code is valid (not used and not expired)"""
+        return not self.is_used and not self.is_expired()
 

@@ -16,6 +16,16 @@ class UserCreate(UserBase):
     """Schema for creating a new user"""
     password: str
     role: UserRole = UserRole.USER
+    is_active: bool = True
+
+
+class UserUpdate(BaseModel):
+    """Schema for updating a user"""
+    username: str
+    email: EmailStr
+    password: str = None  # Optional for updates
+    role: UserRole
+    is_active: bool = True
 
 
 class UserLogin(BaseModel):

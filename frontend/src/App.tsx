@@ -4,17 +4,70 @@ import Dashboard from './pages/Dashboard';
 import CreateTournament from './pages/CreateTournament';
 import Participants from './pages/Participants';
 import TournamentDetail from './pages/TournamentDetail';
-import { authService } from './services/authService';
+import EditTournament from './pages/EditTournament';
+import UserManagement from './pages/Admin/UserManagement';
+import { useAuth } from './contexts/AuthContext';
 
-function App() {
+// BASE_PATH für Plattform-Integration (für React Router basename)
+function getBasePath(): string {
+  // Prüfe ob BASE_PATH bereits gesetzt ist (wird von der Plattform gesetzt)
+  if (typeof window !== 'undefined' && (window as any).BASE_PATH) {
+    return (window as any).BASE_PATH;
+  }
+  
+  // Fallback: Extrahiere aus URL (z.B. /App-4/...)
+  if (typeof window !== 'undefined') {
+    const parts = window.location.pathname.split('/');
+    if (parts.length > 1 && parts[1].startsWith('App-')) {
+      return '/' + parts[1];
+    }
+  }
+  
+  // Lokale Entwicklung ohne Prefix
+  return '';
+}
+
+function AppRoutes() {
+  const { isAuthenticated, loading, canEdit, isAdmin } = useAuth();
+  const basename = getBasePath();
+
+  // Show loading state while checking authentication
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '100vh' 
+      }}>
+        <div>Lädt...</div>
+      </div>
+    );
+  }
+
   return (
-    <Router>
+    <Router 
+      basename={basename}
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true
+      }}
+    >
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route 
+          path="/login" 
+          element={
+            isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Login />
+            )
+          } 
+        />
         <Route 
           path="/dashboard" 
           element={
-            authService.isAuthenticated() ? (
+            isAuthenticated ? (
               <Dashboard />
             ) : (
               <Navigate to="/login" replace />
@@ -24,8 +77,10 @@ function App() {
         <Route 
           path="/tournaments/create" 
           element={
-            authService.isAuthenticated() ? (
+            isAuthenticated && canEdit ? (
               <CreateTournament />
+            ) : isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
             ) : (
               <Navigate to="/login" replace />
             )
@@ -34,7 +89,7 @@ function App() {
         <Route 
           path="/participants" 
           element={
-            authService.isAuthenticated() ? (
+            isAuthenticated ? (
               <Participants />
             ) : (
               <Navigate to="/login" replace />
@@ -44,17 +99,52 @@ function App() {
         <Route 
           path="/tournaments/:id" 
           element={
-            authService.isAuthenticated() ? (
+            isAuthenticated ? (
               <TournamentDetail />
             ) : (
               <Navigate to="/login" replace />
             )
           } 
         />
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route 
+          path="/tournaments/:id/edit" 
+          element={
+            isAuthenticated && canEdit ? (
+              <EditTournament />
+            ) : isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        <Route
+          path="/admin/users"
+          element={
+            isAuthenticated && isAdmin ? (
+              <UserManagement />
+            ) : (
+              <Navigate to="/dashboard" replace />
+            )
+          }
+        />
+        <Route
+          path="/"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
       </Routes>
     </Router>
   );
+}
+
+function App() {
+  return <AppRoutes />;
 }
 
 export default App;

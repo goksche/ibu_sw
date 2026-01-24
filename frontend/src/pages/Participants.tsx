@@ -1,12 +1,35 @@
 // Participants Page
 import { useState, useEffect } from 'react';
-import { authService } from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
 import { participantService } from '../services/participantService';
 import { Participant } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { Button, Card, Input } from '../components/ui';
+import { theme } from '../theme/theme';
+import { ArrowLeft, Upload, Plus, PencilSimple, Trash, CheckCircle, XCircle } from 'phosphor-react';
+
+// BASE_PATH für Plattform-Integration
+function getBasePath(): string {
+  // Prüfe ob BASE_PATH bereits gesetzt ist (wird von der Plattform gesetzt)
+  if (typeof window !== 'undefined' && (window as any).BASE_PATH) {
+    return (window as any).BASE_PATH;
+  }
+  
+  // Fallback: Extrahiere aus URL (z.B. /App-4/...)
+  if (typeof window !== 'undefined') {
+    const parts = window.location.pathname.split('/');
+    if (parts.length > 1 && parts[1].startsWith('App-')) {
+      return '/' + parts[1];
+    }
+  }
+  
+  // Lokale Entwicklung ohne Prefix
+  return '';
+}
 
 export default function Participants() {
   const navigate = useNavigate();
+  const { isAuthenticated, canEdit } = useAuth();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -26,12 +49,12 @@ export default function Participants() {
   });
 
   useEffect(() => {
-    if (!authService.isAuthenticated()) {
+    if (!isAuthenticated) {
       navigate('/login');
       return;
     }
     loadParticipants();
-  }, [navigate]);
+  }, [isAuthenticated, navigate]);
 
   const loadParticipants = async () => {
     try {
@@ -123,7 +146,18 @@ export default function Participants() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('http://localhost:8000/api/v1/participants/import', {
+      // BASE_PATH für Plattform-Integration
+      const basePath = getBasePath();
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const baseApiUrl = apiUrl.replace(/\/api\/v1\/?$/, '');
+      
+      // Wenn BASE_PATH gesetzt ist (Plattform), verwende BASE_PATH für API-Requests
+      // Wenn BASE_PATH leer ist (lokale Entwicklung), verwende API_URL
+      const importUrl = basePath
+        ? `${basePath}/api/v1/participants/import`
+        : `${baseApiUrl}/api/v1/participants/import`;
+
+      const response = await fetch(importUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -148,143 +182,120 @@ export default function Participants() {
     }
   };
 
-  if (loading) return <div style={{ padding: '2rem' }}>Wird geladen...</div>;
+  if (loading) return <div style={{ padding: '2rem', color: theme.colors.text.primary }}>Wird geladen...</div>;
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
-        <h1>Teilnehmer-Verwaltung</h1>
+    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', background: theme.colors.background.primary, minHeight: '100vh' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem', alignItems: 'center' }}>
+        <h1 style={{ margin: 0, color: theme.colors.text.primary }}>Teilnehmer-Verwaltung</h1>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button 
+          <Button 
+            variant="secondary"
             onClick={() => navigate('/dashboard')}
-            style={{ padding: '0.5rem 1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
           >
+            <ArrowLeft size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
             Zurück
-          </button>
-          <button 
-            onClick={() => { setShowImportForm(true); setShowSkippedItems(false); }}
-            disabled={importing}
-            style={{ padding: '0.5rem 1rem', background: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.5 : 1 }}
-          >
-            📥 CSV Import
-          </button>
-          <button 
-            onClick={() => { setShowCreateForm(true); setEditingId(null); resetForm(); }}
-            disabled={showCreateForm}
-            style={{ padding: '0.5rem 1rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: showCreateForm ? 'not-allowed' : 'pointer', opacity: showCreateForm ? 0.5 : 1 }}
-          >
-            + Neuer Teilnehmer
-          </button>
+          </Button>
+          {canEdit && (
+            <>
+              <Button 
+                variant="info"
+                onClick={() => { setShowImportForm(true); setShowSkippedItems(false); }}
+                disabled={importing}
+              >
+                <Upload size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+                CSV Import
+              </Button>
+              <Button 
+                variant="success"
+                onClick={() => { setShowCreateForm(true); setEditingId(null); resetForm(); }}
+                disabled={showCreateForm}
+              >
+                <Plus size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+                Neuer Teilnehmer
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {showCreateForm && (
-        <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '8px' }}>
-          <h2>{editingId ? 'Teilnehmer bearbeiten' : 'Neuer Teilnehmer'}</h2>
+        <Card style={{ marginBottom: '2rem' }}>
+          <h2 style={{ marginTop: 0, color: theme.colors.text.primary }}>{editingId ? 'Teilnehmer bearbeiten' : 'Neuer Teilnehmer'}</h2>
           <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Vorname *
-              </label>
-              <input
-                type="text"
-                name="first_name"
-                value={formData.first_name}
-                onChange={handleChange}
-                required
-                style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
+            <Input
+              label="Vorname *"
+              type="text"
+              name="first_name"
+              value={formData.first_name}
+              onChange={handleChange}
+              required
+            />
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Nachname *
-              </label>
-              <input
-                type="text"
-                name="last_name"
-                value={formData.last_name}
-                onChange={handleChange}
-                required
-                style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
+            <Input
+              label="Nachname *"
+              type="text"
+              name="last_name"
+              value={formData.last_name}
+              onChange={handleChange}
+              required
+            />
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Verein
-              </label>
-              <input
-                type="text"
-                name="club"
-                value={formData.club}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
+            <Input
+              label="Verein"
+              type="text"
+              name="club"
+              value={formData.club}
+              onChange={handleChange}
+            />
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Scolia ID
-              </label>
-              <input
-                type="text"
-                name="scolia_id"
-                value={formData.scolia_id}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
+            <Input
+              label="Scolia ID"
+              type="text"
+              name="scolia_id"
+              value={formData.scolia_id}
+              onChange={handleChange}
+            />
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                E-Mail
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
+            <Input
+              label="E-Mail"
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+            />
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Nickname
-              </label>
-              <input
-                type="text"
-                name="nickname"
-                value={formData.nickname}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
+            <Input
+              label="Nickname"
+              type="text"
+              name="nickname"
+              value={formData.nickname}
+              onChange={handleChange}
+            />
 
             <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              <button
+              <Button
                 type="submit"
-                style={{ padding: '0.75rem 2rem', fontSize: '1rem', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                variant="primary"
               >
                 {editingId ? 'Aktualisieren' : 'Erstellen'}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={handleCancel}
-                style={{ padding: '0.75rem 2rem', fontSize: '1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
               >
                 Abbrechen
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
+        </Card>
       )}
 
       {showImportForm && (
-        <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#e7f3ff', border: '1px solid #86cfff', borderRadius: '8px' }}>
-          <h2>CSV Import</h2>
-          <p style={{ marginBottom: '1rem', color: '#666' }}>
+        <Card style={{ marginBottom: '2rem', border: `1px solid ${theme.colors.accent.info}` }}>
+          <h2 style={{ marginTop: 0, color: theme.colors.text.primary }}>CSV Import</h2>
+          <p style={{ marginBottom: '1rem', color: theme.colors.text.secondary }}>
             Importieren Sie eine CSV-Datei mit Teilnehmerdaten. Erforderliche Felder: Vorname, Nachname. Optionale Felder: E-Mail, Spitzname.
           </p>
           
@@ -292,61 +303,83 @@ export default function Participants() {
             type="file"
             accept=".csv"
             onChange={handleFileChange}
-            style={{ marginBottom: '1rem', padding: '0.5rem', fontSize: '1rem' }}
+            style={{ 
+              marginBottom: '1rem', 
+              padding: '0.5rem', 
+              fontSize: '1rem',
+              background: theme.colors.background.secondary,
+              color: theme.colors.text.primary,
+              border: `1px solid ${theme.colors.border.standard}`,
+              borderRadius: theme.borderRadius.input
+            }}
           />
           
           {importing && (
-            <div style={{ padding: '1rem', background: '#fff3cd', borderRadius: '4px' }}>
-              ⏳ Wird importiert...
+            <div style={{ 
+              padding: '1rem', 
+              background: `${theme.colors.accent.warning}20`, 
+              border: `1px solid ${theme.colors.accent.warning}`,
+              borderRadius: theme.borderRadius.card,
+              color: theme.colors.text.primary 
+            }}>
+              Wird importiert...
             </div>
           )}
           
           {importResult && (
-            <div style={{ padding: '1rem', background: importResult.errors.length > 0 ? '#fff3cd' : '#d4edda', borderRadius: '4px', marginBottom: '1rem' }}>
-              <h3 style={{ marginBottom: '0.5rem' }}>Import abgeschlossen</h3>
-              <p>✅ Importiert: {importResult.imported} Teilnehmer</p>
-              <p>⏭️ Übersprungen: {importResult.skipped} (bereits vorhanden oder ungültig)</p>
+            <div style={{ 
+              padding: '1rem', 
+              background: importResult.errors.length > 0 ? `${theme.colors.accent.warning}20` : `${theme.colors.accent.success}20`, 
+              border: `1px solid ${importResult.errors.length > 0 ? theme.colors.accent.warning : theme.colors.accent.success}`,
+              borderRadius: theme.borderRadius.card, 
+              marginBottom: '1rem',
+              color: theme.colors.text.primary
+            }}>
+              <h3 style={{ marginBottom: '0.5rem', marginTop: 0 }}>Import abgeschlossen</h3>
+              <p><CheckCircle size={16} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} /> Importiert: {importResult.imported} Teilnehmer</p>
+              <p><XCircle size={16} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} /> Übersprungen: {importResult.skipped} (bereits vorhanden oder ungültig)</p>
               
               {importResult.skipped > 0 && importResult.skipped_items && (
                 <div style={{ marginTop: '1rem' }}>
-                  <button
+                  <Button
+                    variant="info"
                     onClick={() => setShowSkippedItems(!showSkippedItems)}
-                    style={{ padding: '0.5rem 1rem', background: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                    style={{ padding: '0.5rem 1rem' }}
                   >
                     {showSkippedItems ? '▼' : '▶'} Übersprungene Details anzeigen
-                  </button>
+                  </Button>
                   
                   {showSkippedItems && (
-                    <div style={{ marginTop: '1rem', background: 'white', padding: '1rem', borderRadius: '4px', border: '1px solid #ddd' }}>
+                    <Card style={{ marginTop: '1rem' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                         <thead>
-                          <tr style={{ borderBottom: '1px solid #ddd' }}>
-                            <th style={{ padding: '0.5rem', textAlign: 'left' }}>Zeile</th>
-                            <th style={{ padding: '0.5rem', textAlign: 'left' }}>Name</th>
-                            <th style={{ padding: '0.5rem', textAlign: 'left' }}>Scolia ID</th>
-                            <th style={{ padding: '0.5rem', textAlign: 'left' }}>Grund</th>
+                          <tr style={{ borderBottom: `1px solid ${theme.colors.border.standard}` }}>
+                            <th style={{ padding: '0.5rem', textAlign: 'left', color: theme.colors.text.primary }}>Zeile</th>
+                            <th style={{ padding: '0.5rem', textAlign: 'left', color: theme.colors.text.primary }}>Name</th>
+                            <th style={{ padding: '0.5rem', textAlign: 'left', color: theme.colors.text.primary }}>Scolia ID</th>
+                            <th style={{ padding: '0.5rem', textAlign: 'left', color: theme.colors.text.primary }}>Grund</th>
                           </tr>
                         </thead>
                         <tbody>
                           {importResult.skipped_items.map((item, idx) => (
-                            <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
-                              <td style={{ padding: '0.5rem' }}>{item.row}</td>
-                              <td style={{ padding: '0.5rem' }}>{item.name}</td>
-                              <td style={{ padding: '0.5rem' }}>{item.scolia_id || '-'}</td>
-                              <td style={{ padding: '0.5rem', color: '#666' }}>{item.reason}</td>
+                            <tr key={idx} style={{ borderBottom: `1px solid ${theme.colors.border.standard}` }}>
+                              <td style={{ padding: '0.5rem', color: theme.colors.text.primary }}>{item.row}</td>
+                              <td style={{ padding: '0.5rem', color: theme.colors.text.primary }}>{item.name}</td>
+                              <td style={{ padding: '0.5rem', color: theme.colors.text.primary }}>{item.scolia_id || '-'}</td>
+                              <td style={{ padding: '0.5rem', color: theme.colors.text.secondary }}>{item.reason}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </Card>
                   )}
                 </div>
               )}
               
               {importResult.errors.length > 0 && (
                 <div style={{ marginTop: '0.5rem' }}>
-                  <strong>Fehler ({importResult.errors.length}):</strong>
-                  <ul>
+                  <strong style={{ color: theme.colors.accent.error }}>Fehler ({importResult.errors.length}):</strong>
+                  <ul style={{ color: theme.colors.text.primary }}>
                     {importResult.errors.map((error, idx) => (
                       <li key={idx}>{error}</li>
                     ))}
@@ -356,61 +389,71 @@ export default function Participants() {
             </div>
           )}
           
-          <button
+          <Button
+            variant="secondary"
             onClick={() => { setShowImportForm(false); setImportResult(null); setShowSkippedItems(false); }}
-            style={{ padding: '0.75rem 2rem', fontSize: '1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
           >
             Schließen
-          </button>
-        </div>
+          </Button>
+        </Card>
       )}
 
       <div>
-        <h2>Teilnehmer ({participants.length})</h2>
+        <h2 style={{ color: theme.colors.text.primary }}>Teilnehmer ({participants.length})</h2>
         {participants.length === 0 ? (
-          <p>Noch keine Teilnehmer vorhanden.</p>
+          <p style={{ color: theme.colors.text.secondary }}>Noch keine Teilnehmer vorhanden.</p>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #ddd', background: '#f8f9fa' }}>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>ID</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Name</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Verein</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Scolia ID</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>E-Mail</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Nickname</th>
-                <th style={{ padding: '0.75rem', textAlign: 'right' }}>Aktionen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {participants.map((participant) => (
-                <tr key={participant.id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '0.75rem' }}>{participant.id}</td>
-                  <td style={{ padding: '0.75rem', fontWeight: 'bold' }}>
-                    {participant.first_name} {participant.last_name}
-                  </td>
-                  <td style={{ padding: '0.75rem' }}>{participant.club || '-'}</td>
-                  <td style={{ padding: '0.75rem' }}>{participant.scolia_id || '-'}</td>
-                  <td style={{ padding: '0.75rem' }}>{participant.email || '-'}</td>
-                  <td style={{ padding: '0.75rem' }}>{participant.nickname || '-'}</td>
-                  <td style={{ padding: '0.75rem', textAlign: 'right' }}>
-                    <button
-                      onClick={() => handleEdit(participant)}
-                      style={{ marginRight: '0.5rem', padding: '0.25rem 0.75rem', background: '#ffc107', color: 'black', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                    >
-                      Bearbeiten
-                    </button>
-                    <button
-                      onClick={() => handleDelete(participant.id)}
-                      style={{ padding: '0.25rem 0.75rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                    >
-                      Löschen
-                    </button>
-                  </td>
+          <Card style={{ padding: 0, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${theme.colors.border.standard}`, background: theme.colors.background.secondary }}>
+                  <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>ID</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>Name</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>Verein</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>Scolia ID</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>E-Mail</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>Nickname</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'right', color: theme.colors.text.primary }}>Aktionen</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {participants.map((participant, index) => (
+                  <tr key={participant.id} style={{ borderBottom: index < participants.length - 1 ? `1px solid ${theme.colors.border.standard}` : 'none' }}>
+                    <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{participant.id}</td>
+                    <td style={{ padding: '0.75rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+                      {participant.first_name} {participant.last_name}
+                    </td>
+                    <td style={{ padding: '0.75rem', color: theme.colors.text.secondary }}>{participant.club || '-'}</td>
+                    <td style={{ padding: '0.75rem', color: theme.colors.text.secondary }}>{participant.scolia_id || '-'}</td>
+                    <td style={{ padding: '0.75rem', color: theme.colors.text.secondary }}>{participant.email || '-'}</td>
+                    <td style={{ padding: '0.75rem', color: theme.colors.text.secondary }}>{participant.nickname || '-'}</td>
+                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                      {canEdit && (
+                        <>
+                          <Button
+                            variant="warning"
+                            onClick={() => handleEdit(participant)}
+                            style={{ marginRight: '0.5rem', padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
+                          >
+                            <PencilSimple size={16} style={{ marginRight: '0.25rem', verticalAlign: 'middle' }} />
+                            Bearbeiten
+                          </Button>
+                          <Button
+                            variant="danger"
+                            onClick={() => handleDelete(participant.id)}
+                            style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
+                          >
+                            <Trash size={16} style={{ marginRight: '0.25rem', verticalAlign: 'middle' }} />
+                            Löschen
+                          </Button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
         )}
       </div>
     </div>

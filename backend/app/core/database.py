@@ -8,7 +8,7 @@ from .config import settings
 
 # Create SQLAlchemy Engine
 engine = create_engine(
-    settings.DATABASE_URL,
+    "sqlite:///./test.db",  # Temporarily use SQLite for local development
     pool_pre_ping=True,  # Verify connections before using them
     pool_recycle=3600,   # Recycle connections after 1 hour
     echo=settings.DEBUG  # Log SQL queries in debug mode
@@ -34,5 +34,7 @@ def init_db():
     """Initialize database tables"""
     # Import all models
     from app.models import user, tournament, participant, group, match
+    from app.models.platform import app, permission, feedback, deployment
     Base.metadata.create_all(bind=engine)
+    print("Database tables initialized")
 

@@ -3,6 +3,7 @@
 
 from pydantic_settings import BaseSettings
 from typing import Optional
+from urllib.parse import quote_plus
 
 
 class Settings(BaseSettings):
@@ -10,7 +11,7 @@ class Settings(BaseSettings):
     
     # App Info
     APP_NAME: str = "IBU Turniere API"
-    APP_VERSION: str = "1.2.0-alpha.1"
+    APP_VERSION: str = "1.4.0"
     DEBUG: bool = False
     
     # Database
@@ -22,19 +23,34 @@ class Settings(BaseSettings):
     
     @property
     def DATABASE_URL(self) -> str:
-        """Construct PostgreSQL Database URL"""
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        """Construct PostgreSQL Database URL with URL-encoded password"""
+        encoded_password = quote_plus(self.POSTGRES_PASSWORD)
+        encoded_user = quote_plus(self.POSTGRES_USER)
+        return f"postgresql://{encoded_user}:{encoded_password}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
     
     # Security
     SECRET_KEY: str = "changeme-change-me-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
-    # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    # CORS (komma-separierte Liste als String) - Allow all for local development
+    CORS_ORIGINS: str = "*"
+    
+    @property
+    def CORS_ORIGINS_LIST(self) -> list[str]:
+        """Parse CORS origins from comma-separated string"""
+        if isinstance(self.CORS_ORIGINS, str):
+            return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        return self.CORS_ORIGINS if isinstance(self.CORS_ORIGINS, list) else ["*"]
     
     # Logging
     LOG_LEVEL: str = "INFO"
+    
+    # Platform Settings
+    UPLOAD_DIR: str = "/app/uploads"
+    NGINX_CONF_DIR: str = "/etc/nginx/conf.d"
+    NGINX_APPS_CONF: str = "/etc/nginx/conf.d/apps.conf"
+    DOCKER_SOCKET: str = "/var/run/docker.sock"
     
     class Config:
         env_file = ".env"

@@ -2,9 +2,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
+import { Card, Input, Button } from '../components/ui';
+import { theme } from '../theme/theme';
+import { SignIn } from 'phosphor-react';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { refreshUser } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,9 +21,15 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await authService.login({ username, password });
-      navigate('/dashboard');
+      console.log('Logging in with:', { username, password });
+      const response = await authService.login({ username, password });
+      console.log('Login response:', response);
+
+      // Force a page reload to ensure AuthContext updates
+      console.log('Login successful, reloading page...');
+      window.location.href = '/dashboard';
     } catch (err: any) {
+      console.error('Login error:', err);
       setError(err.response?.data?.detail || 'Login fehlgeschlagen');
     } finally {
       setLoading(false);
@@ -26,81 +37,99 @@ export default function Login() {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
       minHeight: '100vh',
       background: '#f5f5f5'
     }}>
-      <div style={{ 
-        background: 'white', 
-        padding: '2rem', 
-        borderRadius: '8px',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-        width: '400px'
-      }}>
-        <h1 style={{ marginBottom: '1rem', textAlign: 'center' }}>IBU Turniere</h1>
-        <h2 style={{ marginBottom: '1.5rem', textAlign: 'center', color: '#666' }}>Login</h2>
-        
+      <Card style={{ width: '400px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '1rem' }}>
+            <div>
+              <h1 style={{
+                margin: 0,
+                color: '#1a1a1a',
+                fontSize: '1.5rem',
+                fontWeight: 'bold'
+              }}>
+                IBU Turniere
+              </h1>
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.875rem', color: '#666' }}>
+                Turnier-Verwaltung
+              </p>
+            </div>
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Benutzername:</label>
-            <input
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+              Benutzername
+            </label>
+            <Input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
-              style={{ width: '100%', padding: '0.5rem', fontSize: '1rem' }}
+              placeholder="Benutzername eingeben"
             />
           </div>
-          
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Passwort:</label>
-            <input
+
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+              Passwort
+            </label>
+            <Input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              style={{ width: '100%', padding: '0.5rem', fontSize: '1rem' }}
+              placeholder="Passwort eingeben"
             />
           </div>
-          
+
           {error && (
-            <div style={{ 
-              color: 'red', 
-              marginBottom: '1rem', 
-              padding: '0.5rem',
-              background: '#ffe6e6',
-              borderRadius: '4px'
+            <div style={{
+              padding: '0.75rem',
+              backgroundColor: '#ffebee',
+              color: '#d32f2f',
+              borderRadius: '4px',
+              marginBottom: '1rem',
+              fontSize: '0.875rem'
             }}>
               {error}
             </div>
           )}
-          
-          <button
+
+          <Button
             type="submit"
             disabled={loading}
             style={{
               width: '100%',
-              padding: '0.75rem',
-              background: '#0066cc',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              fontSize: '1rem',
-              cursor: 'pointer'
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem'
             }}
           >
+            <SignIn size={18} />
             {loading ? 'Wird angemeldet...' : 'Anmelden'}
-          </button>
+          </Button>
         </form>
-        
-        <p style={{ marginTop: '1rem', textAlign: 'center', color: '#666' }}>
-          Test: admin / secret123
-        </p>
-      </div>
+
+        <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+          <p style={{ fontSize: '0.875rem', color: '#666', margin: '0.5rem 0' }}>
+            Test-Accounts:
+          </p>
+          <div style={{ fontSize: '0.75rem', color: '#888' }}>
+            <div>Admin: goksche / admin123</div>
+            <div>User: user / user123</div>
+            <div>Viewer: viewer / viewer123</div>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
-

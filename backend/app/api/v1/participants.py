@@ -8,6 +8,7 @@ import csv
 import io
 
 from app.core.database import get_db
+from app.core.dependencies import require_user_or_admin, require_viewer_or_above
 from app.schemas.participant import ParticipantCreate, ParticipantUpdate, ParticipantResponse
 from app.models.participant import Participant, TournamentParticipant
 from pydantic import BaseModel
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/participants", tags=["Participants"])
 async def get_participants(
     skip: int = 0,
     limit: int = 100,
+    current_user = Depends(require_viewer_or_above),
     db: Session = Depends(get_db)
 ):
     """Get all participants with pagination"""
@@ -29,6 +31,7 @@ async def get_participants(
 @router.get("/{participant_id}", response_model=ParticipantResponse)
 async def get_participant(
     participant_id: int,
+    current_user = Depends(require_viewer_or_above),
     db: Session = Depends(get_db)
 ):
     """Get a specific participant by ID"""
@@ -44,6 +47,7 @@ async def get_participant(
 @router.post("", response_model=ParticipantResponse, status_code=status.HTTP_201_CREATED)
 async def create_participant(
     participant_data: ParticipantCreate,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db)
 ):
     """Create a new participant"""
@@ -57,6 +61,7 @@ async def create_participant(
 @router.post("/import", status_code=status.HTTP_201_CREATED)
 async def import_participants_csv(
     file: UploadFile = File(...),
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db)
 ):
     """Import participants from CSV file"""
@@ -161,6 +166,7 @@ async def import_participants_csv(
 async def update_participant(
     participant_id: int,
     participant_data: ParticipantUpdate,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db)
 ):
     """Update a participant"""
@@ -184,6 +190,7 @@ async def update_participant(
 @router.delete("/{participant_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_participant(
     participant_id: int,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db)
 ):
     """Delete a participant"""
@@ -208,6 +215,7 @@ class TournamentParticipantRequest(BaseModel):
 async def add_tournament_participants(
     tournament_id: int,
     request: TournamentParticipantRequest,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db)
 ):
     """Add participants to a tournament"""
@@ -242,9 +250,51 @@ async def add_tournament_participants(
     }
 
 
+@router.post("/tournament/{tournament_id}/add-manual", response_model=ParticipantResponse, status_code=status.HTTP_201_CREATED)
+async def add_manual_tournament_participant(
+    tournament_id: int,
+    participant_data: ParticipantCreate,
+    current_user = Depends(require_user_or_admin),
+    db: Session = Depends(get_db)
+):
+    """Create a participant and add it to tournament in one step (manual entry, not saved to global participants list separately)"""
+    # Create participant
+    participant = Participant(**participant_data.model_dump())
+    db.add(participant)
+    db.flush()  # Get participant ID
+    
+    # Check if tournament exists
+    from app.models.tournament import Tournament
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tournament with ID {tournament_id} not found"
+        )
+    
+    # Check if already in tournament (shouldn't happen for new participant, but check anyway)
+    existing = db.query(TournamentParticipant).filter(
+        TournamentParticipant.tournament_id == tournament_id,
+        TournamentParticipant.participant_id == participant.id
+    ).first()
+    
+    if not existing:
+        # Add to tournament
+        tp = TournamentParticipant(
+            tournament_id=tournament_id,
+            participant_id=participant.id
+        )
+        db.add(tp)
+    
+    db.commit()
+    db.refresh(participant)
+    return participant
+
+
 @router.get("/tournament/{tournament_id}", response_model=List[ParticipantResponse])
 async def get_tournament_participants(
     tournament_id: int,
+    current_user = Depends(require_viewer_or_above),
     db: Session = Depends(get_db)
 ):
     """Get all participants in a tournament"""
@@ -267,6 +317,7 @@ async def get_tournament_participants(
 async def remove_tournament_participant(
     tournament_id: int,
     participant_id: int,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db)
 ):
     """Remove a participant from a tournament"""

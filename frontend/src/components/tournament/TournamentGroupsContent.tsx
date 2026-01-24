@@ -1,9 +1,12 @@
 // Tournament Groups Content (for Tab)
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { tournamentService } from '../../services/tournamentService';
 import { participantService } from '../../services/participantService';
 import { groupService, GroupWithParticipants } from '../../services/groupService';
 import { Tournament, Participant } from '../../types';
+import { theme } from '../../theme/theme';
+import { Button } from '../ui';
 
 interface TournamentGroupsContentProps {
   tournamentId: number;
@@ -11,6 +14,7 @@ interface TournamentGroupsContentProps {
 }
 
 export default function TournamentGroupsContent({ tournamentId, tournament }: TournamentGroupsContentProps) {
+  const { canEdit } = useAuth();
   const [groups, setGroups] = useState<GroupWithParticipants[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +24,8 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
   const [formData, setFormData] = useState({ name: '' });
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>('');
   const [generating, setGenerating] = useState(false);
-  const [generateResult, setGenerateResult] = useState<{message: string, groups_processed?: number, matches_created?: number, groups_created?: number, participants_assigned?: number, distribution_method?: string} | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_generateResult, setGenerateResult] = useState<{message: string, groups_processed?: number, matches_created?: number, groups_created?: number, participants_assigned?: number, distribution_method?: string} | null>(null);
 
   useEffect(() => {
     loadData();
@@ -141,22 +146,60 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
     }
   };
 
-  if (loading) return <div>Wird geladen...</div>;
+  const handleGenerateKOBracket = async () => {
+    if (!confirm('Möchten Sie wirklich das KO-Bracket generieren? Bestehende KO-Spiele werden dabei gelöscht.')) {
+      return;
+    }
+
+    setGenerating(true);
+    setGenerateResult(null);
+
+    try {
+      const result = await tournamentService.generateKOBracket(tournamentId);
+      setGenerateResult(result);
+      alert(`KO-Bracket erfolgreich generiert!\nSpiele: ${result.matches_created}\nErste Runde: Top ${result.first_round_size}\nModus: ${result.mode === 'cross' ? 'Cross' : 'Draw'}`);
+    } catch (err: any) {
+      console.error('Failed to generate KO bracket:', err);
+      alert(err.response?.data?.detail || 'Fehler beim Generieren des KO-Brackets');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  if (loading) return <div style={{ color: theme.colors.text.secondary }}>Wird geladen...</div>;
 
   return (
     <div>
       {!tournament.has_group_phase && (
-        <div style={{ padding: '1rem', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '4px', marginBottom: '2rem' }}>
+        <div style={{ 
+          padding: '1rem', 
+          background: `${theme.colors.accent.warning}20`, 
+          border: `1px solid ${theme.colors.accent.warning}`, 
+          borderRadius: theme.borderRadius.card, 
+          marginBottom: '2rem',
+          color: theme.colors.accent.warning
+        }}>
           ⚠️ Dieses Turnier hat keine Gruppenphase konfiguriert.
         </div>
       )}
 
       {showCreateForm && (
-        <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '8px' }}>
-          <h3>Neue Gruppe erstellen</h3>
+        <div style={{ 
+          marginBottom: '2rem', 
+          padding: '1.5rem', 
+          background: theme.colors.background.card, 
+          border: `1px solid ${theme.colors.border.standard}`, 
+          borderRadius: theme.borderRadius.card 
+        }}>
+          <h3 style={{ color: theme.colors.text.primary, marginTop: 0 }}>Neue Gruppe erstellen</h3>
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              <label style={{ 
+                display: 'block', 
+                marginBottom: '0.5rem', 
+                fontWeight: 'bold',
+                color: theme.colors.text.primary
+              }}>
                 Gruppennamen *
               </label>
               <input
@@ -166,121 +209,164 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
                 onChange={handleChange}
                 required
                 placeholder="z.B. Gruppe A"
-                style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                style={{ 
+                  width: '100%', 
+                  padding: '0.5rem', 
+                  fontSize: '1rem', 
+                  border: `1px solid ${theme.colors.border.standard}`, 
+                  borderRadius: theme.borderRadius.input,
+                  background: theme.colors.background.secondary,
+                  color: theme.colors.text.primary
+                }}
               />
             </div>
             <div style={{ display: 'flex', gap: '1rem' }}>
-              <button
-                type="submit"
-                style={{ padding: '0.75rem 2rem', fontSize: '1rem', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-              >
+              <Button type="submit" variant="primary">
                 Erstellen
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={() => { setShowCreateForm(false); setFormData({ name: '' }); }}
-                style={{ padding: '0.75rem 2rem', fontSize: '1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                variant="secondary"
               >
                 Abbrechen
-              </button>
+              </Button>
             </div>
           </form>
         </div>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h2>Gruppen ({groups.length})</h2>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {!showCreateForm && tournament.has_group_phase && (
-            <button 
-              onClick={handleGenerateGroups}
-              disabled={generating}
-              style={{ 
-                padding: '0.5rem 1rem', 
-                background: generating ? '#6c757d' : '#ff9800', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '4px', 
-                cursor: generating ? 'not-allowed' : 'pointer',
-                opacity: generating ? 0.6 : 1
-              }}
-            >
-              {generating ? '⏳ Generiere...' : '🎲 Gruppen generieren'}
-            </button>
-          )}
-          {!showCreateForm && tournament.has_group_phase && groups.length > 0 && (
-            <button 
-              onClick={handleGenerateRoundRobin}
-              disabled={generating}
-              style={{ 
-                padding: '0.5rem 1rem', 
-                background: generating ? '#6c757d' : '#17a2b8', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '4px', 
-                cursor: generating ? 'not-allowed' : 'pointer',
-                opacity: generating ? 0.6 : 1
-              }}
-            >
-              {generating ? '⏳ Generiere...' : '⚽ Round Robin generieren'}
-            </button>
-          )}
-          {!showCreateForm && tournament.has_group_phase && (
-            <button 
-              onClick={() => setShowCreateForm(true)}
-              style={{ padding: '0.5rem 1rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-            >
-              + Neue Gruppe
-            </button>
-          )}
-        </div>
+        <h2 style={{ color: theme.colors.text.primary }}>Gruppen ({groups.length})</h2>
+        {canEdit && (
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {!showCreateForm && tournament.has_group_phase && (
+              <Button 
+                onClick={handleGenerateGroups}
+                disabled={generating}
+                variant="warning"
+              >
+                {generating ? '⏳ Generiere...' : '🎲 Gruppen generieren'}
+              </Button>
+            )}
+            {!showCreateForm && tournament.has_group_phase && groups.length > 0 && (
+              <Button 
+                onClick={handleGenerateRoundRobin}
+                disabled={generating}
+                variant="info"
+              >
+                {generating ? '⏳ Generiere...' : '⚽ Spielplan generieren'}
+              </Button>
+            )}
+            {!showCreateForm && tournament.has_ko_phase && groups.length > 0 && (
+              <Button 
+                onClick={handleGenerateKOBracket}
+                disabled={generating}
+                variant="danger"
+              >
+                {generating ? '⏳ Generiere...' : '🏆 KO-Bracket generieren'}
+              </Button>
+            )}
+            {!showCreateForm && tournament.has_group_phase && (
+              <Button 
+                onClick={() => setShowCreateForm(true)}
+                variant="success"
+              >
+                + Neue Gruppe
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {groups.length === 0 ? (
-        <p>Noch keine Gruppen vorhanden.</p>
+        <p style={{ color: theme.colors.text.secondary }}>Noch keine Gruppen vorhanden.</p>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '1.5rem' }}>
           {groups.map((group) => (
-            <div key={group.id} style={{ border: '1px solid #dee2e6', borderRadius: '8px', overflow: 'hidden' }}>
-              <div style={{ background: '#007bff', color: 'white', padding: '1rem', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div key={group.id} style={{ 
+              border: `1px solid ${theme.colors.border.standard}`, 
+              borderRadius: theme.borderRadius.card, 
+              overflow: 'hidden',
+              background: theme.colors.background.card
+            }}>
+              <div style={{ 
+                background: theme.colors.accent.primary, 
+                color: theme.colors.background.primary, 
+                padding: '1rem', 
+                fontWeight: 'bold', 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center' 
+              }}>
                 <span>{group.name}</span>
-                <button
-                  onClick={() => handleDeleteGroup(group.id)}
-                  style={{ padding: '0.25rem 0.5rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
-                >
-                  Löschen
-                </button>
+                {canEdit && (
+                  <Button
+                    onClick={() => handleDeleteGroup(group.id)}
+                    variant="danger"
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}
+                  >
+                    Löschen
+                  </Button>
+                )}
               </div>
 
               <div style={{ padding: '1rem' }}>
-                <h3 style={{ marginBottom: '0.5rem', fontSize: '0.875rem', color: '#666' }}>
+                <h3 style={{ 
+                  marginBottom: '0.5rem', 
+                  fontSize: '0.875rem', 
+                  color: theme.colors.text.secondary 
+                }}>
                   Teilnehmer ({group.participants.length})
                 </h3>
 
                 {group.participants.length === 0 ? (
-                  <p style={{ color: '#999', fontSize: '0.875rem' }}>Keine Teilnehmer</p>
+                  <p style={{ color: theme.colors.text.disabled, fontSize: '0.875rem' }}>Keine Teilnehmer</p>
                 ) : (
                   <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1rem 0' }}>
                     {group.participants.map((participant) => (
-                      <li key={participant.id} style={{ padding: '0.5rem', background: '#f8f9fa', marginBottom: '0.5rem', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>{participant.first_name} {participant.last_name}</span>
-                        <button
+                      <li key={participant.id} style={{ 
+                        padding: '0.5rem', 
+                        background: theme.colors.background.secondary, 
+                        marginBottom: '0.5rem', 
+                        borderRadius: theme.borderRadius.card, 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        border: `1px solid ${theme.colors.border.standard}`
+                      }}>
+                        <span style={{ color: theme.colors.text.primary }}>{participant.first_name} {participant.last_name}</span>
+                        <Button
                           onClick={() => handleRemoveParticipant(group.id, participant.id)}
-                          style={{ padding: '0.25rem 0.5rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}
+                          variant="danger"
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
                         >
                           ✕
-                        </button>
+                        </Button>
                       </li>
                     ))}
                   </ul>
                 )}
 
                 {showAddParticipantForm === group.id ? (
-                  <div style={{ padding: '0.75rem', background: '#fff3cd', borderRadius: '4px' }}>
+                  <div style={{ 
+                    padding: '0.75rem', 
+                    background: `${theme.colors.accent.warning}20`, 
+                    borderRadius: theme.borderRadius.card,
+                    border: `1px solid ${theme.colors.accent.warning}`
+                  }}>
                     <select
                       value={selectedParticipantId}
                       onChange={(e) => setSelectedParticipantId(e.target.value)}
-                      style={{ width: '100%', padding: '0.5rem', marginBottom: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                      style={{ 
+                        width: '100%', 
+                        padding: '0.5rem', 
+                        marginBottom: '0.5rem', 
+                        border: `1px solid ${theme.colors.border.standard}`, 
+                        borderRadius: theme.borderRadius.input,
+                        background: theme.colors.background.secondary,
+                        color: theme.colors.text.primary
+                      }}
                     >
                       <option value="">Teilnehmer auswählen...</option>
                       {participants
@@ -293,29 +379,33 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
                       }
                     </select>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button
+                      <Button
                         onClick={() => handleAddParticipant(group.id)}
                         disabled={!selectedParticipantId}
-                        style={{ flex: 1, padding: '0.5rem', background: selectedParticipantId ? '#28a745' : '#ccc', color: 'white', border: 'none', borderRadius: '4px', cursor: selectedParticipantId ? 'pointer' : 'not-allowed' }}
+                        variant="success"
+                        style={{ flex: 1, padding: '0.5rem' }}
                       >
                         Hinzufügen
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         onClick={() => { setShowAddParticipantForm(null); setSelectedParticipantId(''); }}
-                        style={{ flex: 1, padding: '0.5rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                        variant="secondary"
+                        style={{ flex: 1, padding: '0.5rem' }}
                       >
                         Abbrechen
-                      </button>
+                      </Button>
                     </div>
                   </div>
-                ) : (
-                  <button
+                ) : canEdit ? (
+                  <Button
                     onClick={() => setShowAddParticipantForm(group.id)}
-                    style={{ width: '100%', padding: '0.5rem', background: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
+                    variant="info"
+                    fullWidth
+                    style={{ padding: '0.5rem', fontSize: '0.875rem' }}
                   >
                     + Teilnehmer hinzufügen
-                  </button>
-                )}
+                  </Button>
+                ) : null}
               </div>
             </div>
           ))}

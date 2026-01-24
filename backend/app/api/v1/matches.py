@@ -6,11 +6,13 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
+from app.core.dependencies import require_user_or_admin, require_viewer_or_above
 from app.models import GroupMatch, KnockoutMatch, Tournament, Group, Participant, User
 from app.schemas.match import (
     GroupMatchCreate, GroupMatchUpdate, GroupMatchResponse,
     KnockoutMatchCreate, KnockoutMatchUpdate, KnockoutMatchResponse
 )
+from app.services.ko_propagation import save_ko_result_and_propagate, ensure_bronze_from_semis
 
 router = APIRouter()
 
@@ -32,6 +34,7 @@ def check_tournament_access(db: Session, tournament_id: int):
 def get_group_matches(
     tournament_id: int,
     group_id: int = None,
+    current_user = Depends(require_viewer_or_above),
     db: Session = Depends(get_db),
 ):
     """Get all group matches for a tournament (optionally filtered by group)"""
@@ -48,6 +51,7 @@ def get_group_matches(
 @router.post("/groups", response_model=GroupMatchResponse, status_code=status.HTTP_201_CREATED)
 def create_group_match(
     match: GroupMatchCreate,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db),
 ):
     """Create a new group match"""
@@ -85,6 +89,7 @@ def create_group_match(
 @router.get("/groups/{match_id}", response_model=GroupMatchResponse)
 def get_group_match(
     match_id: int,
+    current_user = Depends(require_viewer_or_above),
     db: Session = Depends(get_db),
 ):
     """Get a specific group match"""
@@ -104,6 +109,7 @@ def get_group_match(
 def update_group_match(
     match_id: int,
     match_update: GroupMatchUpdate,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db),
 ):
     """Update a group match"""
@@ -124,12 +130,18 @@ def update_group_match(
     db.commit()
     db.refresh(db_match)
     
+    # Check if decision matches need to be generated (if all matches in group are completed)
+    from app.services.decision_matches import generate_decision_matches_for_group
+    if db_match.group_id:
+        generate_decision_matches_for_group(db, db_match.tournament_id, db_match.group_id)
+    
     return db_match
 
 
 @router.delete("/groups/{match_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_group_match(
     match_id: int,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db),
 ):
     """Delete a group match"""
@@ -152,6 +164,7 @@ def delete_group_match(
 @router.get("/knockout", response_model=List[KnockoutMatchResponse])
 def get_knockout_matches(
     tournament_id: int,
+    current_user = Depends(require_viewer_or_above),
     db: Session = Depends(get_db),
 ):
     """Get all knockout matches for a tournament"""
@@ -164,6 +177,7 @@ def get_knockout_matches(
 @router.post("/knockout", response_model=KnockoutMatchResponse, status_code=status.HTTP_201_CREATED)
 def create_knockout_match(
     match: KnockoutMatchCreate,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db),
 ):
     """Create a new knockout match"""
@@ -192,6 +206,7 @@ def create_knockout_match(
 @router.get("/knockout/{match_id}", response_model=KnockoutMatchResponse)
 def get_knockout_match(
     match_id: int,
+    current_user = Depends(require_viewer_or_above),
     db: Session = Depends(get_db),
 ):
     """Get a specific knockout match"""
@@ -211,6 +226,7 @@ def get_knockout_match(
 def update_knockout_match(
     match_id: int,
     match_update: KnockoutMatchUpdate,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db),
 ):
     """Update a knockout match"""
@@ -231,12 +247,20 @@ def update_knockout_match(
     db.commit()
     db.refresh(db_match)
     
+    # Propagate if scores changed
+    if 'score1' in update_data or 'score2' in update_data:
+        save_ko_result_and_propagate(db, match_id, db_match.score1, db_match.score2)
+        # Try to ensure bronze match
+        ensure_bronze_from_semis(db, db_match.tournament_id)
+        db.refresh(db_match)
+    
     return db_match
 
 
 @router.delete("/knockout/{match_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_knockout_match(
     match_id: int,
+    current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db),
 ):
     """Delete a knockout match"""

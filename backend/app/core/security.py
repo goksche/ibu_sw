@@ -8,19 +8,20 @@ from passlib.context import CryptContext
 from .config import settings
 
 # Password Hashing Context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Temporarily using simple SHA256 for local testing (not secure for production!)
+import hashlib
+
+pwd_context = None  # Not used anymore
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against a hashed password"""
-    return pwd_context.verify(plain_password, hashed_password)
+    return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
 
 
 def get_password_hash(password: str) -> str:
-    """Hash a password using bcrypt"""
-    # Ensure password is within bcrypt limits (72 bytes)
-    password_bytes = password.encode('utf-8')[:72]
-    return pwd_context.hash(password_bytes.decode('utf-8'))
+    """Hash a password using SHA256 (temporary for local testing)"""
+    return hashlib.sha256(password.encode()).hexdigest()
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

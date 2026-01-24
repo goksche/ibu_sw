@@ -1,0 +1,12 @@
+{
+  "app_name": "IBU_SW",
+  "display_name": "IBU Turniere",
+  "description": "Turnier-Verwaltungs-System",
+  "version": "1.4.0",
+  "internal_port": 8000,
+  "frontend_port": 3000,
+  "requires_auth": true,
+  "feedback_enabled": true
+}
+
+
