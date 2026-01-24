@@ -5,6 +5,27 @@ Alle wichtigen Änderungen an IBU Turniere werden in dieser Datei dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2025-01-27
+
+### Hinzugefügt
+- **Vereinfachtes Login-System**: Username/Password für lokale Entwicklung (kein OTP)
+- **Vollständige Benutzerverwaltung**: CRUD-Operationen für User-Management
+- **Persistente Datenspeicherung**: User-Änderungen werden in localStorage gespeichert
+- **Navigation verbessert**: Zurück-Buttons und intuitive Benutzerführung
+- **Neue UI-Komponenten**: Select, Input, Badge und andere wiederverwendbare Komponenten
+- **Platform-Management**: Erweiterte Verwaltungsfunktionen für Multi-Tenant-Deployment
+
+### Geändert
+- **Authentifizierung robuster**: Verbessertes Token-Decoding mit Fallback-Mechanismen
+- **Formulare konsistent**: Einheitliche Label-Verwendung und Validierung
+- **UI/UX verbessert**: Bessere Benutzeroberfläche und Benutzererfahrung
+
+### Behoben
+- **Token-Decoding-Fehler**: Base64-Decoding für Mock-Tokens behoben
+- **Select-Komponenten**: Korrekte options-API-Implementierung
+- **Admin-Schutz**: Verhinderung versehentlicher Löschung von Admin-Users
+- **Navigation**: Korrekte Routing und Berechtigungsprüfungen
+
 ## [1.4.0] - 2025-01-27
 
 ### Hinzugefügt
