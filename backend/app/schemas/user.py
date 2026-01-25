@@ -9,23 +9,25 @@ from app.models.user import UserRole
 class UserBase(BaseModel):
     """Base User Schema"""
     username: str
-    email: EmailStr
+    email: str
 
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
     """Schema for creating a new user"""
-    password: str
+    email: EmailStr
     role: UserRole = UserRole.USER
     is_active: bool = True
+    username: str | None = None
+    password: str | None = None
 
 
 class UserUpdate(BaseModel):
     """Schema for updating a user"""
-    username: str
-    email: EmailStr
-    password: str = None  # Optional for updates
-    role: UserRole
-    is_active: bool = True
+    username: str | None = None
+    email: EmailStr | None = None
+    password: str | None = None  # Optional for updates
+    role: UserRole | None = None
+    is_active: bool | None = None
 
 
 class UserLogin(BaseModel):

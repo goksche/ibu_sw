@@ -56,6 +56,18 @@ export const tournamentService = {
     return response.data;
   },
 
+  // Create manual KO bracket
+  async createManualKOBracket(
+    id: number,
+    pairs: Array<{ player1_id: number | null; player2_id: number | null; }>
+  ): Promise<{message: string, matches_created: number, bracket_size: number, mode: string}> {
+    const response = await api.post<{message: string, matches_created: number, bracket_size: number, mode: string}>(
+      `/tournaments/${id}/manual-ko-bracket`,
+      { pairs }
+    );
+    return response.data;
+  },
+
   // Duplicate tournament
   async duplicate(id: number): Promise<Tournament> {
     const response = await api.post<Tournament>(`/tournaments/${id}/duplicate`);

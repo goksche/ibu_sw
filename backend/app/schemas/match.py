@@ -11,6 +11,12 @@ class MatchBase(BaseModel):
     match_no: int = Field(..., ge=1, description="Match number within round")
 
 
+class KnockoutMatchBase(BaseModel):
+    """Base schema for Knockout Match (allows negative rounds for consolation and 99 for bronze)"""
+    round: int = Field(..., description="Round number (positive for main bracket, negative for consolation, 99 for bronze)")
+    match_no: int = Field(..., ge=1, description="Match number within round")
+
+
 class GroupMatchCreate(MatchBase):
     """Schema for creating a group match"""
     tournament_id: int = Field(..., description="Tournament ID")
@@ -36,12 +42,13 @@ class GroupMatchResponse(MatchBase):
     player2_id: Optional[int]
     score1: Optional[int]
     score2: Optional[int]
+    is_decision_match: bool
     
     class Config:
         from_attributes = True
 
 
-class KnockoutMatchCreate(MatchBase):
+class KnockoutMatchCreate(KnockoutMatchBase):
     """Schema for creating a knockout match"""
     tournament_id: int = Field(..., description="Tournament ID")
     player1_id: Optional[int] = Field(None, description="Player 1 ID")
@@ -56,7 +63,7 @@ class KnockoutMatchUpdate(BaseModel):
     score2: Optional[int] = Field(None, ge=0, description="Player 2 score")
 
 
-class KnockoutMatchResponse(MatchBase):
+class KnockoutMatchResponse(KnockoutMatchBase):
     """Schema for knockout match response"""
     id: int
     tournament_id: int

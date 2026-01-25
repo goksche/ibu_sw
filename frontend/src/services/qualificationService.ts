@@ -28,6 +28,8 @@ export interface FallbackCandidateRule {
   count: number;
   selection: string;
   candidates: QualificationCandidate[];
+  cutoff_tie_group?: number[];
+  manual_selected_ids?: number[];
 }
 
 export interface QualificationTable {
@@ -63,6 +65,19 @@ export const qualificationService = {
     const response = await api.get<QualificationTable>(
       `/tournaments/${tournamentId}/qualification-table`
     );
+    return response.data;
+  },
+
+  // Manually select fallback qualifiers for a tied position
+  async setManualFallbackSelection(
+    tournamentId: number,
+    position: number,
+    selectedIds: number[]
+  ): Promise<any> {
+    const response = await api.post(`/tournaments/${tournamentId}/qualification-table/manual`, {
+      position,
+      selected_ids: selectedIds
+    });
     return response.data;
   },
 };

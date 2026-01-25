@@ -3,19 +3,20 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import List, Optional
+import re
 from pydantic import BaseModel, EmailStr
 
 from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token, decode_access_token
 from app.core.config import settings
 from app.core.dependencies import get_current_user, get_user_app_permissions, require_admin
-import pyotp
+import secrets
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import timedelta
+ 
 from app.schemas.user import UserCreate, UserUpdate, UserLogin, UserResponse, Token
 from app.models.user import User, UserRole, OTPCode
 
@@ -171,16 +172,16 @@ class VerifyOTPRequest(BaseModel):
 
 def send_email_otp(email: str, otp_code: str) -> bool:
     """Send OTP code via email"""
+    if not settings.SMTP_HOST or not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD:
+        print("SMTP not configured - cannot send OTP email.")
+        return False
+
     try:
-        # Email configuration (should be in settings)
-        smtp_server = "smtp.gmail.com"  # Example - should be configurable
-        smtp_port = 587
-        smtp_username = "your-email@gmail.com"  # Should be in settings
-        smtp_password = "your-app-password"  # Should be in settings
+        smtp_from = settings.SMTP_FROM or settings.SMTP_USERNAME
 
         # Create message
         msg = MIMEMultipart()
-        msg['From'] = smtp_username
+        msg['From'] = smtp_from
         msg['To'] = email
         msg['Subject'] = "IBU Turniere - Ihr Login-Code"
 
@@ -191,7 +192,7 @@ Ihr Einmal-Code für die Anmeldung bei IBU Turniere lautet:
 
 {otp_code}
 
-Dieser Code ist 10 Minuten gültig.
+Dieser Code ist {settings.OTP_EXPIRY_MINUTES} Minuten gültig.
 
 Falls Sie diese E-Mail nicht erwartet haben, ignorieren Sie sie bitte.
 
@@ -201,11 +202,11 @@ Ihr IBU Turniere Team
         msg.attach(MIMEText(body, 'plain'))
 
         # Send email
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.starttls()
-        server.login(smtp_username, smtp_password)
-        text = msg.as_string()
-        server.sendmail(smtp_username, email, text)
+        server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
+        if settings.SMTP_USE_TLS:
+            server.starttls()
+        server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+        server.sendmail(smtp_from, [email], msg.as_string())
         server.quit()
 
         return True
@@ -218,22 +219,19 @@ Ihr IBU Turniere Team
 async def send_otp(request: SendOTPRequest, db: Session = Depends(get_db)):
     """Send OTP code to email for login"""
 
-    # Find user by email
+    # Whitelist: email must exist and be active
     user = db.query(User).filter(User.email == request.email).first()
-    if not user:
-        # Don't reveal if email exists or not for security
-        return {"message": "Wenn die E-Mail-Adresse registriert ist, wurde ein Code versendet."}
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="E-Mail ist nicht freigegeben oder Account ist inaktiv"
+        )
 
-    if not user.is_active:
-        return {"message": "Account ist nicht aktiv."}
-
-    # Generate OTP (fixed code for development)
-    # totp = pyotp.TOTP(pyotp.random_base32(), interval=600)  # 10 minutes
-    # otp_code = totp.now()
-    otp_code = "123456"  # Fixed code for development testing
+    # Generate OTP
+    otp_code = f"{secrets.randbelow(10 ** settings.OTP_LENGTH):0{settings.OTP_LENGTH}d}"
 
     # Save OTP to database
-    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    expires_at = datetime.utcnow() + timedelta(minutes=settings.OTP_EXPIRY_MINUTES)
 
     # Invalidate any existing OTPs for this user
     db.query(OTPCode).filter(
@@ -253,19 +251,18 @@ async def send_otp(request: SendOTPRequest, db: Session = Depends(get_db)):
     db.add(otp_record)
     db.commit()
 
-    # Save OTP to file for easy access during development
-    otp_file = "otp_codes.txt"
-    with open(otp_file, "a") as f:
-        f.write(f"{datetime.utcnow()}: OTP Code for {request.email}: {otp_code}\n")
+    # Send email (or dev fallback)
+    if send_email_otp(request.email, otp_code):
+        return {"message": "OTP-Code wurde per E-Mail versendet."}
 
-    # Also print to console
-    print(f"OTP Code for {request.email}: {otp_code}")
-    print(f"OTP also saved to file: {otp_file}")
-    print(f"🔑 DEVELOPMENT OTP CODE: {otp_code} (use this for testing)")
+    if settings.OTP_DEV_MODE:
+        print(f"DEV OTP Code for {request.email}: {otp_code}")
+        return {"message": "OTP-Code wurde erzeugt (DEV).", "dev_otp_code": otp_code}
 
-    # In production: send_email_otp(request.email, otp_code)
-
-    return {"message": "OTP-Code wurde versendet.", "dev_otp_code": otp_code}
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="OTP konnte nicht versendet werden. SMTP ist nicht konfiguriert."
+    )
 
 
 @router.post("/verify-otp", response_model=Token)
@@ -334,14 +331,6 @@ async def create_user(
 ):
     """Create a new user (Admin only)"""
 
-    # Check if username already exists
-    existing_user = db.query(User).filter(User.username == user_data.username).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already exists"
-        )
-
     # Check if email already exists
     existing_email = db.query(User).filter(User.email == user_data.email).first()
     if existing_email:
@@ -350,10 +339,34 @@ async def create_user(
             detail="Email already exists"
         )
 
+    def normalize_username(value: str) -> str:
+        cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "", value.strip().lower())
+        return cleaned or "user"
+
+    # Resolve username (optional)
+    if user_data.username and user_data.username.strip():
+        candidate = user_data.username.strip()
+        existing_user = db.query(User).filter(User.username == candidate).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already exists"
+            )
+    else:
+        base = normalize_username(user_data.email.split("@")[0])
+        candidate = base
+        suffix = 1
+        while db.query(User).filter(User.username == candidate).first():
+            candidate = f"{base}{suffix}"
+            suffix += 1
+
     # Create new user
-    hashed_password = get_password_hash(user_data.password)
+    if user_data.password and user_data.password.strip():
+        hashed_password = get_password_hash(user_data.password)
+    else:
+        hashed_password = get_password_hash(secrets.token_urlsafe(24))
     new_user = User(
-        username=user_data.username,
+        username=candidate,
         email=user_data.email,
         hashed_password=hashed_password,
         role=user_data.role,
@@ -384,33 +397,41 @@ async def update_user(
             detail="User not found"
         )
 
-    # Check if username already exists (excluding current user)
-    existing_user = db.query(User).filter(
-        User.username == user_data.username,
-        User.id != user_id
-    ).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already exists"
-        )
+    if user_data.username is not None:
+        candidate = user_data.username.strip()
+        if not candidate:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username cannot be empty"
+            )
+        existing_user = db.query(User).filter(
+            User.username == candidate,
+            User.id != user_id
+        ).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already exists"
+            )
+        user.username = candidate
 
-    # Check if email already exists (excluding current user)
-    existing_email = db.query(User).filter(
-        User.email == user_data.email,
-        User.id != user_id
-    ).first()
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already exists"
-        )
+    if user_data.email is not None:
+        existing_email = db.query(User).filter(
+            User.email == user_data.email,
+            User.id != user_id
+        ).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already exists"
+            )
+        user.email = user_data.email
 
-    # Update user
-    user.username = user_data.username
-    user.email = user_data.email
-    user.role = user_data.role
-    user.is_active = user_data.is_active
+    if user_data.role is not None:
+        user.role = user_data.role
+
+    if user_data.is_active is not None:
+        user.is_active = user_data.is_active
 
     # Update password if provided
     if user_data.password and user_data.password.strip():

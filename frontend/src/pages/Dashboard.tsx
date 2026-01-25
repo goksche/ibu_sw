@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { tournamentService } from '../services/tournamentService';
-import { infoService } from '../services/infoService';
 import { Tournament } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { Button, Badge, Card, Input } from '../components/ui';
@@ -48,8 +47,7 @@ export default function Dashboard() {
 
   const loadTournaments = async () => {
     try {
-      // Temporarily disabled due to CORS issues - just set empty array
-      setTournaments([]);
+      const data = await tournamentService.getAll();
       setTournaments(data);
     } catch (err: any) {
       // Fehler beim Laden der Turniere sollte die Seite nicht blockieren
@@ -142,7 +140,19 @@ export default function Dashboard() {
   const filteredTournaments = tournaments
     .filter(t => {
       const matchesSearch = !searchTerm || t.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || t.status?.toLowerCase() === statusFilter.toLowerCase();
+      let matchesStatus = true;
+      if (statusFilter !== 'all') {
+        const status = t.status?.toLowerCase() || '';
+        // Map German status names to English equivalents for filtering
+        const statusMap: Record<string, string[]> = {
+          'geplant': ['planned', 'geplant'],
+          'laufend': ['running', 'laufend'],
+          'abgeschlossen': ['completed', 'abgeschlossen']
+        };
+        const filterValue = statusFilter.toLowerCase();
+        const allowedStatuses = statusMap[filterValue] || [filterValue];
+        matchesStatus = allowedStatuses.includes(status);
+      }
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
@@ -347,6 +357,16 @@ export default function Dashboard() {
           >
             <Users size={20} weight="bold" style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
             Teilnehmer-Verwaltung
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => navigate('/leagues')}
+            style={{ transition: 'transform 0.2s' }}
+            onMouseEnter={(e: any) => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseLeave={(e: any) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            <Trophy size={20} weight="bold" style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+            Meisterschaften
           </Button>
           <Button
             variant="success"

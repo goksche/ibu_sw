@@ -31,7 +31,18 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "changeme-change-me-in-production"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 600
+
+    # OTP / Email
+    OTP_EXPIRY_MINUTES: int = 10
+    OTP_LENGTH: int = 6
+    OTP_DEV_MODE: bool = False
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM: Optional[str] = None
+    SMTP_USE_TLS: bool = True
     
     # CORS (komma-separierte Liste als String) - Allow all for local development
     CORS_ORIGINS: str = "*"

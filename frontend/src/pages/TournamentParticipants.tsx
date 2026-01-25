@@ -78,6 +78,14 @@ export default function TournamentParticipants() {
     }
   };
 
+  const handleSelectAllAvailable = () => {
+    setSelectedParticipantIds(availableParticipants.map(participant => participant.id));
+  };
+
+  const handleClearSelected = () => {
+    setSelectedParticipantIds([]);
+  };
+
   const handleRemoveParticipant = async (participantId: number) => {
     if (!confirm('Möchten Sie diesen Teilnehmer wirklich aus dem Turnier entfernen?')) {
       return;
@@ -99,6 +107,11 @@ export default function TournamentParticipants() {
   const availableParticipants = allParticipants.filter(
     p => !tournamentParticipants.some(tp => tp.id === p.id)
   );
+  const sortedAvailableParticipants = [...availableParticipants].sort((a, b) => {
+    const firstCompare = a.first_name.localeCompare(b.first_name, 'de', { sensitivity: 'base' });
+    if (firstCompare !== 0) return firstCompare;
+    return a.last_name.localeCompare(b.last_name, 'de', { sensitivity: 'base' });
+  });
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
@@ -148,9 +161,40 @@ export default function TournamentParticipants() {
               <p style={{ marginBottom: '1rem', color: '#666' }}>
                 Wählen Sie Teilnehmer aus (${selectedParticipantIds.length} ausgewählt):
               </p>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <button
+                  onClick={handleSelectAllAvailable}
+                  disabled={availableParticipants.length === 0}
+                  style={{
+                    padding: '0.4rem 0.75rem',
+                    background: availableParticipants.length === 0 ? '#6c757d' : '#17a2b8',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: availableParticipants.length === 0 ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Alle auswählen
+                </button>
+                <button
+                  onClick={handleClearSelected}
+                  disabled={selectedParticipantIds.length === 0}
+                  style={{
+                    padding: '0.4rem 0.75rem',
+                    background: selectedParticipantIds.length === 0 ? '#6c757d' : '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: selectedParticipantIds.length === 0 ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Alle löschen
+                </button>
+              </div>
               
               <div style={{ maxHeight: '300px', overflowY: 'auto', background: 'white', border: '1px solid #ddd', borderRadius: '4px', padding: '1rem' }}>
-                {availableParticipants.map(participant => (
+                {sortedAvailableParticipants.map(participant => (
                   <label 
                     key={participant.id}
                     style={{ 

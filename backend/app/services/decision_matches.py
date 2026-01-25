@@ -77,6 +77,130 @@ def compute_group_stats(matches: List[Dict], participant_ids: List[int], scoring
     return stats
 
 
+def _split_group_by_key(group: List[int], key_map: Dict[int, Tuple]) -> List[List[int]]:
+    buckets: Dict[Tuple, List[int]] = {}
+    for pid in group:
+        key = key_map.get(pid, ())
+        buckets.setdefault(key, []).append(pid)
+    sorted_keys = sorted(buckets.keys(), reverse=True)
+    return [buckets[key] for key in sorted_keys]
+
+
+def _direct_encounter_groups(
+    group: List[int],
+    matches: List[Dict],
+    scoring_system: LeagueScoringSystem
+) -> List[List[int]]:
+    if len(group) <= 1:
+        return [group]
+
+    if len(group) == 2:
+        from app.services.ko_bracket import _head_to_head_winner
+        a, b = group
+        winner = _head_to_head_winner(matches, a, b)
+        if winner == a:
+            return [[a], [b]]
+        if winner == b:
+            return [[b], [a]]
+        return [group]
+
+    direct_matches = [
+        m for m in matches
+        if m.get('player1_id') in group
+        and m.get('player2_id') in group
+        and m.get('score1') is not None
+        and m.get('score2') is not None
+    ]
+    mini_stats = compute_group_stats(direct_matches, group, scoring_system, exclude_decision_matches=False)
+
+    key_map: Dict[int, Tuple] = {}
+    for pid in group:
+        stats = mini_stats.get(pid, {})
+        if scoring_system == LeagueScoringSystem.POINTS:
+            key_map[pid] = (
+                stats.get('points', 0),
+                stats.get('diff', 0),
+                stats.get('goals_for', 0)
+            )
+        else:
+            key_map[pid] = (
+                stats.get('diff', 0),
+                stats.get('goals_for', 0)
+            )
+
+    return _split_group_by_key(group, key_map)
+
+
+def compute_group_ranking_with_rules(
+    matches: List[Dict],
+    participant_ids: List[int],
+    scoring_system: LeagueScoringSystem,
+    tie_breaking_rules: Optional[List[str]] = None
+) -> List[int]:
+    stats = compute_group_stats(matches, participant_ids, scoring_system, exclude_decision_matches=True)
+    rules = tie_breaking_rules or []
+
+    # Primary buckets by scoring system
+    buckets: Dict[int, List[int]] = {}
+    for pid in participant_ids:
+        if scoring_system == LeagueScoringSystem.POINTS:
+            primary_value = stats[pid].get('points', 0)
+        else:
+            primary_value = stats[pid].get('diff', 0)
+        buckets.setdefault(primary_value, []).append(pid)
+
+    sorted_values = sorted(buckets.keys(), reverse=True)
+    ordered: List[int] = []
+
+    for primary_value in sorted_values:
+        group = buckets[primary_value]
+        if len(group) == 1:
+            ordered.append(group[0])
+            continue
+
+        groups = [group]
+        for rule in rules:
+            if rule == 'decision_match':
+                continue
+            next_groups: List[List[int]] = []
+            for g in groups:
+                if len(g) <= 1:
+                    next_groups.append(g)
+                    continue
+                if rule == 'wins':
+                    wins_map = {pid: (stats[pid].get('wins', 0),) for pid in g}
+                    next_groups.extend(_split_group_by_key(g, wins_map))
+                elif rule == 'direct_encounter':
+                    next_groups.extend(_direct_encounter_groups(g, matches, scoring_system))
+                else:
+                    next_groups.append(g)
+            groups = next_groups
+
+        use_stats_fallback = 'decision_match' not in rules
+        for g in groups:
+            if len(g) == 1:
+                ordered.append(g[0])
+            else:
+                if not use_stats_fallback:
+                    ordered.extend(sorted(g))
+                elif scoring_system == LeagueScoringSystem.POINTS:
+                    ordered.extend(
+                        sorted(
+                            g,
+                            key=lambda pid: (-stats[pid].get('diff', 0), -stats[pid].get('goals_for', 0), pid)
+                        )
+                    )
+                else:
+                    ordered.extend(
+                        sorted(
+                            g,
+                            key=lambda pid: (-stats[pid].get('goals_for', 0), pid)
+                        )
+                    )
+
+    return ordered
+
+
 def find_tied_participants(stats: Dict[int, Dict], scoring_system: LeagueScoringSystem) -> List[List[int]]:
     """
     Find groups of participants with the same standing (points or difference).
@@ -127,7 +251,8 @@ def compute_ranking_with_decision_matches(
     regular_matches: List[Dict],
     decision_matches: List[Dict],
     participant_ids: List[int],
-    scoring_system: LeagueScoringSystem
+    scoring_system: LeagueScoringSystem,
+    tie_breaking_rules: Optional[List[str]] = None
 ) -> Tuple[List[int], Dict[int, bool]]:
     """
     Compute group ranking considering decision matches.
@@ -143,13 +268,16 @@ def compute_ranking_with_decision_matches(
         - ranked_participant_ids: List of participant IDs in ranking order
         - decision_winners: Dict mapping participant_id -> True if they won a decision match
     """
-    from app.services.ko_bracket import compute_group_ranking_with_ties
-    
     # Compute stats from regular matches only (exclude decision matches)
     stats = compute_group_stats(regular_matches, participant_ids, scoring_system, exclude_decision_matches=True)
     
     # Get initial ranking from regular matches
-    ranked_participants = compute_group_ranking_with_ties(regular_matches, participant_ids)
+    ranked_participants = compute_group_ranking_with_rules(
+        regular_matches,
+        participant_ids,
+        scoring_system,
+        tie_breaking_rules
+    )
     
     # Process decision matches to adjust ranking
     decision_winners: Dict[int, bool] = {}

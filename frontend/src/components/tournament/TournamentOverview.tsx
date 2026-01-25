@@ -36,6 +36,14 @@ export default function TournamentOverview({ tournament }: TournamentOverviewPro
     'predefined_bracket': 'Vorgegebener Turnierbaum'
   };
 
+  const koDrawModeLabels: Record<string, string> = {
+    'random_first_round': 'a) Erste Runde zufällig, danach fester Turnierbaum',
+    'random_each_round': 'b) Jede Runde neu zufällig',
+    'predefined_slots': 'c) Fester Turnierbaum mit Slot-Bezeichnungen',
+    'cross': 'Legacy: Cross',
+    'draw': 'Legacy: Draw'
+  };
+
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
       {/* Basic Information Card */}
@@ -370,6 +378,17 @@ export default function TournamentOverview({ tournament }: TournamentOverviewPro
                     {tournament.ko_draw_method === 'full_random' && 'Alle kommen in einen Topf und werden zufällig gezogen, gewisse Begegnungen sind verboten.'}
                     {tournament.ko_draw_method === 'bonus_draw_for_winners' && 'Wer seine Gruppe gewinnt, bekommt in der ersten KO-Runde bewusst einen leichteren Gegner.'}
                     {tournament.ko_draw_method === 'predefined_bracket' && 'Der Turnierbaum steht schon vorher fest, die Gruppenphase entscheidet nur über die Position darin.'}
+                  </div>
+                </div>
+              )}
+
+              {tournament.ko_distribution && (
+                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
+                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                    KO-Auslosungsmodus
+                  </div>
+                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600', marginBottom: '0.5rem' }}>
+                    {koDrawModeLabels[tournament.ko_distribution] || tournament.ko_distribution}
                   </div>
                 </div>
               )}

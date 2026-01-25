@@ -262,9 +262,9 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
               <Button 
                 onClick={handleGenerateKOBracket}
                 disabled={generating}
-                variant="danger"
+                variant="warning"
               >
-                {generating ? '⏳ Generiere...' : '🏆 KO-Bracket generieren'}
+                {generating ? '⏳ Generiere...' : '🔄 KO-Bracket generieren/neu generieren'}
               </Button>
             )}
             {!showCreateForm && tournament.has_group_phase && (

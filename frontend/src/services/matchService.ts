@@ -14,6 +14,7 @@ export interface GroupMatch extends MatchBase {
   player2_id: number | null;
   score1: number | null;
   score2: number | null;
+  is_decision_match: boolean;
 }
 
 export interface KnockoutMatch extends MatchBase {

@@ -248,6 +248,22 @@ def update_knockout_match(
     db.refresh(db_match)
     
     # Propagate if scores changed
+    # Handle byes: if one player is None (bye), automatically set score to 3:0
+    if db_match.player1_id is None and db_match.player2_id is not None:
+        # Player 2 has a bye, automatically wins 3:0
+        if db_match.score1 is None or db_match.score2 is None:
+            db_match.score1 = 0
+            db_match.score2 = 3
+            update_data['score1'] = 0
+            update_data['score2'] = 3
+    elif db_match.player2_id is None and db_match.player1_id is not None:
+        # Player 1 has a bye, automatically wins 3:0
+        if db_match.score1 is None or db_match.score2 is None:
+            db_match.score1 = 3
+            db_match.score2 = 0
+            update_data['score1'] = 3
+            update_data['score2'] = 0
+    
     if 'score1' in update_data or 'score2' in update_data:
         save_ko_result_and_propagate(db, match_id, db_match.score1, db_match.score2)
         # Try to ensure bronze match

@@ -1,26 +1,37 @@
 # Tournament API Endpoints
 # v1.2.0-alpha.2
 
+import math
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Dict, Tuple, Optional
+from pydantic import BaseModel
 from app.models.tournament import TournamentStatus
 
 from app.core.database import get_db
 from app.core.dependencies import require_user_or_admin, require_viewer_or_above
-from app.schemas.tournament import TournamentCreate, TournamentUpdate, TournamentResponse
+from app.schemas.tournament import TournamentCreate, TournamentUpdate, TournamentResponse, QualificationManualSelection
 from app.models.tournament import Tournament, TournamentMode
 from app.models.group import Group, GroupParticipant
 from app.models.match import GroupMatch, KnockoutMatch
-from app.models.participant import TournamentParticipant
+from app.models.participant import TournamentParticipant, Participant
 from app.services.round_robin import generate_round_robin_rounds, validate_round_robin_participants
 from app.services.group_distribution import distribute_participants_random, distribute_participants_seeded, validate_distribution
-from app.services.ko_bracket import compute_group_ranking_with_ties, generate_ko_bracket_from_groups, generate_ko_bracket_from_participants
+from app.services.ko_bracket import generate_ko_bracket_from_groups, generate_ko_bracket_from_participants
 from app.services.qualification import calculate_qualification_plan
-from app.services.decision_matches import compute_ranking_with_decision_matches
+from app.services.decision_matches import compute_ranking_with_decision_matches, compute_group_ranking_with_rules
 from app.models.tournament import KOStartRound
 
 router = APIRouter(prefix="/tournaments", tags=["Tournaments"])
+
+
+class ManualKOPair(BaseModel):
+    player1_id: Optional[int] = None
+    player2_id: Optional[int] = None
+
+
+class ManualKOBracketRequest(BaseModel):
+    pairs: List[ManualKOPair]
 
 
 @router.get("", response_model=List[TournamentResponse])
@@ -126,7 +137,7 @@ async def update_tournament(
     config_fields = [
         'mode', 'has_group_phase', 'has_ko_phase', 'groups_count', 
         'participants_per_group', 'group_distribution', 'ko_participants',
-        'ko_first_round_size', 'ko_structure', 'ko_draw_method',
+        'ko_first_round_size', 'ko_structure', 'ko_draw_method', 'ko_distribution',
         'league_scoring_system', 'tie_breaking_rules'
     ]
     
@@ -520,12 +531,12 @@ async def generate_ko_bracket_matches(
             )
         
         participant_ids = [tp.participant_id for tp in tournament_participants]
-        
+
         # Get draw method (default to full_random for knockout mode)
         draw_method = tournament.ko_draw_method or 'full_random'
         if draw_method not in ('full_random', 'pot_system', 'overall_seeding', 'manual'):
             draw_method = 'full_random'
-        
+
         # For manual mode, don't generate matches automatically - user will set them manually
         if draw_method == 'manual':
             raise HTTPException(
@@ -533,7 +544,20 @@ async def generate_ko_bracket_matches(
                 detail="Bei manueller Auslosung müssen die Paarungen manuell über die Turnier-Verwaltung festgelegt werden. "
                        "Bitte verwenden Sie die Funktion 'Paarungen manuell erstellen' im Turnier-Bereich."
             )
-        
+
+        def _apply_seeded_order(ids: List[int]) -> List[int]:
+            seeded = tournament.seeded_participant_ids or []
+            seeded_ids = [pid for pid in seeded if pid in ids]
+            remaining_ids = [pid for pid in ids if pid not in seeded_ids]
+            if remaining_ids:
+                participants = db.query(Participant).filter(Participant.id.in_(remaining_ids)).all()
+                participants.sort(key=lambda p: (p.last_name.lower(), p.first_name.lower(), p.id))
+                remaining_ids = [p.id for p in participants]
+            return seeded_ids + remaining_ids
+
+        if draw_method in ('overall_seeding', 'pot_system'):
+            participant_ids = _apply_seeded_order(participant_ids)
+
         rng_seed = tournament.ko_random_seed
         
         # Generate KO bracket
@@ -541,7 +565,8 @@ async def generate_ko_bracket_matches(
             ko_matches = generate_ko_bracket_from_participants(
                 participant_ids=participant_ids,
                 draw_method=draw_method,
-                rng_seed=rng_seed
+                rng_seed=rng_seed,
+                ko_structure=tournament.ko_structure.value if tournament.ko_structure else None
             )
         except ValueError as e:
             raise HTTPException(
@@ -549,10 +574,37 @@ async def generate_ko_bracket_matches(
                 detail=str(e)
             )
         
+        # Note: generate_ko_bracket_from_participants already creates consolation matches
+        # if ko_structure == 'consolation_bracket', so we don't need to create them again here
+        
+        # Handle other KO structures that need special generation
+        if tournament.ko_structure and tournament.ko_structure.value == 'double_elimination':
+            from app.services.ko_bracket import generate_double_elimination_bracket
+            ko_matches = generate_double_elimination_bracket(
+                participant_ids=participant_ids,
+                draw_method=draw_method,
+                rng_seed=rng_seed
+            )
+        elif tournament.ko_structure and tournament.ko_structure.value == 'triple_elimination':
+            from app.services.ko_bracket import generate_triple_elimination_bracket
+            ko_matches = generate_triple_elimination_bracket(
+                participant_ids=participant_ids,
+                draw_method=draw_method,
+                rng_seed=rng_seed
+            )
+        elif tournament.ko_structure and tournament.ko_structure.value == 'aggregate_ko':
+            from app.services.ko_bracket import generate_aggregate_ko_bracket
+            ko_matches = generate_aggregate_ko_bracket(
+                participant_ids=participant_ids,
+                draw_method=draw_method,
+                rng_seed=rng_seed
+            )
+        
         # Calculate bracket size from first round matches
         first_round_matches = [m for m in ko_matches if m['round'] == 1]
         bracket_size = len(first_round_matches) * 2
         mode = draw_method
+        first_round_size = bracket_size
         
     else:
         # Combined mode: generate bracket from groups
@@ -610,16 +662,20 @@ async def generate_ko_bracket_matches(
             scoring_system = tournament.league_scoring_system or LeagueScoringSystem.POINTS
             
             if decision_matches:
-                # Use ranking that considers decision matches
                 ranking, _ = compute_ranking_with_decision_matches(
                     regular_matches=regular_matches,
                     decision_matches=decision_matches,
                     participant_ids=group_participants,
-                    scoring_system=scoring_system
+                    scoring_system=scoring_system,
+                    tie_breaking_rules=tournament.tie_breaking_rules
                 )
             else:
-                # No decision matches, use regular ranking
-                ranking = compute_group_ranking_with_ties(regular_matches, group_participants)
+                ranking = compute_group_ranking_with_rules(
+                    regular_matches,
+                    group_participants,
+                    scoring_system,
+                    tournament.tie_breaking_rules
+                )
             
             group_rankings[group.id] = ranking
         
@@ -634,9 +690,30 @@ async def generate_ko_bracket_matches(
                 ko_start_round=tournament.ko_start_round
             )
             first_round_size = qualification_plan.get("required_participants", 4)
-            # Store fallback qualifiers if calculated
-            if qualification_plan.get("fallback_rules"):
+            # Store fallback qualifiers if not already set
+            stored_fallback = tournament.ko_fallback_qualifiers or []
+            if not stored_fallback and qualification_plan.get("fallback_rules"):
                 tournament.ko_fallback_qualifiers = qualification_plan.get("fallback_rules")
+                stored_fallback = tournament.ko_fallback_qualifiers or []
+            # Merge manual selections from stored fallback qualifiers
+            if stored_fallback:
+                merged_fallback_rules = []
+                for rule in qualification_plan.get("fallback_rules", []):
+                    matched = next(
+                        (
+                            stored
+                            for stored in stored_fallback
+                            if stored.get("position") == rule.get("position")
+                            and stored.get("count") == rule.get("count")
+                        ),
+                        None
+                    )
+                    if matched and matched.get("manual_selected_ids"):
+                        merged_rule = {**rule, "manual_selected_ids": matched.get("manual_selected_ids")}
+                    else:
+                        merged_rule = rule
+                    merged_fallback_rules.append(merged_rule)
+                qualification_plan["fallback_rules"] = merged_fallback_rules
         else:
             # Legacy: use ko_first_round_size or ko_participants
             if tournament.ko_first_round_size:
@@ -650,9 +727,14 @@ async def generate_ko_bracket_matches(
                 detail=f"Ungültige erste KO-Runde: {first_round_size}. Muss 4, 8, 16 oder 32 sein"
             )
         
-        # Get KO distribution mode
+        # Determine draw mode for combined tournaments
         ko_distribution = tournament.ko_distribution or 'cross'
-        mode = ko_distribution if ko_distribution in ('cross', 'draw') else 'cross'
+        if tournament.ko_draw_method in ('fixed_cross', 'same_position_cross'):
+            mode = 'cross'
+        elif tournament.ko_draw_method in ('overall_seeding', 'pot_system', 'full_random', 'bonus_draw_for_winners', 'predefined_bracket', 'manual'):
+            mode = 'draw'
+        else:
+            mode = ko_distribution if ko_distribution in ('cross', 'draw') else 'cross'
         
         # For qualification plan with fallback rules, we need to compute stats for proper ranking
         # Compute group stats for qualification service
@@ -699,13 +781,68 @@ async def generate_ko_bracket_matches(
                 group_rankings=group_rankings,
                 first_round_size=first_round_size,
                 mode=mode,
-                qualification_plan=qualification_plan
+                qualification_plan=qualification_plan,
+                block_same_group=tournament.ko_block_same_group,
+                block_same_position=tournament.ko_block_same_position,
+                group_stats=group_stats_dict,
+                tie_breaking_rules=tournament.tie_breaking_rules
             )
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e)
             )
+        
+        # Generate additional structures if needed
+        if tournament.ko_structure and tournament.ko_structure.value == 'consolation_bracket':
+            from app.services.ko_bracket import generate_consolation_bracket_from_first_round_losers
+            first_round_matches = [m for m in ko_matches if m['round'] == 1]
+            # Get draw method for consolation bracket
+            consolation_draw_method = None
+            if tournament.ko_draw_method:
+                consolation_draw_method = tournament.ko_draw_method.value
+            elif mode in ('full_random', 'pot_system', 'overall_seeding'):
+                consolation_draw_method = mode
+            consolation_matches = generate_consolation_bracket_from_first_round_losers(
+                first_round_matches=first_round_matches,
+                rng_seed=tournament.ko_random_seed,
+                draw_method=consolation_draw_method
+            )
+            ko_matches.extend(consolation_matches)
+        elif tournament.ko_structure and tournament.ko_structure.value in ('double_elimination', 'triple_elimination', 'aggregate_ko'):
+            # For combined mode with these structures, we need to generate from qualified participants
+            # Get qualified participants from group rankings
+            qualified_participants = []
+            for group_id, ranking in group_rankings.items():
+                # Take first N participants based on qualification plan
+                if qualification_plan:
+                    basis_per_group = qualification_plan.get("basis_per_group", 0)
+                    qualified_participants.extend(ranking[:basis_per_group])
+                else:
+                    qualifiers_per_group = first_round_size // len(group_rankings)
+                    qualified_participants.extend(ranking[:qualifiers_per_group])
+            
+            if tournament.ko_structure.value == 'double_elimination':
+                from app.services.ko_bracket import generate_double_elimination_bracket
+                ko_matches = generate_double_elimination_bracket(
+                    participant_ids=qualified_participants,
+                    draw_method=mode if mode in ('full_random', 'pot_system', 'overall_seeding') else 'full_random',
+                    rng_seed=tournament.ko_random_seed
+                )
+            elif tournament.ko_structure.value == 'triple_elimination':
+                from app.services.ko_bracket import generate_triple_elimination_bracket
+                ko_matches = generate_triple_elimination_bracket(
+                    participant_ids=qualified_participants,
+                    draw_method=mode if mode in ('full_random', 'pot_system', 'overall_seeding') else 'full_random',
+                    rng_seed=tournament.ko_random_seed
+                )
+            elif tournament.ko_structure.value == 'aggregate_ko':
+                from app.services.ko_bracket import generate_aggregate_ko_bracket
+                ko_matches = generate_aggregate_ko_bracket(
+                    participant_ids=qualified_participants,
+                    draw_method=mode if mode in ('full_random', 'pot_system', 'overall_seeding') else 'full_random',
+                    rng_seed=tournament.ko_random_seed
+                )
         
         bracket_size = first_round_size
         # mode already set above for combined mode
@@ -714,6 +851,180 @@ async def generate_ko_bracket_matches(
     db.query(KnockoutMatch).filter(KnockoutMatch.tournament_id == tournament_id).delete()
     
     # Create KO matches
+    created_matches = []
+    for match_data in ko_matches:
+        ko_match = KnockoutMatch(
+            tournament_id=tournament_id,
+            round=match_data['round'],
+            match_no=match_data['match_no'],
+            player1_id=match_data.get('player1_id'),
+            player2_id=match_data.get('player2_id'),
+            score1=match_data.get('score1'),  # May be set for byes (3:0)
+            score2=match_data.get('score2')   # May be set for byes (3:0)
+        )
+        db.add(ko_match)
+        created_matches.append(ko_match)
+    
+    db.commit()
+    
+    # Propagate bye matches immediately (matches with scores already set)
+    from app.services.ko_propagation import save_ko_result_and_propagate, assign_consolation_first_round_losers
+    for ko_match in created_matches:
+        # If scores are set (for byes), propagate immediately
+        if ko_match.score1 is not None and ko_match.score2 is not None:
+            db.refresh(ko_match)  # Ensure we have the ID
+            save_ko_result_and_propagate(
+                db,
+                ko_match.id,
+                ko_match.score1,
+                ko_match.score2
+            )
+    
+    # After propagation, assign losers to consolation bracket if all first round matches are completed
+    # This is important for cases where matches already have scores (e.g., byes)
+    if tournament.ko_structure and tournament.ko_structure.value == 'consolation_bracket':
+        draw_method = None
+        if tournament.ko_draw_method:
+            draw_method = tournament.ko_draw_method.value
+        assign_consolation_first_round_losers(
+            db,
+            tournament_id,
+            tournament.ko_random_seed if tournament else None,
+            draw_method=draw_method
+        )
+    
+    return {
+        "message": "KO-Bracket erfolgreich generiert",
+        "matches_created": len(ko_matches),
+        "bracket_size": bracket_size,
+        "mode": mode
+    }
+
+
+@router.post("/{tournament_id}/manual-ko-bracket", status_code=status.HTTP_201_CREATED)
+async def create_manual_ko_bracket(
+    tournament_id: int,
+    payload: ManualKOBracketRequest,
+    current_user = Depends(require_user_or_admin),
+    db: Session = Depends(get_db)
+):
+    """Create KO bracket from manual pairings (knockout mode only)."""
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tournament with ID {tournament_id} not found"
+        )
+
+    if not tournament.has_ko_phase:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dieses Turnier hat keine KO-Phase konfiguriert"
+        )
+
+    if tournament.mode != TournamentMode.KNOCKOUT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Manuelle KO-Auslosung ist nur im KO-Modus möglich"
+        )
+
+    if tournament.ko_draw_method != 'manual':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Manuelle Auslosung ist für dieses Turnier nicht aktiviert"
+        )
+
+    tournament_participants = db.query(TournamentParticipant).filter(
+        TournamentParticipant.tournament_id == tournament_id
+    ).all()
+
+    if len(tournament_participants) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mindestens 2 Teilnehmer benötigt für KO-Bracket"
+        )
+
+    participant_ids = [tp.participant_id for tp in tournament_participants]
+
+    num_participants = len(participant_ids)
+    if num_participants <= 4:
+        bracket_size = 4
+    elif num_participants <= 8:
+        bracket_size = 8
+    elif num_participants <= 16:
+        bracket_size = 16
+    elif num_participants <= 32:
+        bracket_size = 32
+    else:
+        bracket_size = 2 ** (int(round(math.log2(num_participants))) + 1)
+
+    expected_pairs = bracket_size // 2
+    if len(payload.pairs) != expected_pairs:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Es werden genau {expected_pairs} Paarungen erwartet"
+        )
+
+    selected_ids = []
+    selected_set = set()
+
+    for idx, pair in enumerate(payload.pairs, start=1):
+        p1 = pair.player1_id
+        p2 = pair.player2_id
+
+        if p1 is not None and p1 not in participant_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Ungültiger Teilnehmer in Paarung {idx} (Spieler 1)"
+            )
+        if p2 is not None and p2 not in participant_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Ungültiger Teilnehmer in Paarung {idx} (Spieler 2)"
+            )
+        if p1 is not None and p2 is not None and p1 == p2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Teilnehmer darf nicht gegen sich selbst spielen (Paarung {idx})"
+            )
+
+        for pid in (p1, p2):
+            if pid is None:
+                continue
+            if pid in selected_set:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Teilnehmer {pid} ist mehrfach zugewiesen"
+                )
+            selected_set.add(pid)
+            selected_ids.append(pid)
+
+    if set(participant_ids) != selected_set:
+        missing = sorted(set(participant_ids) - selected_set)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Nicht alle Teilnehmer zugewiesen: {missing}"
+        )
+
+    ko_matches = []
+    match_no = 1
+    for pair in payload.pairs:
+        ko_matches.append({
+            'round': 1,
+            'match_no': match_no,
+            'player1_id': pair.player1_id,
+            'player2_id': pair.player2_id
+        })
+        match_no += 1
+
+    rounds_total = int(round(math.log2(bracket_size)))
+    for r in range(2, rounds_total + 1):
+        mcount = max(1, bracket_size // (2 ** r))
+        for m in range(1, mcount + 1):
+            ko_matches.append({'round': r, 'match_no': m, 'player1_id': None, 'player2_id': None})
+
+    db.query(KnockoutMatch).filter(KnockoutMatch.tournament_id == tournament_id).delete()
+
     for match_data in ko_matches:
         ko_match = KnockoutMatch(
             tournament_id=tournament_id,
@@ -723,14 +1034,14 @@ async def generate_ko_bracket_matches(
             player2_id=match_data.get('player2_id')
         )
         db.add(ko_match)
-    
+
     db.commit()
-    
+
     return {
-        "message": "KO-Bracket erfolgreich generiert",
+        "message": "Manuelles KO-Bracket erfolgreich erstellt",
         "matches_created": len(ko_matches),
         "bracket_size": bracket_size,
-        "mode": mode
+        "mode": "manual"
     }
 
 
@@ -890,7 +1201,7 @@ async def get_qualification_table(
     db: Session = Depends(get_db)
 ):
     """Get qualification table showing which participants qualify and fallback candidates"""
-    from app.services.ko_bracket import compute_group_ranking_with_ties
+    from app.services.decision_matches import compute_group_ranking_with_rules
     from app.models.match import GroupMatch
     from app.models.participant import Participant
     from app.services.decision_matches import compute_group_stats, compute_ranking_with_decision_matches
@@ -932,6 +1243,27 @@ async def get_qualification_table(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Turnier hat keine KO-Start-Runde konfiguriert"
         )
+
+    # Merge manual selections from stored fallback qualifiers (if any)
+    stored_fallback = tournament.ko_fallback_qualifiers or []
+    if qualification_plan and stored_fallback:
+        merged_fallback_rules = []
+        for rule in qualification_plan.get("fallback_rules", []):
+            matched = next(
+                (
+                    stored
+                    for stored in stored_fallback
+                    if stored.get("position") == rule.get("position")
+                    and stored.get("count") == rule.get("count")
+                ),
+                None
+            )
+            if matched and matched.get("manual_selected_ids"):
+                merged_rule = {**rule, "manual_selected_ids": matched.get("manual_selected_ids")}
+            else:
+                merged_rule = rule
+            merged_fallback_rules.append(merged_rule)
+        qualification_plan["fallback_rules"] = merged_fallback_rules
     
     # Get group rankings and stats
     group_rankings = {}
@@ -977,16 +1309,20 @@ async def get_qualification_table(
         
         # Compute ranking with decision matches considered
         if decision_matches:
-            # Use ranking that considers decision matches
             ranking, decision_winners = compute_ranking_with_decision_matches(
                 regular_matches=regular_matches,
                 decision_matches=decision_matches,
                 participant_ids=group_participants,
-                scoring_system=scoring_system
+                scoring_system=scoring_system,
+                tie_breaking_rules=tournament.tie_breaking_rules
             )
         else:
-            # No decision matches, use regular ranking
-            ranking = compute_group_ranking_with_ties(regular_matches, group_participants)
+            ranking = compute_group_ranking_with_rules(
+                regular_matches,
+                group_participants,
+                scoring_system,
+                tournament.tie_breaking_rules
+            )
         
         group_rankings[group.id] = ranking
         
@@ -1007,7 +1343,8 @@ async def get_qualification_table(
     qualified_participants = get_qualified_participants_from_groups(
         group_rankings=group_rankings,
         qualification_plan=qualification_plan,
-        group_stats=group_stats
+        group_stats=group_stats,
+        tie_breaking_rules=tournament.tie_breaking_rules
     )
     
     # Build qualification table
@@ -1053,13 +1390,30 @@ async def get_qualification_table(
         count = rule["count"]
         selection = rule.get("selection", "best")
         
-        from app.services.qualification import _rank_candidates_at_position
-        candidates = _rank_candidates_at_position(
+        from app.services.qualification import rank_candidates_with_keys
+        ranked_candidates = rank_candidates_with_keys(
             group_rankings=group_rankings,
             position=position,
-            group_stats=group_stats
+            group_stats=group_stats,
+            tie_breaking_rules=tournament.tie_breaking_rules
         )
+        candidates = [c["participant_id"] for c in ranked_candidates]
         
+        # Determine ties at cutoff for manual resolution
+        tie_groups: Dict[Tuple, List[int]] = {}
+        for candidate in ranked_candidates:
+            tie_key = tuple(candidate.get("tie_key", []))
+            tie_groups.setdefault(tie_key, []).append(candidate["participant_id"])
+
+        cutoff_tie_group = []
+        top_ids = set(candidates[:count])
+        for _, group_ids in tie_groups.items():
+            if group_ids and any(pid in top_ids for pid in group_ids) and any(pid not in top_ids for pid in group_ids):
+                cutoff_tie_group = group_ids
+                break
+
+        manual_selected_ids = rule.get("manual_selected_ids") if isinstance(rule, dict) else None
+
         # Get ALL candidates (not just the qualified ones) to show complete ranking
         candidate_details = []
         for candidate_id in candidates:  # Show all candidates, not just [:count]
@@ -1094,7 +1448,9 @@ async def get_qualification_table(
             'position': position,
             'count': count,
             'selection': selection,
-            'candidates': candidate_details
+            'candidates': candidate_details,
+            'cutoff_tie_group': cutoff_tie_group,
+            'manual_selected_ids': manual_selected_ids
         })
     
     return {
@@ -1105,5 +1461,158 @@ async def get_qualification_table(
         'group_qualifiers': qualification_table,
         'fallback_candidates': fallback_candidates_by_rule,
         'all_qualified_participants': qualified_participants
+    }
+
+
+@router.post("/{tournament_id}/qualification-table/manual", status_code=status.HTTP_200_OK)
+async def set_manual_qualification_selection(
+    tournament_id: int,
+    payload: QualificationManualSelection,
+    current_user = Depends(require_user_or_admin),
+    db: Session = Depends(get_db)
+):
+    """Manually select fallback qualifiers when ties persist"""
+    from app.services.decision_matches import compute_group_stats, compute_ranking_with_decision_matches, compute_group_ranking_with_rules
+    from app.models.tournament import LeagueScoringSystem
+    from app.services.qualification import rank_candidates_with_keys
+
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tournament with ID {tournament_id} not found"
+        )
+
+    if not tournament.has_group_phase:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Turnier hat keine Gruppenphase"
+        )
+
+    if not tournament.ko_start_round:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Turnier hat keine KO-Start-Runde konfiguriert"
+        )
+
+    qualification_plan = calculate_qualification_plan(
+        groups_count=tournament.groups_count,
+        ko_start_round=tournament.ko_start_round
+    )
+
+    fallback_rules = qualification_plan.get("fallback_rules", [])
+    rule = next((r for r in fallback_rules if r.get("position") == payload.position), None)
+    if not rule:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Keine Fallback-Regel für diese Position"
+        )
+
+    required_count = rule.get("count", 0)
+    selected_ids = list(dict.fromkeys(payload.selected_ids or []))
+    if selected_ids and len(selected_ids) != required_count:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Es müssen genau {required_count} Teilnehmer ausgewählt werden"
+        )
+
+    groups = db.query(Group).filter(Group.tournament_id == tournament_id).all()
+    if not groups:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Keine Gruppen vorhanden"
+        )
+
+    scoring_system = tournament.league_scoring_system or LeagueScoringSystem.POINTS
+    group_rankings = {}
+    group_stats = {}
+
+    for group in groups:
+        group_participants = [gp.participant_id for gp in group.participants]
+        regular_matches_data = db.query(GroupMatch).filter(
+            GroupMatch.tournament_id == tournament_id,
+            GroupMatch.group_id == group.id,
+            GroupMatch.is_decision_match == False
+        ).all()
+        regular_matches = [
+            {
+                'player1_id': m.player1_id,
+                'player2_id': m.player2_id,
+                'score1': m.score1,
+                'score2': m.score2
+            }
+            for m in regular_matches_data
+        ]
+
+        decision_matches_data = db.query(GroupMatch).filter(
+            GroupMatch.tournament_id == tournament_id,
+            GroupMatch.group_id == group.id,
+            GroupMatch.is_decision_match == True
+        ).all()
+        decision_matches = [
+            {
+                'player1_id': m.player1_id,
+                'player2_id': m.player2_id,
+                'score1': m.score1,
+                'score2': m.score2
+            }
+            for m in decision_matches_data
+        ]
+
+        if decision_matches:
+            ranking, _ = compute_ranking_with_decision_matches(
+                regular_matches=regular_matches,
+                decision_matches=decision_matches,
+                participant_ids=group_participants,
+                scoring_system=scoring_system,
+                tie_breaking_rules=tournament.tie_breaking_rules
+            )
+        else:
+            ranking = compute_group_ranking_with_rules(
+                regular_matches,
+                group_participants,
+                scoring_system,
+                tournament.tie_breaking_rules
+            )
+        group_rankings[group.id] = ranking
+
+        stats = compute_group_stats(regular_matches, group_participants, scoring_system, exclude_decision_matches=True)
+        for pid in stats:
+            stats[pid]["scoring_system"] = scoring_system.value
+        group_stats[group.id] = stats
+
+    ranked_candidates = rank_candidates_with_keys(
+        group_rankings=group_rankings,
+        position=payload.position,
+        group_stats=group_stats,
+        tie_breaking_rules=tournament.tie_breaking_rules
+    )
+    candidate_ids = [c["participant_id"] for c in ranked_candidates]
+
+    if selected_ids and not all(pid in candidate_ids for pid in selected_ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ausgewählte Teilnehmer sind nicht in der Kandidatenliste"
+        )
+
+    stored_fallback = tournament.ko_fallback_qualifiers or fallback_rules
+    updated_fallback = []
+    for stored in stored_fallback:
+        if stored.get("position") == payload.position and stored.get("count") == required_count:
+            if selected_ids:
+                updated_rule = {**stored, "manual_selected_ids": selected_ids}
+            else:
+                updated_rule = {k: v for k, v in stored.items() if k != "manual_selected_ids"}
+            updated_fallback.append(updated_rule)
+        else:
+            updated_fallback.append(stored)
+
+    tournament.ko_fallback_qualifiers = updated_fallback
+    db.commit()
+
+    return {
+        "tournament_id": tournament_id,
+        "position": payload.position,
+        "selected_ids": selected_ids
     }
 

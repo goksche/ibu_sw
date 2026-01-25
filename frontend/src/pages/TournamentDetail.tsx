@@ -254,7 +254,7 @@ export default function TournamentDetail() {
             Gruppen
           </button>
         )}
-        {tournament.has_group_phase && (
+        {tournament.show_matches && (tournament.has_group_phase || tournament.has_ko_phase) && (
           <button
             onClick={() => handleTabChange('matches')}
             style={{
@@ -272,22 +272,24 @@ export default function TournamentDetail() {
             Spiele
           </button>
         )}
-        <button
-          onClick={() => handleTabChange('tables')}
-          style={{
-            padding: '0.75rem 1.5rem',
-            background: 'transparent',
-            border: 'none',
-            borderBottom: activeTab === 'tables' ? `2px solid ${theme.colors.accent.primary}` : '2px solid transparent',
-            cursor: 'pointer',
-            color: activeTab === 'tables' ? theme.colors.accent.primary : theme.colors.text.secondary,
-            fontWeight: activeTab === 'tables' ? 'bold' : 'normal',
-            marginBottom: '-2px',
-            borderRadius: '0px'
-          }}
-        >
-          Tabellen
-        </button>
+        {tournament.show_tables && (
+          <button
+            onClick={() => handleTabChange('tables')}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: activeTab === 'tables' ? `2px solid ${theme.colors.accent.primary}` : '2px solid transparent',
+              cursor: 'pointer',
+              color: activeTab === 'tables' ? theme.colors.accent.primary : theme.colors.text.secondary,
+              fontWeight: activeTab === 'tables' ? 'bold' : 'normal',
+              marginBottom: '-2px',
+              borderRadius: '0px'
+            }}
+          >
+            Tabellen
+          </button>
+        )}
       </div>
 
       {/* Tab Content */}
@@ -295,8 +297,10 @@ export default function TournamentDetail() {
         {activeTab === 'overview' && <TournamentOverview tournament={tournament} />}
         {activeTab === 'participants' && <TournamentParticipantsContent tournamentId={tournamentId} />}
         {activeTab === 'groups' && tournament.has_group_phase && <TournamentGroupsContent tournamentId={tournamentId} tournament={tournament} />}
-        {activeTab === 'matches' && tournament.has_group_phase && <TournamentMatchesContent tournamentId={tournamentId} tournament={tournament} />}
-        {activeTab === 'tables' && <TournamentTables tournamentId={tournamentId} tournament={tournament} />}
+        {activeTab === 'matches' && tournament.show_matches && (tournament.has_group_phase || tournament.has_ko_phase) && (
+          <TournamentMatchesContent tournamentId={tournamentId} tournament={tournament} />
+        )}
+        {activeTab === 'tables' && tournament.show_tables && <TournamentTables tournamentId={tournamentId} tournament={tournament} />}
       </div>
 
       {/* Delete Confirmation Dialog */}

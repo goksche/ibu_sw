@@ -2,16 +2,27 @@
 # v1.3.4 - Fixed: moved score validation before DB query to avoid stale data
 
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 from app.models.match import KnockoutMatch
+from app.models.tournament import Tournament
+import random
 
 BRONZE_ROUND = 99
 
 
 def _next_round_slot_for(match_no: int) -> tuple[int, int]:
-    """Determine target match and slot for winner"""
+    """Determine target match and slot for winner
+    
+    Logic:
+    - Match 1 and Match 2 -> both go to Match 1 of next round
+      - Match 1 winner -> slot 2 (bottom)
+      - Match 2 winner -> slot 1 (top)
+    - Match 3 and Match 4 -> both go to Match 2 of next round
+      - Match 3 winner -> slot 2 (bottom)
+      - Match 4 winner -> slot 1 (top)
+    """
     target = (match_no + 1) // 2
-    slot = 1 if (match_no % 2 == 1) else 2
+    slot = 2 if (match_no % 2 == 1) else 1  # Reversed: odd -> bottom, even -> top
     return target, slot
 
 
@@ -26,17 +37,65 @@ def save_ko_result_and_propagate(
     
     Desktop equivalent: save_ko_result_and_propagate
     """
-    # Check if we should propagate
-    if score1 is None or score2 is None or score1 == score2:
-        return
-    
-    # Get the match
+    # Get the match first to check for byes
     match = db.query(KnockoutMatch).filter(KnockoutMatch.id == match_id).first()
     if not match:
         return
     
     # Check if we should propagate
     if match.round is None or match.match_no is None:
+        return
+    
+    # Get tournament draw mode
+    tournament = db.query(Tournament).filter(Tournament.id == match.tournament_id).first()
+    draw_mode = tournament.ko_distribution if tournament else None
+
+    # Get winner - handle byes FIRST before checking scores
+    player1_id = match.player1_id
+    player2_id = match.player2_id
+    
+    # Handle byes: if one player is None, the other automatically wins
+    if player1_id is None and player2_id is not None:
+        # Player 2 has bye, automatically wins
+        winner_id = player2_id
+        # Ensure score is set to 3:0 if not already set
+        if match.score1 is None or match.score2 is None:
+            match.score1 = 0
+            match.score2 = 3
+            db.commit()
+        # Update score1 and score2 for propagation check
+        score1 = match.score1
+        score2 = match.score2
+    elif player2_id is None and player1_id is not None:
+        # Player 1 has bye, automatically wins
+        winner_id = player1_id
+        # Ensure score is set to 3:0 if not already set
+        if match.score1 is None or match.score2 is None:
+            match.score1 = 3
+            match.score2 = 0
+            db.commit()
+        # Update score1 and score2 for propagation check
+        score1 = match.score1
+        score2 = match.score2
+    elif player1_id is None or player2_id is None:
+        # Both are None or invalid state
+        return
+    else:
+        # Both players exist, determine winner from scores
+        # Use match scores if provided scores are None
+        if score1 is None:
+            score1 = match.score1
+        if score2 is None:
+            score2 = match.score2
+        
+        # Check if we should propagate (after handling byes and getting scores)
+        if score1 is None or score2 is None or score1 == score2:
+            return
+        
+        winner_id = player1_id if score1 > score2 else player2_id
+    
+    # Check if we should propagate (for byes, we already have scores)
+    if score1 is None or score2 is None or score1 == score2:
         return
     
     # Don't propagate from final
@@ -48,31 +107,576 @@ def save_ko_result_and_propagate(
     
     if max_round_result and match.round == max_round_result:
         return
-    
-    # Get winner
-    player1_id = match.player1_id
-    player2_id = match.player2_id
-    if player1_id is None or player2_id is None:
+
+    if draw_mode == "random_each_round":
+        _assign_next_round_randomly(db, match.tournament_id, match.round, tournament.ko_random_seed if tournament else None)
         return
     
-    winner_id = player1_id if score1 > score2 else player2_id
+    # Handle consolation bracket (negative rounds: -1, -2, etc.)
+    if match.round < 0 and match.round > -1000:
+        # For consolation bracket, next round is round - 1 (e.g., -1 -> -2)
+        next_round = match.round - 1
+        
+        # Check if there is a next round (final is the most negative round)
+        next_round_exists = db.query(KnockoutMatch).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round == next_round
+        ).first()
+        
+        if not next_round_exists:
+            # This is the final, don't propagate
+            return
+        
+        target_match_no, slot = _next_round_slot_for(match.match_no)
+        
+        target_match = db.query(KnockoutMatch).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round == next_round,
+            KnockoutMatch.match_no == target_match_no
+        ).first()
+        
+        if target_match:
+            if slot == 1:
+                target_match.player1_id = winner_id
+            else:
+                target_match.player2_id = winner_id
+            db.commit()
+        return
     
-    # Determine next match
-    target_match_no, slot = _next_round_slot_for(match.match_no)
+    # Handle double elimination losers bracket (negative rounds: -1001, -1002, etc.)
+    if match.round <= -1001 and match.round > -2000:
+        # For double elimination losers bracket, next round is round - 1
+        next_round = match.round - 1
+        target_match_no, slot = _next_round_slot_for(match.match_no)
+        
+        target_match = db.query(KnockoutMatch).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round == next_round,
+            KnockoutMatch.match_no == target_match_no
+        ).first()
+        
+        if target_match:
+            if slot == 1:
+                target_match.player1_id = winner_id
+            else:
+                target_match.player2_id = winner_id
+            db.commit()
+        
+        # Check if this is the final of losers bracket, then propagate to grand final
+        from sqlalchemy import func
+        min_losers_round = db.query(func.min(KnockoutMatch.round)).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round <= -1001,
+            KnockoutMatch.round > -2000
+        ).scalar()
+        
+        if min_losers_round and match.round == min_losers_round:
+            # This is the final of losers bracket, propagate to grand final
+            grand_final = db.query(KnockoutMatch).filter(
+                KnockoutMatch.tournament_id == match.tournament_id,
+                KnockoutMatch.round == 2000
+            ).first()
+            if grand_final:
+                grand_final.player2_id = winner_id  # Losers bracket winner is player2 in grand final
+                db.commit()
+        return
     
-    # Find target match
-    target_match = db.query(KnockoutMatch).filter(
-        KnockoutMatch.tournament_id == match.tournament_id,
-        KnockoutMatch.round == match.round + 1,
-        KnockoutMatch.match_no == target_match_no
-    ).first()
+    # Handle triple elimination first losers bracket (negative rounds: -2001, -2002, etc.)
+    if match.round <= -2001 and match.round > -3000:
+        # For triple elimination first losers bracket, next round is round - 1
+        next_round = match.round - 1
+        target_match_no, slot = _next_round_slot_for(match.match_no)
+        
+        target_match = db.query(KnockoutMatch).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round == next_round,
+            KnockoutMatch.match_no == target_match_no
+        ).first()
+        
+        if target_match:
+            if slot == 1:
+                target_match.player1_id = winner_id
+            else:
+                target_match.player2_id = winner_id
+            db.commit()
+        
+        # Check if this is the final of first losers bracket, then propagate to second losers bracket
+        from sqlalchemy import func
+        min_losers1_round = db.query(func.min(KnockoutMatch.round)).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round <= -2001,
+            KnockoutMatch.round > -3000
+        ).scalar()
+        
+        if min_losers1_round and match.round == min_losers1_round:
+            # This is the final of first losers bracket, propagate to second losers bracket
+            # Find first match of second losers bracket
+            first_losers2_match = db.query(KnockoutMatch).filter(
+                KnockoutMatch.tournament_id == match.tournament_id,
+                KnockoutMatch.round <= -3001,
+                KnockoutMatch.round > -4000
+            ).order_by(KnockoutMatch.round.asc(), KnockoutMatch.match_no.asc()).first()
+            if first_losers2_match:
+                if first_losers2_match.player1_id is None:
+                    first_losers2_match.player1_id = winner_id
+                elif first_losers2_match.player2_id is None:
+                    first_losers2_match.player2_id = winner_id
+                db.commit()
+        return
     
-    if target_match:
-        if slot == 1:
-            target_match.player1_id = winner_id
+    # Handle triple elimination second losers bracket (negative rounds: -3001, -3002, etc.)
+    if match.round <= -3001 and match.round > -4000:
+        # For triple elimination second losers bracket, next round is round - 1
+        next_round = match.round - 1
+        target_match_no, slot = _next_round_slot_for(match.match_no)
+        
+        target_match = db.query(KnockoutMatch).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round == next_round,
+            KnockoutMatch.match_no == target_match_no
+        ).first()
+        
+        if target_match:
+            if slot == 1:
+                target_match.player1_id = winner_id
+            else:
+                target_match.player2_id = winner_id
+            db.commit()
+        
+        # Check if this is the final of second losers bracket, then propagate to grand final
+        from sqlalchemy import func
+        min_losers2_round = db.query(func.min(KnockoutMatch.round)).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round <= -3001,
+            KnockoutMatch.round > -4000
+        ).scalar()
+        
+        if min_losers2_round and match.round == min_losers2_round:
+            # This is the final of second losers bracket, propagate to grand final
+            grand_final = db.query(KnockoutMatch).filter(
+                KnockoutMatch.tournament_id == match.tournament_id,
+                KnockoutMatch.round == 4000
+            ).first()
+            if grand_final:
+                grand_final.player2_id = winner_id  # Second losers bracket winner is player2 in grand final
+                db.commit()
+        return
+    
+    # Handle main bracket (positive rounds: 1, 2, 3, etc.)
+    # Check if this is aggregate KO (both legs need to be completed)
+    if tournament and tournament.ko_structure and tournament.ko_structure.value == 'aggregate_ko':
+        # For aggregate KO, we need to check if both legs are completed
+        # Find the other leg of this match
+        other_leg = db.query(KnockoutMatch).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round == match.round,
+            KnockoutMatch.match_no == match.match_no,
+            KnockoutMatch.id != match.id
+        ).first()
+        
+        if not other_leg or other_leg.score1 is None or other_leg.score2 is None:
+            # Other leg not completed yet, don't propagate
+            return
+        
+        # Calculate aggregate score
+        total_score1 = match.score1 + other_leg.score2  # player1's total (home + away)
+        total_score2 = match.score2 + other_leg.score1  # player2's total (home + away)
+        
+        if total_score1 == total_score2:
+            # Tie - use away goals rule (goals scored away count more)
+            away_goals1 = other_leg.score2  # player1's away goals
+            away_goals2 = match.score2  # player2's away goals
+            
+            if away_goals1 == away_goals2:
+                # Still tied - for now, don't propagate (would need extra time/penalties)
+                return
+            else:
+                winner_id = player1_id if away_goals1 > away_goals2 else player2_id
         else:
-            target_match.player2_id = winner_id
-        db.commit()
+            winner_id = player1_id if total_score1 > total_score2 else player2_id
+        
+        # Propagate winner to next round (both legs of next round)
+        target_match_no, slot = _next_round_slot_for(match.match_no)
+        next_round = match.round + 1
+        
+        # Find both legs of next round match
+        next_leg1 = db.query(KnockoutMatch).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round == next_round,
+            KnockoutMatch.match_no == target_match_no
+        ).order_by(KnockoutMatch.id.asc()).first()
+        
+        if next_leg1:
+            # Assign to first leg
+            if slot == 1:
+                next_leg1.player1_id = winner_id
+            else:
+                next_leg1.player2_id = winner_id
+            
+            # Find second leg and assign (swapped)
+            next_leg2 = db.query(KnockoutMatch).filter(
+                KnockoutMatch.tournament_id == match.tournament_id,
+                KnockoutMatch.round == next_round,
+                KnockoutMatch.match_no == target_match_no,
+                KnockoutMatch.id != next_leg1.id
+            ).first()
+            
+            if next_leg2:
+                if slot == 1:
+                    next_leg2.player2_id = winner_id  # Swapped for away leg
+                else:
+                    next_leg2.player1_id = winner_id  # Swapped for away leg
+            
+            db.commit()
+        return
+    
+    # Handle double elimination winners bracket
+    # Check if this is winners bracket final, then propagate to grand final
+    if tournament and tournament.ko_structure and tournament.ko_structure.value == 'double_elimination':
+        from sqlalchemy import func
+        max_winners_round = db.query(func.max(KnockoutMatch.round)).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round > 0,
+            KnockoutMatch.round < 2000
+        ).scalar()
+        
+        if max_winners_round and match.round == max_winners_round:
+            # This is the final of winners bracket, propagate to grand final
+            grand_final = db.query(KnockoutMatch).filter(
+                KnockoutMatch.tournament_id == match.tournament_id,
+                KnockoutMatch.round == 2000
+            ).first()
+            if grand_final:
+                grand_final.player1_id = winner_id  # Winners bracket winner is player1 in grand final
+                db.commit()
+            
+            # Also propagate loser to losers bracket
+            loser_id = player2_id if score1 > score2 else player1_id
+            # Find appropriate losers bracket match (this is complex, simplified here)
+            # In a full implementation, we'd need to track which losers bracket round receives this loser
+            return
+        
+        # Also propagate loser to losers bracket for earlier rounds
+        if match.round >= 1:
+            loser_id = player2_id if score1 > score2 else player1_id
+            # Find appropriate losers bracket match
+            # This is simplified - in full implementation, we'd need proper losers bracket assignment logic
+            # For now, we'll let the losers bracket be populated when matches are completed
+        
+        # For double elimination, also propagate winner to next winners bracket round
+        if match.round >= 1 and match.round < max_winners_round:
+            next_round = match.round + 1
+            target_match_no, slot = _next_round_slot_for(match.match_no)
+            
+            target_match = db.query(KnockoutMatch).filter(
+                KnockoutMatch.tournament_id == match.tournament_id,
+                KnockoutMatch.round == next_round,
+                KnockoutMatch.round > 0,
+                KnockoutMatch.round < 2000,
+                KnockoutMatch.match_no == target_match_no
+            ).first()
+            
+            if target_match:
+                if slot == 1:
+                    target_match.player1_id = winner_id
+                else:
+                    target_match.player2_id = winner_id
+                db.commit()
+        return
+    
+    # Handle triple elimination winners bracket
+    if tournament and tournament.ko_structure and tournament.ko_structure.value == 'triple_elimination':
+        from sqlalchemy import func
+        max_winners_round = db.query(func.max(KnockoutMatch.round)).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round > 0,
+            KnockoutMatch.round < 4000
+        ).scalar()
+        
+        if max_winners_round and match.round == max_winners_round:
+            # This is the final of winners bracket, propagate to grand final
+            grand_final = db.query(KnockoutMatch).filter(
+                KnockoutMatch.tournament_id == match.tournament_id,
+                KnockoutMatch.round == 4000
+            ).first()
+            if grand_final:
+                grand_final.player1_id = winner_id  # Winners bracket winner is player1 in grand final
+                db.commit()
+            return
+        
+        # Propagate loser to first losers bracket
+        if match.round >= 1:
+            loser_id = player2_id if score1 > score2 else player1_id
+            # Find appropriate first losers bracket match
+            # Simplified - full implementation would need proper assignment logic
+        
+        # For triple elimination, also propagate winner to next winners bracket round
+        if match.round >= 1:
+            max_winners_round = db.query(func.max(KnockoutMatch.round)).filter(
+                KnockoutMatch.tournament_id == match.tournament_id,
+                KnockoutMatch.round > 0,
+                KnockoutMatch.round < 4000
+            ).scalar()
+            if max_winners_round and match.round < max_winners_round:
+                next_round = match.round + 1
+                target_match_no, slot = _next_round_slot_for(match.match_no)
+                
+                target_match = db.query(KnockoutMatch).filter(
+                    KnockoutMatch.tournament_id == match.tournament_id,
+                    KnockoutMatch.round == next_round,
+                    KnockoutMatch.round > 0,
+                    KnockoutMatch.round < 4000,
+                    KnockoutMatch.match_no == target_match_no
+                ).first()
+                
+                if target_match:
+                    if slot == 1:
+                        target_match.player1_id = winner_id
+                    else:
+                        target_match.player2_id = winner_id
+                    db.commit()
+        return
+    
+    # Standard propagation for normal single elimination KO bracket
+    # Only execute if not aggregate_ko, not double_elimination, not triple_elimination
+    if match.round > 0 and match.round < 2000:
+        next_round = match.round + 1
+        target_match_no, slot = _next_round_slot_for(match.match_no)
+        
+        target_match = db.query(KnockoutMatch).filter(
+            KnockoutMatch.tournament_id == match.tournament_id,
+            KnockoutMatch.round == next_round,
+            KnockoutMatch.match_no == target_match_no
+        ).first()
+        
+        if target_match:
+            if slot == 1:
+                target_match.player1_id = winner_id
+            else:
+                target_match.player2_id = winner_id
+            db.commit()
+    
+    # If this is a first round match, try to assign losers to consolation bracket
+    if match.round == 1:
+        draw_method = None
+        if tournament and tournament.ko_draw_method:
+            draw_method = tournament.ko_draw_method.value
+        assign_consolation_first_round_losers(
+            db, 
+            match.tournament_id, 
+            tournament.ko_random_seed if tournament else None,
+            draw_method=draw_method
+        )
+
+
+def _assign_next_round_randomly(db: Session, tournament_id: int, current_round: int, rng_seed: Optional[int]) -> None:
+    """Assign next round participants randomly once the current round is complete."""
+    # Get matches for current round
+    current_round_matches = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == tournament_id,
+        KnockoutMatch.round == current_round
+    ).all()
+
+    if not current_round_matches:
+        return
+
+    # Ensure all matches in current round are completed
+    winners: List[int] = []
+    for match in current_round_matches:
+        if match.score1 is None or match.score2 is None or match.score1 == match.score2:
+            return
+        if match.player1_id is None or match.player2_id is None:
+            return
+        winner_id = match.player1_id if match.score1 > match.score2 else match.player2_id
+        winners.append(winner_id)
+
+    # Determine next round
+    next_round = current_round + 1
+    next_round_matches = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == tournament_id,
+        KnockoutMatch.round == next_round
+    ).order_by(KnockoutMatch.match_no.asc()).all()
+
+    if not next_round_matches:
+        return
+
+    # Avoid reshuffling if next round already has scores
+    if any(m.score1 is not None or m.score2 is not None for m in next_round_matches):
+        return
+
+    rng = random.Random(rng_seed + current_round) if rng_seed is not None else random
+    rng.shuffle(winners)
+
+    # Clear existing assignments before re-draw
+    for match in next_round_matches:
+        match.player1_id = None
+        match.player2_id = None
+
+    # Assign winners to next round matches
+    idx = 0
+    for match in next_round_matches:
+        if idx < len(winners):
+            match.player1_id = winners[idx]
+            idx += 1
+        if idx < len(winners):
+            match.player2_id = winners[idx]
+            idx += 1
+
+    db.commit()
+
+
+def assign_consolation_first_round_losers(db: Session, tournament_id: int, rng_seed: Optional[int] = None, draw_method: Optional[str] = None) -> bool:
+    """
+    Assign losers from first round (round 1) to consolation bracket first round (round -1).
+    Only assigns if all first round matches are completed.
+    Applies draw method to assign losers to consolation bracket matches.
+    
+    Returns:
+        True if assignment was successful, False otherwise
+    """
+    # Get tournament to check draw method
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        return False
+    
+    # Get draw method from tournament
+    if not draw_method:
+        if tournament.ko_draw_method:
+            draw_method = tournament.ko_draw_method.value
+        else:
+            draw_method = 'full_random'
+    
+    # Get all first round matches
+    first_round_matches = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == tournament_id,
+        KnockoutMatch.round == 1
+    ).order_by(KnockoutMatch.match_no.asc()).all()
+    
+    if not first_round_matches:
+        return False
+    
+    # Collect losers from first round matches
+    # IMPORTANT: Each match in round 1 produces one loser (the half that doesn't advance)
+    # Only matches with BOTH players (no bye) can have actual losers
+    losers = []
+    matches_with_both_players = []
+    
+    for match in first_round_matches:
+        # Check if match has both players (not a bye)
+        if match.player1_id is None or match.player2_id is None:
+            # Bye match - no actual loser, skip it (don't require it to be completed)
+            # But the bracket structure still accounts for this match slot
+            continue
+        
+        # Match has both players - track it
+        matches_with_both_players.append(match)
+        
+        # Check if this match is completed
+        if match.score1 is None or match.score2 is None or match.score1 == match.score2:
+            return False  # Not all matches with both players are completed yet
+        
+        # Determine loser (only for matches with both players)
+        # The loser is the one with the lower score
+        loser_id = match.player2_id if match.score1 > match.score2 else match.player1_id
+        losers.append(loser_id)
+    
+    # If no matches with both players, no losers to assign
+    if not matches_with_both_players:
+        # But still return True if consolation bracket exists (even if empty)
+        # This allows the bracket to be created even if there are no losers yet
+        consolation_matches = db.query(KnockoutMatch).filter(
+            KnockoutMatch.tournament_id == tournament_id,
+            KnockoutMatch.round == -1
+        ).first()
+        if consolation_matches:
+            return True  # Consolation bracket exists, but no losers to assign
+        return False
+    
+    # If we have losers but no consolation matches, that's an error
+    if not losers:
+        return False
+    
+    # Get consolation first round matches (round -1)
+    consolation_matches = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == tournament_id,
+        KnockoutMatch.round == -1
+    ).order_by(KnockoutMatch.match_no.asc()).all()
+    
+    if not consolation_matches:
+        return False  # No consolation bracket exists
+    
+    # Check if already assigned (avoid re-assignment)
+    if all(m.player1_id is not None or m.player2_id is not None for m in consolation_matches):
+        # Check if all slots are filled
+        all_filled = True
+        for m in consolation_matches:
+            if m.player1_id is None and m.player2_id is None:
+                all_filled = False
+                break
+        if all_filled:
+            return True  # Already assigned
+    
+    # Apply draw method to losers (same as main bracket)
+    if draw_method == 'full_random':
+        if rng_seed is not None:
+            rng = random.Random(rng_seed + 1000)  # Different seed for consolation
+            rng.shuffle(losers)
+        else:
+            random.shuffle(losers)
+    elif draw_method == 'pot_system':
+        # Split losers into pots
+        mid = len(losers) // 2
+        pot1 = losers[:mid]
+        pot2 = losers[mid:]
+        if rng_seed is not None:
+            rng = random.Random(rng_seed + 1000)
+            rng.shuffle(pot1)
+            rng.shuffle(pot2)
+        else:
+            random.shuffle(pot1)
+            random.shuffle(pot2)
+        # Interleave pots
+        losers = []
+        for i in range(max(len(pot1), len(pot2))):
+            if i < len(pot1):
+                losers.append(pot1[i])
+            if i < len(pot2):
+                losers.append(pot2[i])
+    # For 'overall_seeding', keep order (losers are already in order from matches)
+    
+    # Assign losers to consolation matches (pair them up)
+    # If there are fewer losers than slots, some matches will have byes (None)
+    loser_idx = 0
+    for match in consolation_matches:
+        if loser_idx < len(losers):
+            match.player1_id = losers[loser_idx]
+            loser_idx += 1
+        if loser_idx < len(losers):
+            match.player2_id = losers[loser_idx]
+            loser_idx += 1
+        # If match has a bye (one player is None), set automatic score 3:0
+        if match.player1_id is None and match.player2_id is not None:
+            match.score1 = 0
+            match.score2 = 3
+        elif match.player2_id is None and match.player1_id is not None:
+            match.score1 = 3
+            match.score2 = 0
+    
+    db.commit()
+    
+    # Propagate bye matches in consolation bracket immediately
+    from app.services.ko_propagation import save_ko_result_and_propagate
+    for match in consolation_matches:
+        if match.score1 is not None and match.score2 is not None:
+            db.refresh(match)  # Ensure we have the ID
+            save_ko_result_and_propagate(
+                db,
+                match.id,
+                match.score1,
+                match.score2
+            )
+    
+    return True
 
 
 def ensure_bronze_from_semis(db: Session, tournament_id: int) -> bool:

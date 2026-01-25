@@ -38,6 +38,15 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       CORS_ORIGINS: ${CORS_ORIGINS:-https://yourdomain.com}
       DEBUG: "False"
+      OTP_DEV_MODE: ${OTP_DEV_MODE:-false}
+      OTP_EXPIRY_MINUTES: ${OTP_EXPIRY_MINUTES:-10}
+      OTP_LENGTH: ${OTP_LENGTH:-6}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
     volumes:
       - backend_logs:/app/logs
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
@@ -59,7 +68,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_API_URL: ${VITE_API_URL:-/}
     container_name: ibu_frontend_prod
     # Keine Volumes - Build-Dateien sind bereits im Image
     depends_on:
@@ -77,7 +86,9 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
     depends_on:
       - frontend
       - backend
@@ -85,17 +96,26 @@ services:
       - ibu_network
     restart: unless-stopped
 
-  # Certbot for SSL (nicht benötigt, Caddy übernimmt SSL)
-  # certbot:
-  #   image: certbot/certbot
-  #   container_name: ibu_certbot_prod
-  #   volumes:
-  #     - certbot_certs:/etc/letsencrypt
-  #     - certbot_www:/var/www/certbot
-  #   networks:
-  #     - ibu_network
-  #   command: certonly --webroot --webroot-path=/var/www/certbot --email ${CERTBOT_EMAIL} --agree-tos --no-eff-email -d ${DOMAIN_NAME}
-  #   restart: on-failure
+  # Certbot for SSL (Let's Encrypt)
+  # Einmalig ausführen (oder für Renew als Cron/Systemd nutzen):
+  # docker compose -f docker-compose.prod.yml run --rm certbot
+  certbot:
+    image: certbot/certbot
+    container_name: ibu_certbot_prod
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    networks:
+      - ibu_network
+    command: >-
+      certonly --webroot
+      --webroot-path=/var/www/certbot
+      --email ${CERTBOT_EMAIL}
+      --agree-tos
+      --no-eff-email
+      -d ${DOMAIN_NAME}
+      -d www.${DOMAIN_NAME}
+    restart: "no"
 
 # Named Volumes
 volumes:
@@ -103,10 +123,10 @@ volumes:
     driver: local
   backend_logs:
     driver: local
-  # certbot_certs:
-  #   driver: local
-  # certbot_www:
-  #   driver: local
+  certbot_certs:
+    driver: local
+  certbot_www:
+    driver: local
 
 # Network
 networks:

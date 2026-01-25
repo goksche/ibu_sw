@@ -7,7 +7,7 @@ from fastapi.responses import Response
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.api.v1 import auth, tournaments, participants, groups, matches, tables, info
+from app.api.v1 import auth, tournaments, participants, groups, matches, tables, info, leagues
 from app.api.v1.platform import dashboard, feedback
 from app.api.v1.platform.admin import users, apps, permissions, deployment
 
@@ -40,6 +40,7 @@ app.include_router(participants.router, prefix="/api/v1")
 app.include_router(groups.router, prefix="/api/v1/groups", tags=["Groups"])
 app.include_router(matches.router, prefix="/api/v1/matches", tags=["Matches"])
 app.include_router(tables.router, prefix="/api/v1/tables", tags=["Tables"])
+app.include_router(leagues.router, prefix="/api/v1")
 app.include_router(info.router, prefix="/api/v1")
 
 # Platform Routers

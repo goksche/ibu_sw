@@ -29,7 +29,7 @@ class TournamentCreate(TournamentBase):
     ko_first_round_size: int | None = Field(default=4, ge=4, le=16)  # Legacy
     ko_start_round: KOStartRound | None = None
     ko_fallback_qualifiers: List[Dict[str, Any]] | None = None  # Format: [{"position": 3, "count": 2, "selection": "best"}]
-    ko_distribution: str | None = Field(default='cross', pattern='^(cross|draw)$')  # Deprecated, kept for backward compatibility
+    ko_distribution: str | None = Field(default='cross', pattern='^(cross|draw|random_first_round|random_each_round|predefined_slots)$')  # Deprecated, kept for backward compatibility
     ko_structure: KOStructure | None = None
     ko_draw_method: KODrawMethod | None = None
     ko_third_place_match: bool = Field(default=False)
@@ -64,7 +64,7 @@ class TournamentUpdate(BaseModel):
     ko_first_round_size: int | None = Field(default=None, ge=4, le=16)  # Legacy
     ko_start_round: KOStartRound | None = None
     ko_fallback_qualifiers: List[Dict[str, Any]] | None = None
-    ko_distribution: str | None = Field(default=None, pattern='^(cross|draw)$')
+    ko_distribution: str | None = Field(default=None, pattern='^(cross|draw|random_first_round|random_each_round|predefined_slots)$')
     ko_structure: KOStructure | None = None
     ko_draw_method: KODrawMethod | None = None
     ko_third_place_match: bool | None = None
@@ -83,6 +83,12 @@ class TournamentUpdate(BaseModel):
 class TournamentDeleteRequest(BaseModel):
     """Schema for deleting a tournament with password confirmation"""
     password: str = Field(..., min_length=1)
+
+
+class QualificationManualSelection(BaseModel):
+    """Schema for manual qualification selection in fallback rules"""
+    position: int = Field(..., ge=1)
+    selected_ids: list[int] = Field(default_factory=list)
 
 
 class TournamentResponse(TournamentBase):

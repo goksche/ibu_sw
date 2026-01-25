@@ -79,6 +79,14 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
     }
   };
 
+  const handleSelectAllAvailable = () => {
+    setSelectedParticipantIds(availableParticipants.map(participant => participant.id));
+  };
+
+  const handleClearSelected = () => {
+    setSelectedParticipantIds([]);
+  };
+
   const handleRemoveParticipant = async (participantId: number) => {
     if (!confirm('Möchten Sie diesen Teilnehmer wirklich aus dem Turnier entfernen?')) {
       return;
@@ -142,6 +150,11 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
   const availableParticipants = allParticipants.filter(
     p => !tournamentParticipants.some(tp => tp.id === p.id)
   );
+  const sortedAvailableParticipants = [...availableParticipants].sort((a, b) => {
+    const firstCompare = a.first_name.localeCompare(b.first_name, 'de', { sensitivity: 'base' });
+    if (firstCompare !== 0) return firstCompare;
+    return a.last_name.localeCompare(b.last_name, 'de', { sensitivity: 'base' });
+  });
 
   return (
     <div>
@@ -176,6 +189,25 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
               <p style={{ marginBottom: '1rem', color: theme.colors.text.secondary }}>
                 Wählen Sie Teilnehmer aus ({selectedParticipantIds.length} ausgewählt):
               </p>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <Button
+                  variant="info"
+                  onClick={handleSelectAllAvailable}
+                  disabled={availableParticipants.length === 0}
+                  style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}
+                >
+                  Alle auswählen
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={handleClearSelected}
+                  disabled={selectedParticipantIds.length === 0}
+                  style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}
+                >
+                  Alle löschen
+                </Button>
+              </div>
               
               <div style={{ 
                 maxHeight: '300px', 
@@ -185,7 +217,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
                 borderRadius: theme.borderRadius.card, 
                 padding: '1rem' 
               }}>
-                {availableParticipants.map(participant => (
+                {sortedAvailableParticipants.map(participant => (
                   <label 
                     key={participant.id}
                     style={{ 

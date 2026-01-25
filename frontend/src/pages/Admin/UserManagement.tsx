@@ -3,12 +3,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, Input, Button, Select } from '../../components/ui';
-import { authService } from '../../services/authService';
 import { User } from '../../types';
+import { authService } from '../../services/authService';
 import { Plus, Pencil, Trash, Users, ArrowLeft } from 'phosphor-react';
-import { theme } from '../../theme/theme';
 
-// Define UserRole enum locally since it's not exported from types
+// UserRole enum for the component
 enum UserRole {
   ADMIN = 'admin',
   USER = 'user',
@@ -16,11 +15,8 @@ enum UserRole {
 }
 
 interface UserFormData {
-  username: string;
   email: string;
-  password: string;
   role: UserRole;
-  is_active: boolean;
 }
 
 export default function UserManagement() {
@@ -31,11 +27,8 @@ export default function UserManagement() {
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<UserFormData>({
-    username: '',
     email: '',
-    password: '',
-    role: UserRole.USER,
-    is_active: true
+    role: 'user' as UserRole
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -49,72 +42,22 @@ export default function UserManagement() {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      // For local development, use mock data since CORS blocks API calls
-      console.log('Using mock data for user management (CORS issue in local dev)');
+      console.log('Loading users from API...');
 
-      // Try to load from localStorage first
-      const savedUsers = localStorage.getItem('mockUsers');
-      let mockUsers: User[];
+      // Load users from API
+      const usersData = await authService.getUsers();
+      console.log('Loaded users from API:', usersData.length);
 
-      if (savedUsers) {
-        mockUsers = JSON.parse(savedUsers).map((user: any) => ({
-          ...user,
-          created_at: new Date(user.created_at)
-        }));
-        console.log('Loaded users from localStorage:', mockUsers.length);
-      } else {
-        // Default mock users
-        mockUsers = [
-          {
-            id: 1,
-            username: 'goksche',
-            email: 'goksche23@gmail.com',
-            role: 'admin' as any,
-            is_active: true,
-            created_at: new Date('2024-01-01'),
-            app_permissions: []
-          },
-          {
-            id: 2,
-            username: 'user',
-            email: 'user@example.com',
-            role: 'user' as any,
-            is_active: true,
-            created_at: new Date('2024-01-01'),
-            app_permissions: []
-          },
-          {
-            id: 3,
-            username: 'viewer',
-            email: 'viewer@example.com',
-            role: 'viewer' as any,
-            is_active: true,
-            created_at: new Date('2024-01-01'),
-            app_permissions: []
-          },
-        ];
-        console.log('Using default mock users');
-      }
-
-      setUsers(mockUsers);
+      setUsers(usersData);
       setError('');
     } catch (err: any) {
       console.error('Failed to load users:', err);
-      setError('Fehler beim Laden der Benutzer');
+      setError(err.response?.data?.detail || 'Fehler beim Laden der Benutzer');
     } finally {
       setLoading(false);
     }
   };
 
-  // Save users to localStorage whenever users change
-  const saveUsersToStorage = (usersToSave: User[]) => {
-    try {
-      localStorage.setItem('mockUsers', JSON.stringify(usersToSave));
-      console.log('Saved users to localStorage:', usersToSave.length);
-    } catch (error) {
-      console.error('Failed to save users to localStorage:', error);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,39 +66,31 @@ export default function UserManagement() {
 
     try {
       if (editingUser) {
-        // Update user (local mock implementation)
-        const updatedUsers = users.map(user =>
-          user.id === editingUser.id
-            ? { ...user, ...formData }
-            : user
-        );
-        setUsers(updatedUsers);
-        saveUsersToStorage(updatedUsers);
-        console.log('User updated (mock):', editingUser.id, formData);
-      } else {
-        // Create user (local mock implementation)
-        const newUser: User = {
-          id: Math.max(...users.map(u => u.id), 0) + 1,
-          username: formData.username,
+        // Update user via API
+        await authService.updateUser(editingUser.id, {
           email: formData.email,
-          role: formData.role,
-          is_active: formData.is_active,
-          created_at: new Date(),
-          app_permissions: []
-        };
-        const updatedUsers = [...users, newUser];
-        setUsers(updatedUsers);
-        saveUsersToStorage(updatedUsers);
-        console.log('User created (mock):', newUser);
+          role: formData.role
+        });
+        console.log('User updated:', editingUser.id, formData);
+      } else {
+        // Create user via API
+        await authService.createUser({
+          email: formData.email,
+          role: formData.role
+        });
+        console.log('User created:', formData.email);
       }
+
+      // Reload users from API
+      await loadUsers();
 
       // Reset form
       setShowForm(false);
       setEditingUser(null);
       resetForm();
     } catch (err: any) {
-      console.error('Mock operation failed:', err);
-      setError('Fehler beim Speichern (Mock)');
+      console.error('User operation failed:', err);
+      setError(err.response?.data?.detail || 'Fehler beim Speichern');
     } finally {
       setSaving(false);
     }
@@ -164,11 +99,8 @@ export default function UserManagement() {
   const handleEdit = (user: User) => {
     setEditingUser(user);
     setFormData({
-      username: user.username,
       email: user.email,
-      password: '', // Don't show existing password
-      role: user.role,
-      is_active: user.is_active
+      role: user.role as UserRole
     });
     setShowForm(true);
   };
@@ -185,24 +117,22 @@ export default function UserManagement() {
     }
 
     try {
-      // Delete user (local mock implementation)
-      const updatedUsers = users.filter(u => u.id !== user.id);
-      setUsers(updatedUsers);
-      saveUsersToStorage(updatedUsers);
-      console.log('User deleted (mock):', user.id);
+      // Delete user via API
+      await authService.deleteUser(user.id);
+      console.log('User deleted:', user.id);
+
+      // Reload users from API
+      await loadUsers();
     } catch (err: any) {
-      console.error('Mock delete failed:', err);
-      setError('Fehler beim Löschen (Mock)');
+      console.error('Delete failed:', err);
+      setError(err.response?.data?.detail || 'Fehler beim Löschen');
     }
   };
 
   const resetForm = () => {
     setFormData({
-      username: '',
       email: '',
-      password: '',
-      role: UserRole.USER,
-      is_active: true
+      role: 'user' as UserRole
     });
   };
 
@@ -258,7 +188,7 @@ export default function UserManagement() {
             <p style={{ color: '#666', margin: '0.5rem 0 0 0' }}>
               Verwalten Sie Benutzer und deren Rollen
               <br />
-              <small style={{ color: '#888' }}>Lokale Entwicklung: Änderungen werden im Browser gespeichert</small>
+              <small style={{ color: '#888' }}>Änderungen werden in der Datenbank gespeichert</small>
             </p>
           </div>
         </div>
@@ -301,16 +231,6 @@ export default function UserManagement() {
             }}>
               <div>
                 <Input
-                  label="Benutzername"
-                  type="text"
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div>
-                <Input
                   label="E-Mail"
                   type="email"
                   value={formData.email}
@@ -333,26 +253,12 @@ export default function UserManagement() {
                 />
               </div>
 
-              <div>
-                <Select
-                  label="Aktiv"
-                  value={formData.is_active.toString()}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'true' })}
-                  options={[
-                    { value: 'true', label: 'Ja' },
-                    { value: 'false', label: 'Nein' }
-                  ]}
-                />
-              </div>
-
               <div style={{ gridColumn: '1 / -1' }}>
-                <Input
-                  label={`Passwort ${editingUser ? '(leer lassen für keine Änderung)' : ''}`}
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required={!editingUser}
-                />
+                <div style={{ fontSize: '0.85rem', color: '#888' }}>
+                  Benutzername wird automatisch aus der E-Mail erzeugt.
+                  <br />
+                  Login erfolgt per OTP (E-Mail).
+                </div>
               </div>
             </div>
 
@@ -439,7 +345,6 @@ export default function UserManagement() {
                     <td style={{ padding: '1rem' }}>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
                         <Button
-                          size="small"
                           variant="secondary"
                           onClick={() => handleEdit(user)}
                           style={{ padding: '0.25rem' }}
@@ -447,7 +352,6 @@ export default function UserManagement() {
                           <Pencil size={14} />
                         </Button>
                         <Button
-                          size="small"
                           variant="danger"
                           onClick={() => handleDelete(user)}
                           style={{ padding: '0.25rem' }}

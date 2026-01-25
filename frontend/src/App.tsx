@@ -5,6 +5,10 @@ import CreateTournament from './pages/CreateTournament';
 import Participants from './pages/Participants';
 import TournamentDetail from './pages/TournamentDetail';
 import EditTournament from './pages/EditTournament';
+import Leagues from './pages/Leagues';
+import CreateLeague from './pages/CreateLeague';
+import LeagueDetail from './pages/LeagueDetail';
+import EditLeague from './pages/EditLeague';
 import UserManagement from './pages/Admin/UserManagement';
 import { useAuth } from './contexts/AuthContext';
 
@@ -85,6 +89,50 @@ function AppRoutes() {
               <Navigate to="/login" replace />
             )
           } 
+        />
+        <Route
+          path="/leagues"
+          element={
+            isAuthenticated ? (
+              <Leagues />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/leagues/create"
+          element={
+            isAuthenticated && canEdit ? (
+              <CreateLeague />
+            ) : isAuthenticated ? (
+              <Navigate to="/leagues" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/leagues/:id"
+          element={
+            isAuthenticated ? (
+              <LeagueDetail />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/leagues/:id/edit"
+          element={
+            isAuthenticated && canEdit ? (
+              <EditLeague />
+            ) : isAuthenticated ? (
+              <Navigate to="/leagues" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
         <Route 
           path="/participants" 

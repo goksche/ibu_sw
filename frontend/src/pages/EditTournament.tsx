@@ -11,6 +11,8 @@ import { theme } from '../theme/theme';
 import { ArrowLeft } from 'phosphor-react';
 
 export default function EditTournament() {
+  type KODrawModeValue = 'random_first_round' | 'random_each_round' | 'predefined_slots' | 'cross' | 'draw';
+
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const tournamentId = id ? parseInt(id) : 0;
@@ -37,7 +39,7 @@ export default function EditTournament() {
     ko_first_round_size: 4,  // Legacy
     ko_start_round: null as KOStartRound | null,
     ko_fallback_qualifiers: null as Array<{position: number; count: number; selection: 'best'}> | null,
-    ko_distribution: 'cross' as 'cross' | 'draw',  // Deprecated, kept for backward compatibility
+    ko_distribution: 'random_first_round' as KODrawModeValue,  // Deprecated, kept for backward compatibility
     ko_structure: null as 'single_elimination' | 'single_elimination_with_third' | 'double_elimination' | 'group_then_single_ko' | 'group_then_double_ko' | 'ko_with_group_winner_advantage' | 'page_playoff' | null,
     ko_draw_method: null as 'fixed_cross' | 'same_position_cross' | 'overall_seeding' | 'pot_system' | 'full_random' | 'bonus_draw_for_winners' | 'predefined_bracket' | 'manual' | null,
     ko_third_place_match: false,
@@ -85,7 +87,7 @@ export default function EditTournament() {
         ko_first_round_size: tournament.ko_first_round_size || 4,  // Legacy
         ko_start_round: tournament.ko_start_round || null,
         ko_fallback_qualifiers: tournament.ko_fallback_qualifiers || null,
-        ko_distribution: tournament.ko_distribution as 'cross' | 'draw' || 'cross',
+        ko_distribution: normalizeDrawMode(tournament.ko_distribution),
         ko_structure: tournament.ko_structure,
         ko_draw_method: tournament.ko_draw_method,
         ko_third_place_match: tournament.ko_third_place_match || false,
@@ -147,16 +149,6 @@ export default function EditTournament() {
       }
     }
   }, [formData.mode, formData.has_group_phase]);
-
-  // Remove 'wins' from tie_breaking_rules if league_scoring_system is 'points'
-  useEffect(() => {
-    if (formData.league_scoring_system === 'points' && formData.tie_breaking_rules.includes('wins')) {
-      setFormData(prev => ({
-        ...prev,
-        tie_breaking_rules: prev.tie_breaking_rules.filter(r => r !== 'wins')
-      }));
-    }
-  }, [formData.league_scoring_system]);
 
   // Handle exclusive logic: decision_match vs other rules
   useEffect(() => {
@@ -283,8 +275,8 @@ export default function EditTournament() {
         has_ko_phase: formData.has_ko_phase,
         ko_participants: (formData.has_ko_phase && formData.mode === 'combined') ? formData.ko_participants : 0,  // Legacy
         ko_first_round_size: formData.has_ko_phase ? parseInt(formData.ko_first_round_size.toString()) : undefined,  // Legacy
-        ko_start_round: formData.has_ko_phase && formData.mode === 'combined' ? formData.ko_start_round : undefined,
-        ko_fallback_qualifiers: formData.has_ko_phase && formData.mode === 'combined' ? formData.ko_fallback_qualifiers : undefined,
+        ko_start_round: formData.has_ko_phase && formData.mode === 'combined' ? (formData.ko_start_round as any) : undefined,
+        ko_fallback_qualifiers: formData.has_ko_phase && formData.mode === 'combined' ? (formData.ko_fallback_qualifiers as any) : undefined,
         ko_distribution: formData.has_ko_phase ? formData.ko_distribution : undefined,  // Deprecated
         ko_structure: formData.has_ko_phase ? formData.ko_structure : undefined,
         ko_draw_method: formData.has_ko_phase ? formData.ko_draw_method : undefined,
@@ -355,11 +347,7 @@ export default function EditTournament() {
 
   // Verfügbare Gleichstandsregeln (abhängig von Wertungssystem)
   const getAvailableTieBreakingRules = () => {
-    const allRules = ['wins', 'direct_encounter', 'decision_match'];
-    if (formData.league_scoring_system === 'points') {
-      return allRules.filter(r => r !== 'wins');
-    }
-    return allRules;
+    return ['wins', 'direct_encounter', 'decision_match'];
   };
 
   // Hilfsfunktionen für Reihenfolge der Gleichstandsregeln
@@ -375,6 +363,13 @@ export default function EditTournament() {
       ...prev,
       tie_breaking_rules: newRules
     }));
+  };
+
+  const normalizeDrawMode = (value: string | null | undefined): KODrawModeValue => {
+    if (!value || value === 'cross' || value === 'draw') {
+      return 'random_first_round';
+    }
+    return value as KODrawModeValue;
   };
 
   // KO-Struktur-Optionen mit Beschreibungen
@@ -489,6 +484,24 @@ export default function EditTournament() {
     }
   ];
 
+  const koDrawModeOptions = [
+    {
+      value: 'random_first_round',
+      label: 'a) Erste Runde zufällig, danach fester Turnierbaum',
+      description: 'Die erste KO-Runde wird ausgelost. Ab dann bleibt der Baum fest (klassischer Bracket-Flow).'
+    },
+    {
+      value: 'random_each_round',
+      label: 'b) Jede Runde neu zufällig',
+      description: 'Nach jeder Runde werden die Sieger neu ausgelost. Finale ohne weitere Auslosung.'
+    },
+    {
+      value: 'predefined_slots',
+      label: 'c) Fester Turnierbaum mit Slot-Bezeichnungen',
+      description: 'Der Baum ist von Anfang an fix. Spätere Runden zeigen nur Slot-Bezeichnungen, bis die Qualifikanten feststehen.'
+    }
+  ];
+
   // Helper-Funktion für erlaubte KO-Strukturen basierend auf Modus
   const getAllowedKOStructures = (mode: string) => {
     if (mode === 'combined') {
@@ -520,9 +533,13 @@ export default function EditTournament() {
   };
 
   // Helper-Funktionen für bedingte Anzeige
-  const needsDrawMethod = (structure: string | null) => {
-    // Alle Strukturen benötigen eine Auslosungsmethode
-    return structure !== null;
+  const needsDrawMethod = (structure: string | null, _drawMethod: string | null) => {
+    // Wenn keine Struktur ausgewählt, keine Auslosung nötig
+    if (!structure) return false;
+    // Bei manuellen Paarungen ist die Auslosung optional (wird später im Turnier-Bereich gemacht)
+    // Aber wir zeigen sie trotzdem an, damit der Benutzer "Manuelle Paarungen" auswählen kann
+    // Die Auslosung ist nur required, wenn nicht "manual" ausgewählt ist
+    return true;
   };
 
   const needsGroupWinnerAdvantage = (_structure: string | null, _mode: string) => {
@@ -765,6 +782,11 @@ export default function EditTournament() {
                 <option value="points">Punkte</option>
                 <option value="difference">Differenz</option>
               </select>
+              {formData.league_scoring_system === 'points' && (
+                <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#666', fontStyle: 'italic' }}>
+                  Standard-Punkteverteilung: Sieg 3, Remis 1, Niederlage 0.
+                </p>
+              )}
             </div>
 
             {formData.mode === 'round_robin' && (
@@ -1040,17 +1062,17 @@ export default function EditTournament() {
                 </div>
               </div>
 
-              {needsDrawMethod(formData.ko_structure) && (
+              {needsDrawMethod(formData.ko_structure, formData.ko_draw_method) && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                      Auslosung *
+                      Auslosung {formData.ko_draw_method !== 'manual' ? '*' : ''}
                     </label>
                     <select
                       name="ko_draw_method"
                       value={formData.ko_draw_method || ''}
                       onChange={handleChange}
-                      required
+                      required={formData.ko_draw_method !== 'manual'}
                       style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
                     >
                       <option value="">-- Bitte wählen --</option>
@@ -1068,6 +1090,61 @@ export default function EditTournament() {
                       </p>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* KO-Auslosungsmodus nur anzeigen, wenn nicht manuelle Paarungen */}
+              {formData.ko_draw_method !== 'manual' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                      KO-Auslosungsmodus *
+                    </label>
+                    <select
+                      name="ko_distribution"
+                      value={formData.ko_distribution || 'random_first_round'}
+                      onChange={handleChange}
+                      required
+                      style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                    >
+                      {koDrawModeOptions.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '1.75rem' }}>
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: '#666', fontStyle: 'italic' }}>
+                      {koDrawModeOptions.find(o => o.value === formData.ko_distribution)?.description}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {formData.has_group_phase && formData.ko_draw_method && (
+                <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#f8f9fa', borderRadius: '4px', border: '1px solid #dee2e6' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                    Auslosungs-Restriktionen
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
+                    <input
+                      type="checkbox"
+                      name="ko_block_same_group"
+                      checked={formData.ko_block_same_group}
+                      onChange={handleChange}
+                    />
+                    <span>Keine Paarung aus der gleichen Gruppe</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      name="ko_block_same_position"
+                      checked={formData.ko_block_same_position}
+                      onChange={handleChange}
+                    />
+                    <span>Keine Paarung mit gleicher Gruppenplatzierung</span>
+                  </label>
                 </div>
               )}
 

@@ -1,5 +1,5 @@
 // Auth Context - Manages user authentication and role state
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { authService } from '../services/authService';
 import { UserWithPermissions } from '../types';
 
@@ -28,69 +28,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // For now, create a simple user object from the token
-    // In a real app, this would validate the token and load user data
     try {
-      const token = authService.getToken();
-      if (token) {
-        // Decode token to get user info (simple decode, not secure)
-        let payload;
-        try {
-          // Try JWT format first
-          payload = JSON.parse(atob(token.split('.')[1]));
-        } catch {
-          // If JWT decoding fails, try direct base64 decode (for mock tokens)
-          try {
-            payload = JSON.parse(atob(token));
-          } catch {
-            // If all decoding fails, create mock user data
-            console.log('Using mock user data for development');
-            payload = {
-              sub: 'goksche',
-              user_id: 1,
-              role: 'admin',
-              exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
-            };
-          }
-        }
-        console.log('Token payload:', payload);
-
-        // Check if token is expired
-        const currentTime = Math.floor(Date.now() / 1000);
-        if (payload.exp && payload.exp < currentTime) {
-          console.log('Token expired, logging out');
-          authService.logout();
-          setUser(null);
-        } else {
-          // Create a simple user object
-          const userData = {
-            id: payload.user_id || 1,
-            username: payload.sub || 'admin',
-            email: 'admin@localhost',
-            role: payload.role || 'admin',
-            is_active: true,
-            app_permissions: []
-          };
-          console.log('Setting user data:', userData);
-          setUser(userData);
-        }
-      } else {
+      // Validate token first
+      const isValid = await authService.validateToken();
+      if (!isValid) {
+        authService.logout();
         setUser(null);
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      console.error('Failed to decode token:', error);
-      // For development, create a default admin user instead of logging out
-      console.log('Creating default admin user for development');
-      const userData = {
-        id: 1,
-        username: 'goksche',
-        email: 'goksche23@gmail.com',
-        role: 'admin',
-        is_active: true,
-        created_at: new Date(),
-        app_permissions: []
-      };
+
+      // Load user data from backend
+      const userData = await authService.getCurrentUser();
       setUser(userData);
+    } catch (error) {
+      console.error('Failed to load user:', error);
+      authService.logout();
+      setUser(null);
     } finally {
       setLoading(false);
     }

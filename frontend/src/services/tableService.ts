@@ -35,6 +35,7 @@ export interface TieBreakMiniTable {
   participant_ids: number[];  // IDs of participants in this tie group
   mini_table: MiniTableEntry[];  // Mini table with only direct encounters
   is_completely_tied?: boolean;  // True if all participants have identical stats in mini table
+  unresolved_tie_groups?: number[][];  // Remaining tie groups after rules (excluding direct encounter)
 }
 
 export interface GroupTable {
@@ -70,6 +71,12 @@ export const tableService = {
     return response.data;
   },
 
+  // Get consolation bracket standings
+  async getConsolationStandings(tournamentId: number): Promise<TournamentStandings> {
+    const response = await api.get<TournamentStandings>(`/tables/tournament/${tournamentId}/consolation`);
+    return response.data;
+  },
+
   // Generate playoff matches for tied participants
   async generateTieBreakPlayoff(groupId: number, participantIds: number[]): Promise<any> {
     const response = await api.post(`/tables/group/${groupId}/tie-break/playoff`, participantIds);
@@ -88,6 +95,18 @@ export const tableService = {
       participant_ids: participantIds,
       winner_id: winnerId
     });
+    return response.data;
+  },
+
+  // Generate decision matches for a group
+  async generateDecisionMatches(groupId: number): Promise<any> {
+    const response = await api.post(`/tables/group/${groupId}/decision-matches`);
+    return response.data;
+  },
+
+  // Delete decision matches for a group
+  async deleteDecisionMatches(groupId: number): Promise<any> {
+    const response = await api.delete(`/tables/group/${groupId}/decision-matches`);
     return response.data;
   },
 };

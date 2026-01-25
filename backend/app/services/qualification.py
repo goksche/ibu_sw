@@ -94,7 +94,8 @@ def _calculate_fallback_strategy(
 def get_qualified_participants_from_groups(
     group_rankings: Dict[int, List[int]],  # group_id -> [sorted participant_ids]
     qualification_plan: Dict,
-    group_stats: Optional[Dict[int, Dict[int, Dict]]] = None  # group_id -> participant_id -> stats
+    group_stats: Optional[Dict[int, Dict[int, Dict]]] = None,  # group_id -> participant_id -> stats
+    tie_breaking_rules: Optional[List[str]] = None
 ) -> List[int]:
     """
     Get qualified participants from groups based on qualification plan.
@@ -123,21 +124,81 @@ def get_qualified_participants_from_groups(
         selection = rule.get("selection", "best")
         
         if selection == "best":
+            manual_selected_ids = rule.get("manual_selected_ids") if isinstance(rule, dict) else None
             candidates = _rank_candidates_at_position(
                 group_rankings=group_rankings,
                 position=position,
-                group_stats=group_stats
+                group_stats=group_stats,
+                tie_breaking_rules=tie_breaking_rules
             )
-            # Take top 'count' candidates
-            qualified.extend(candidates[:count])
+            if manual_selected_ids:
+                selected = [pid for pid in manual_selected_ids if pid in candidates]
+                if len(selected) < count:
+                    fill = [pid for pid in candidates if pid not in selected]
+                    selected.extend(fill[: max(0, count - len(selected))])
+                qualified.extend(selected[:count])
+            else:
+                # Take top 'count' candidates
+                qualified.extend(candidates[:count])
     
     return qualified
+
+
+def _build_candidate_sort_key(stats: Dict, tie_breaking_rules: Optional[List[str]]) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
+    scoring_system = stats.get("scoring_system", "difference")
+    key_parts: List[int] = []
+
+    if scoring_system == "points":
+        key_parts.append(stats.get("points", 0))
+    else:
+        key_parts.append(stats.get("diff", 0))
+
+    for rule in tie_breaking_rules or []:
+        if rule == "wins":
+            key_parts.append(stats.get("wins", 0))
+
+    if scoring_system == "points":
+        key_parts.append(stats.get("diff", 0))
+        key_parts.append(stats.get("goals_for", 0))
+    else:
+        key_parts.append(stats.get("goals_for", 0))
+
+    sort_key = tuple(-value for value in key_parts)
+    tie_key = tuple(key_parts)
+    return sort_key, tie_key
+
+
+def rank_candidates_with_keys(
+    group_rankings: Dict[int, List[int]],
+    position: int,
+    group_stats: Optional[Dict[int, Dict[int, Dict]]] = None,
+    tie_breaking_rules: Optional[List[str]] = None
+) -> List[Dict]:
+    candidates = []
+    for group_id, ranking in group_rankings.items():
+        pos_index = position - 1
+        if pos_index < len(ranking):
+            participant_id = ranking[pos_index]
+            stats = {}
+            if group_stats and group_id in group_stats and participant_id in group_stats[group_id]:
+                stats = group_stats[group_id][participant_id]
+            sort_key, tie_key = _build_candidate_sort_key(stats, tie_breaking_rules)
+            candidates.append({
+                "participant_id": participant_id,
+                "group_id": group_id,
+                "sort_key": sort_key,
+                "tie_key": tie_key
+            })
+
+    candidates.sort(key=lambda c: c["sort_key"])
+    return candidates
 
 
 def _rank_candidates_at_position(
     group_rankings: Dict[int, List[int]],
     position: int,
-    group_stats: Optional[Dict[int, Dict[int, Dict]]] = None
+    group_stats: Optional[Dict[int, Dict[int, Dict]]] = None,
+    tie_breaking_rules: Optional[List[str]] = None
 ) -> List[int]:
     """
     Rank candidates at a specific position across all groups.
@@ -151,44 +212,10 @@ def _rank_candidates_at_position(
         List of participant IDs sorted by their performance at that position
         (best first)
     """
-    candidates = []
-    
-    # Collect all participants at this position with their stats
-    for group_id, ranking in group_rankings.items():
-        pos_index = position - 1  # Convert to 0-based index
-        if pos_index < len(ranking):
-            participant_id = ranking[pos_index]
-            candidate_data = {
-                "participant_id": participant_id,
-                "group_id": group_id
-            }
-            
-            # If we have stats, add them for ranking
-            if group_stats and group_id in group_stats and participant_id in group_stats[group_id]:
-                stats = group_stats[group_id][participant_id]
-                candidate_data["stats"] = stats
-                # Create a sort key: prefer higher points/diff, then goals_for
-                scoring_system = stats.get("scoring_system", "difference")
-                if scoring_system == "points":
-                    sort_key = (
-                        -stats.get("points", 0),
-                        -stats.get("diff", 0),
-                        -stats.get("goals_for", 0)
-                    )
-                else:
-                    sort_key = (
-                        -stats.get("diff", 0),
-                        -stats.get("goals_for", 0)
-                    )
-                candidate_data["_sort_key"] = sort_key
-            else:
-                # No stats available, use order from ranking (all candidates are at same position)
-                candidate_data["_sort_key"] = (0, 0, 0)
-            
-            candidates.append(candidate_data)
-    
-    # Sort by sort key (best first)
-    candidates.sort(key=lambda x: x["_sort_key"])
-    
-    # Return sorted list of participant IDs
-    return [c["participant_id"] for c in candidates]
+    ranked_candidates = rank_candidates_with_keys(
+        group_rankings=group_rankings,
+        position=position,
+        group_stats=group_stats,
+        tie_breaking_rules=tie_breaking_rules
+    )
+    return [c["participant_id"] for c in ranked_candidates]

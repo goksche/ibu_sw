@@ -27,6 +27,13 @@ export type KODrawMethod =
   | 'predefined_bracket'
   | 'manual';
 
+export type KODrawMode =
+  | 'random_first_round'
+  | 'random_each_round'
+  | 'predefined_slots'
+  | 'cross'
+  | 'draw';
+
 export type KOStartRound = 
   | 'round_of_32'  // 32 Teilnehmer
   | 'round_of_16'  // 16 Teilnehmer
@@ -68,7 +75,7 @@ export interface Tournament {
     count: number;
     selection: 'best';
   }>;
-  ko_distribution: string | null;  // Deprecated
+  ko_distribution: KODrawMode | null;  // Deprecated
   ko_structure: KOStructure | null;
   ko_draw_method: KODrawMethod | null;
   ko_third_place_match: boolean;
@@ -87,6 +94,33 @@ export interface Tournament {
   created_at: string;
   updated_at: string;
   creator_id: number | null;
+}
+
+export interface LeagueParticipantSummary {
+  id: number;
+  first_name: string;
+  last_name: string;
+}
+
+export interface LeagueTournamentSummary {
+  id: number;
+  name: string;
+  start_date?: string;
+  end_date?: string | null;
+}
+
+export interface League {
+  id: number;
+  name: string;
+  description: string | null;
+  scoring_schema: Record<string, number> | null;
+  mode_presets: Record<string, any> | null;
+  participant_ids: number[];
+  tournament_ids: number[];
+  participants: LeagueParticipantSummary[];
+  tournaments: LeagueTournamentSummary[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Participant {

@@ -1,6 +1,5 @@
 // Tournament Tables Tab
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useState, useEffect } from 'react';
 import { Tournament } from '../../types';
 import { tableService, GroupTable, TournamentStandings } from '../../services/tableService';
 import { groupService, GroupWithParticipants } from '../../services/groupService';
@@ -12,9 +11,66 @@ import { Button } from '../ui';
 interface QualificationTableViewProps {
   qualificationTable: QualificationTable;
   tournament: Tournament;
+  onRefresh: () => void;
 }
 
-function QualificationTableView({ qualificationTable, tournament }: QualificationTableViewProps) {
+function QualificationTableView({ qualificationTable, tournament, onRefresh }: QualificationTableViewProps) {
+  const [manualSelections, setManualSelections] = useState<Record<number, number[]>>({});
+  const [savingPosition, setSavingPosition] = useState<number | null>(null);
+
+  useEffect(() => {
+    const initialSelections: Record<number, number[]> = {};
+    qualificationTable.fallback_candidates.forEach(rule => {
+      if (rule.manual_selected_ids && rule.manual_selected_ids.length > 0) {
+        initialSelections[rule.position] = rule.manual_selected_ids;
+      }
+    });
+    setManualSelections(initialSelections);
+  }, [qualificationTable]);
+
+  const toggleManualSelection = (position: number, participantId: number, maxCount: number) => {
+    setManualSelections(prev => {
+      const current = prev[position] || [];
+      const isSelected = current.includes(participantId);
+      if (isSelected) {
+        return { ...prev, [position]: current.filter(id => id !== participantId) };
+      }
+      if (current.length >= maxCount) {
+        return prev;
+      }
+      return { ...prev, [position]: [...current, participantId] };
+    });
+  };
+
+  const handleSaveManualSelection = async (position: number, count: number) => {
+    const selectedIds = manualSelections[position] || [];
+    if (selectedIds.length !== count) {
+      alert(`Bitte genau ${count} Teilnehmer auswählen.`);
+      return;
+    }
+    setSavingPosition(position);
+    try {
+      await qualificationService.setManualFallbackSelection(tournament.id, position, selectedIds);
+      onRefresh();
+    } catch (error: any) {
+      alert(`Fehler bei manueller Auswahl: ${error.response?.data?.detail || error.message}`);
+    } finally {
+      setSavingPosition(null);
+    }
+  };
+
+  const handleClearManualSelection = async (position: number) => {
+    setSavingPosition(position);
+    try {
+      await qualificationService.setManualFallbackSelection(tournament.id, position, []);
+      onRefresh();
+    } catch (error: any) {
+      alert(`Fehler beim Zurücksetzen: ${error.response?.data?.detail || error.message}`);
+    } finally {
+      setSavingPosition(null);
+    }
+  };
+
   return (
     <div>
       <div style={{ 
@@ -69,7 +125,7 @@ function QualificationTableView({ qualificationTable, tournament }: Qualificatio
                   {groupQual.group_name}
                 </h5>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {groupQual.basis_qualifiers.map((qualifier, idx) => (
+                  {groupQual.basis_qualifiers.map((qualifier) => (
                     <div 
                       key={qualifier.participant_id}
                       style={{
@@ -118,7 +174,13 @@ function QualificationTableView({ qualificationTable, tournament }: Qualificatio
             <h4 style={{ color: theme.colors.text.primary, marginBottom: '1rem' }}>
               Zusätzliche Qualifikanten (Fallback-Regeln)
             </h4>
-            {qualificationTable.fallback_candidates.map((rule, ruleIdx) => (
+            {qualificationTable.fallback_candidates.map((rule, ruleIdx) => {
+              const cutoffGroup = rule.cutoff_tie_group || [];
+              const candidateMap = new Map(rule.candidates.map(c => [c.participant_id, c]));
+              const selectedIds = manualSelections[rule.position] || [];
+              const hasManualSelection = rule.manual_selected_ids && rule.manual_selected_ids.length > 0;
+
+              return (
               <div 
                 key={ruleIdx}
                 style={{
@@ -144,12 +206,12 @@ function QualificationTableView({ qualificationTable, tournament }: Qualificatio
                       <th style={{ padding: '0.5rem', textAlign: 'left', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Status</th>
                       <th style={{ padding: '0.5rem', textAlign: 'left', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Spieler</th>
                       <th style={{ padding: '0.5rem', textAlign: 'left', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Gruppe</th>
-                      {tournament.league_scoring_system === 'points' && (
-                        <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Pkt</th>
-                      )}
                       <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Diff</th>
                       <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>LF</th>
                       <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>LA</th>
+                      {tournament.league_scoring_system === 'points' && (
+                        <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Pkt</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -208,11 +270,6 @@ function QualificationTableView({ qualificationTable, tournament }: Qualificatio
                           <td style={{ padding: '0.5rem', color: theme.colors.text.secondary }}>
                             {candidate.group_name || `Gruppe ${candidate.group_id}`}
                           </td>
-                          {tournament.league_scoring_system === 'points' && (
-                            <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 'bold', color: theme.colors.accent.info }}>
-                              {candidate.stats.points ?? 0}
-                            </td>
-                          )}
                           <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 'bold', color: candidate.stats.diff > 0 ? theme.colors.accent.success : candidate.stats.diff < 0 ? theme.colors.accent.error : theme.colors.text.primary }}>
                             {candidate.stats.diff > 0 ? '+' : ''}{candidate.stats.diff}
                           </td>
@@ -222,13 +279,84 @@ function QualificationTableView({ qualificationTable, tournament }: Qualificatio
                           <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>
                             {candidate.stats.goals_against}
                           </td>
+                          {tournament.league_scoring_system === 'points' && (
+                            <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 'bold', color: theme.colors.accent.info }}>
+                              {candidate.stats.points ?? 0}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
+
+                {cutoffGroup.length > 0 && (
+                  <div style={{ marginTop: '1rem', padding: '0.75rem', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
+                    <div style={{ fontSize: '0.875rem', fontWeight: 'bold', color: theme.colors.text.primary, marginBottom: '0.5rem' }}>
+                      Gleichstand um die letzten {rule.count} Plätze
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: theme.colors.text.secondary, marginBottom: '0.75rem' }}>
+                      Bitte auswählen, wer sich qualifiziert (max. {rule.count}).
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {cutoffGroup.map(pid => {
+                        const candidate = candidateMap.get(pid);
+                        if (!candidate) return null;
+                        const isSelected = selectedIds.includes(pid);
+                        return (
+                          <label
+                            key={pid}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                              padding: '0.5rem',
+                              borderRadius: theme.borderRadius.input,
+                              background: isSelected ? `${theme.colors.accent.success}20` : theme.colors.background.secondary,
+                              border: `1px solid ${theme.colors.border.standard}`,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleManualSelection(rule.position, pid, rule.count)}
+                            />
+                            <span style={{ color: theme.colors.text.primary }}>
+                              {candidate.name}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                      <Button
+                        onClick={() => handleSaveManualSelection(rule.position, rule.count)}
+                        variant="success"
+                        disabled={savingPosition === rule.position}
+                        style={{ fontSize: '0.875rem' }}
+                      >
+                        Auswahl speichern
+                      </Button>
+                      <Button
+                        onClick={() => handleClearManualSelection(rule.position)}
+                        variant="secondary"
+                        disabled={savingPosition === rule.position || !hasManualSelection}
+                        style={{ fontSize: '0.875rem' }}
+                      >
+                        Zurücksetzen
+                      </Button>
+                    </div>
+                    {hasManualSelection && (
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: theme.colors.text.secondary }}>
+                        Manuelle Auswahl aktiv.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            ))}
+            );
+          })}
           </div>
         )}
         
@@ -254,6 +382,7 @@ interface MiniTableSectionProps {
     participant_ids: number[];
     mini_table: Array<{ participant_id: number; name: string; games: number; wins: number; draws: number; losses: number; goals_for: number; goals_against: number; diff: number; points?: number }>;
     is_completely_tied?: boolean;
+    unresolved_tie_groups?: number[][];
   }>;
   tournament: Tournament;
   selectedGroupId: number | null;
@@ -277,8 +406,11 @@ function MiniTableSection({ tieMiniTables, tournament, selectedGroupId, onResolv
 
   return (
     <>
-      {tieMiniTables.map((tieMiniTable, tableIndex) => {
+      {tieMiniTables.map((_tieMiniTable, tableIndex) => {
         const isExpanded = expandedTables.has(tableIndex);
+        const unresolvedGroups = (_tieMiniTable.unresolved_tie_groups && _tieMiniTable.unresolved_tie_groups.length > 0)
+          ? _tieMiniTable.unresolved_tie_groups
+          : (_tieMiniTable.is_completely_tied ? [_tieMiniTable.participant_ids] : []);
         return (
           <div 
             key={tableIndex}
@@ -308,9 +440,9 @@ function MiniTableSection({ tieMiniTables, tournament, selectedGroupId, onResolv
                 {isExpanded ? '▾' : '▸'}
               </span>
               <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
-                Direktbegegnungen (Minitabelle) - Gleichstand mit {tieMiniTable.participant_ids.length} Teilnehmern
+                Direktbegegnungen (Minitabelle) - Gleichstand mit {_tieMiniTable.participant_ids.length} Teilnehmern
               </span>
-              {tieMiniTable.is_completely_tied && (
+              {_tieMiniTable.is_completely_tied && (
                 <span style={{ 
                   fontSize: '0.75rem', 
                   color: theme.colors.accent.error, 
@@ -330,19 +462,19 @@ function MiniTableSection({ tieMiniTables, tournament, selectedGroupId, onResolv
                     <tr style={{ background: theme.colors.background.secondary }}>
                       <th style={{ padding: '0.5rem', textAlign: 'left', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Spieler</th>
                       <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Sp</th>
-                      {tournament.league_scoring_system === 'points' && (
-                        <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Pkt</th>
-                      )}
                       <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>S</th>
                       <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>U</th>
                       <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>N</th>
                       <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>LF</th>
                       <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>LA</th>
                       <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Diff</th>
+                      {tournament.league_scoring_system === 'points' && (
+                        <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Pkt</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
-                    {tieMiniTable.mini_table.map((miniRow, miniIdx) => (
+                    {_tieMiniTable.mini_table.map((miniRow, miniIdx) => (
                       <tr key={miniRow.participant_id} style={{ 
                         borderBottom: `1px solid ${theme.colors.border.standard}`, 
                         background: miniIdx % 2 === 0 ? theme.colors.background.card : theme.colors.background.secondary 
@@ -351,11 +483,6 @@ function MiniTableSection({ tieMiniTables, tournament, selectedGroupId, onResolv
                           {miniRow.name}
                         </td>
                         <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>{miniRow.games}</td>
-                        {tournament.league_scoring_system === 'points' && (
-                          <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 'bold', color: theme.colors.accent.info }}>
-                            {miniRow.points ?? 0}
-                          </td>
-                        )}
                         <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>{miniRow.wins}</td>
                         <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>{miniRow.draws}</td>
                         <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>{miniRow.losses}</td>
@@ -364,18 +491,32 @@ function MiniTableSection({ tieMiniTables, tournament, selectedGroupId, onResolv
                         <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 'bold', color: miniRow.diff > 0 ? theme.colors.accent.success : miniRow.diff < 0 ? theme.colors.accent.error : theme.colors.text.primary }}>
                           {miniRow.diff > 0 ? '+' : ''}{miniRow.diff}
                         </td>
+                        {tournament.league_scoring_system === 'points' && (
+                          <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 'bold', color: theme.colors.accent.info }}>
+                            {miniRow.points ?? 0}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 {/* Show tie-break resolution options if completely tied */}
-                {tieMiniTable.is_completely_tied && selectedGroupId && (
-                  <TieBreakResolutionComponent
-                    groupId={selectedGroupId}
-                    participantIds={tieMiniTable.participant_ids}
-                    miniTable={tieMiniTable.mini_table}
-                    onResolved={onResolved}
-                  />
+                {selectedGroupId && unresolvedGroups.length > 0 && (
+                  <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {unresolvedGroups.map((groupIds, idx) => (
+                      <div key={`${tableIndex}-tie-${idx}`}>
+                        <div style={{ fontSize: '0.8rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>
+                          Offener Gleichstand ({groupIds.length} Teilnehmer)
+                        </div>
+                        <TieBreakResolutionComponent
+                          groupId={selectedGroupId}
+                          participantIds={groupIds}
+                          miniTable={_tieMiniTable.mini_table}
+                          onResolved={onResolved}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
@@ -466,7 +607,7 @@ function TieBreakResolutionComponent({ groupId, participantIds, miniTable, onRes
       }}>
         Gleichstand-Auflösung:
       </div>
-      {canEdit && (
+      {true && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <Button
             onClick={handleGeneratePlayoff}
@@ -558,7 +699,6 @@ interface TournamentTablesProps {
 }
 
 export default function TournamentTables({ tournamentId, tournament }: TournamentTablesProps) {
-  const { canEdit } = useAuth();
   const [groups, setGroups] = useState<GroupWithParticipants[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const [groupTable, setGroupTable] = useState<GroupTable | null>(null);
@@ -718,22 +858,21 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
                           <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Rang</th>
                           <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Spieler</th>
                           <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Sp</th>
-                          {tournament.league_scoring_system === 'points' && (
-                            <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Pkt</th>
-                          )}
                           <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>S</th>
                           <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>U</th>
                           <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>N</th>
                           <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>LF</th>
                           <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>LA</th>
                           <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Diff</th>
+                          {tournament.league_scoring_system === 'points' && (
+                            <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Pkt</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
                         {groupTable.table.map((row, idx) => {
                         // Check if this row is the first in a tie group that needs a mini table
                         let isLastInTieGroup = false;
-                        let tieMiniTable = null;
                         
                         if (row.is_in_tie_group && row.tie_group_size && row.tie_group_size > 2) {
                           // Find the tie group this participant belongs to
@@ -750,7 +889,7 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
                             isLastInTieGroup = !nextRowInSameGroup;
                             
                             if (isLastInTieGroup) {
-                              tieMiniTable = participantTieGroup;
+                              // Mini table will be displayed here
                             }
                           }
                         }
@@ -772,11 +911,6 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
                               )}
                             </td>
                             <td style={{ padding: '0.75rem', textAlign: 'center', color: theme.colors.text.primary }}>{row.games}</td>
-                            {tournament.league_scoring_system === 'points' && (
-                              <td style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold', color: theme.colors.accent.info }}>
-                                {row.points ?? 0}
-                              </td>
-                            )}
                             <td style={{ padding: '0.75rem', textAlign: 'center', color: theme.colors.text.primary }}>{row.wins}</td>
                             <td style={{ padding: '0.75rem', textAlign: 'center', color: theme.colors.text.primary }}>{(row as any).draws ?? 0}</td>
                             <td style={{ padding: '0.75rem', textAlign: 'center', color: theme.colors.text.primary }}>{row.losses}</td>
@@ -785,6 +919,11 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
                             <td style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold', color: row.diff > 0 ? theme.colors.accent.success : row.diff < 0 ? theme.colors.accent.error : theme.colors.text.primary }}>
                               {row.diff > 0 ? '+' : ''}{row.diff}
                             </td>
+                            {tournament.league_scoring_system === 'points' && (
+                              <td style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold', color: theme.colors.accent.info }}>
+                                {row.points ?? 0}
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
@@ -822,6 +961,14 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
             <QualificationTableView 
               qualificationTable={qualificationTable}
               tournament={tournament}
+              onRefresh={async () => {
+                try {
+                  const qualTable = await qualificationService.getQualificationTable(tournamentId);
+                  setQualificationTable(qualTable);
+                } catch (err) {
+                  console.error('Failed to refresh qualification table:', err);
+                }
+              }}
             />
           ) : (
             <div style={{ padding: '2rem', textAlign: 'center', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
