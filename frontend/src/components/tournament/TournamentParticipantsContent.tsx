@@ -19,6 +19,8 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
   const [showManualForm, setShowManualForm] = useState(false);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<number[]>([]);
   const [adding, setAdding] = useState(false);
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [participantSortBy, setParticipantSortBy] = useState<'first_name' | 'last_name'>('last_name');
   const [manualFormData, setManualFormData] = useState({
     first_name: '',
     last_name: '',
@@ -80,7 +82,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
   };
 
   const handleSelectAllAvailable = () => {
-    setSelectedParticipantIds(availableParticipants.map(participant => participant.id));
+    setSelectedParticipantIds(sortedAvailableParticipants.map(participant => participant.id));
   };
 
   const handleClearSelected = () => {
@@ -150,10 +152,26 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
   const availableParticipants = allParticipants.filter(
     p => !tournamentParticipants.some(tp => tp.id === p.id)
   );
-  const sortedAvailableParticipants = [...availableParticipants].sort((a, b) => {
-    const firstCompare = a.first_name.localeCompare(b.first_name, 'de', { sensitivity: 'base' });
+  // Filter by search (Vorname, Nachname, Verein, Spitzname)
+  const searchLower = participantSearch.trim().toLowerCase();
+  const filteredAvailable = searchLower
+    ? availableParticipants.filter(
+        p =>
+          (p.first_name || '').toLowerCase().includes(searchLower) ||
+          (p.last_name || '').toLowerCase().includes(searchLower) ||
+          (p.club || '').toLowerCase().includes(searchLower) ||
+          (p.nickname || '').toLowerCase().includes(searchLower)
+      )
+    : availableParticipants;
+  const sortedAvailableParticipants = [...filteredAvailable].sort((a, b) => {
+    if (participantSortBy === 'last_name') {
+      const lastCompare = (a.last_name || '').localeCompare(b.last_name || '', 'de', { sensitivity: 'base' });
+      if (lastCompare !== 0) return lastCompare;
+      return (a.first_name || '').localeCompare(b.first_name || '', 'de', { sensitivity: 'base' });
+    }
+    const firstCompare = (a.first_name || '').localeCompare(b.first_name || '', 'de', { sensitivity: 'base' });
     if (firstCompare !== 0) return firstCompare;
-    return a.last_name.localeCompare(b.last_name, 'de', { sensitivity: 'base' });
+    return (a.last_name || '').localeCompare(b.last_name || '', 'de', { sensitivity: 'base' });
   });
 
   return (
@@ -189,6 +207,33 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
               <p style={{ marginBottom: '1rem', color: theme.colors.text.secondary }}>
                 Wählen Sie Teilnehmer aus ({selectedParticipantIds.length} ausgewählt):
               </p>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <Input
+                  type="text"
+                  placeholder="Spieler suchen (Name, Verein, Spitzname)..."
+                  value={participantSearch}
+                  onChange={(e) => setParticipantSearch(e.target.value)}
+                  style={{ marginBottom: '0.5rem' }}
+                />
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>Sortierung:</span>
+                  <Button
+                    variant={participantSortBy === 'last_name' ? 'primary' : 'secondary'}
+                    onClick={() => setParticipantSortBy('last_name')}
+                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.85rem' }}
+                  >
+                    Nachname
+                  </Button>
+                  <Button
+                    variant={participantSortBy === 'first_name' ? 'primary' : 'secondary'}
+                    onClick={() => setParticipantSortBy('first_name')}
+                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.85rem' }}
+                  >
+                    Vorname
+                  </Button>
+                </div>
+              </div>
 
               <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem' }}>
                 <Button

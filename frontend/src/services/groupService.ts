@@ -5,6 +5,7 @@ export interface Group {
   id: number;
   tournament_id: number;
   name: string;
+  spielfeld_id?: number | null;
 }
 
 export interface GroupWithParticipants extends Group {
@@ -18,10 +19,12 @@ export interface GroupWithParticipants extends Group {
 export interface GroupCreate {
   tournament_id: number;
   name: string;
+  spielfeld_id?: number | null;
 }
 
 export interface GroupUpdate {
   name?: string;
+  spielfeld_id?: number | null;
 }
 
 export interface GroupParticipantAdd {

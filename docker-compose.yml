@@ -65,20 +65,21 @@ services:
     networks:
       - ibu_network
 
-  # React Frontend
+  # React Frontend (Vite Dev-Server, Port 3000; Nginx proxyt darauf)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: ibu_frontend
     environment:
-      VITE_API_URL: http://localhost:8000
+      # Leer oder "/" = gleiche Origin (Nginx /api) – Login/API funktionieren so auf dem Server
+      VITE_API_URL: /
     ports:
       - "3000:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    command: npm run dev -- --host 0.0.0.0
+    command: ["node", "node_modules/vite/bin/vite.js", "--port", "3000", "--host", "0.0.0.0"]
     depends_on:
       - backend
     networks:

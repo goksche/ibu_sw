@@ -144,9 +144,7 @@ export const authService = {
   ): Promise<User> {
     const response = await api.put<User>(`/auth/users/${userId}`, userData);
     return response.data;
-  },
-
-  async deleteUser(userId: number): Promise<void> {
+  },  async deleteUser(userId: number): Promise<void> {
     await api.delete(`/auth/users/${userId}`);
   },
 };

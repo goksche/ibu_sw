@@ -170,6 +170,12 @@ def compute_group_ranking_with_rules(
                 if rule == 'wins':
                     wins_map = {pid: (stats[pid].get('wins', 0),) for pid in g}
                     next_groups.extend(_split_group_by_key(g, wins_map))
+                elif rule == 'diff':
+                    diff_map = {pid: (stats[pid].get('diff', 0),) for pid in g}
+                    next_groups.extend(_split_group_by_key(g, diff_map))
+                elif rule == 'goals_for':
+                    gf_map = {pid: (stats[pid].get('goals_for', 0),) for pid in g}
+                    next_groups.extend(_split_group_by_key(g, gf_map))
                 elif rule == 'direct_encounter':
                     next_groups.extend(_direct_encounter_groups(g, matches, scoring_system))
                 else:

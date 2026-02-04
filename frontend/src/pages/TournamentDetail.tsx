@@ -2,11 +2,12 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { tournamentService } from '../services/tournamentService';
+import { locationService } from '../services/locationService';
 import { Tournament } from '../types';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Button, Card, Input, Badge } from '../components/ui';
+import { Button, Card, Input, Badge, Select } from '../components/ui';
 import { theme } from '../theme/theme';
-import { PencilSimple, Copy, Star, Trash, ArrowLeft } from 'phosphor-react';
+import { PencilSimple, Copy, Star, Trash, ArrowLeft, Television } from 'phosphor-react';
 
 // Import tab content components
 import TournamentOverview from '../components/tournament/TournamentOverview';
@@ -14,8 +15,9 @@ import TournamentParticipantsContent from '../components/tournament/TournamentPa
 import TournamentGroupsContent from '../components/tournament/TournamentGroupsContent';
 import TournamentMatchesContent from '../components/tournament/TournamentMatchesContent';
 import TournamentTables from '../components/tournament/TournamentTables';
+import TournamentOverallScheduleContent from '../components/tournament/TournamentOverallScheduleContent';
 
-type TabType = 'overview' | 'participants' | 'groups' | 'matches' | 'tables';
+type TabType = 'overview' | 'participants' | 'groups' | 'matches' | 'tables' | 'overall';
 
 export default function TournamentDetail() {
   const navigate = useNavigate();
@@ -31,6 +33,9 @@ export default function TournamentDetail() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [locationName, setLocationName] = useState<string | null>(null);
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -40,7 +45,7 @@ export default function TournamentDetail() {
     
     // Get active tab from URL
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['overview', 'participants', 'groups', 'matches', 'tables'].includes(tabParam)) {
+    if (tabParam && ['overview', 'participants', 'groups', 'matches', 'tables', 'overall'].includes(tabParam)) {
       setActiveTab(tabParam as TabType);
     }
     
@@ -48,6 +53,22 @@ export default function TournamentDetail() {
       loadTournament();
     }
   }, [tournamentId, navigate, searchParams]);
+
+  useEffect(() => {
+    if (!tournament?.location_id) {
+      setLocationName(null);
+      return;
+    }
+    const load = async () => {
+      try {
+        const loc = await locationService.getById(tournament.location_id!);
+        setLocationName(loc.name);
+      } catch {
+        setLocationName(null);
+      }
+    };
+    load();
+  }, [tournament?.location_id]);
 
   const loadTournament = async () => {
     try {
@@ -72,6 +93,7 @@ export default function TournamentDetail() {
     setShowDeleteDialog(true);
     setDeleteConfirmText('');
     setDeleteError(null);
+    setDeleting(false);
   };
 
   const handleDeleteCancel = () => {
@@ -89,6 +111,21 @@ export default function TournamentDetail() {
     } catch (err: any) {
       console.error('Failed to duplicate tournament:', err);
       alert('Fehler beim Duplizieren des Turniers');
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!tournament || statusUpdating) return;
+    if (newStatus === tournament.status) return;
+    setStatusError(null);
+    setStatusUpdating(true);
+    try {
+      const updated = await tournamentService.update(tournament.id, { status: newStatus as 'planned' | 'running' | 'completed' });
+      setTournament(updated);
+    } catch (err: any) {
+      setStatusError(err?.response?.data?.detail || 'Status konnte nicht geändert werden.');
+    } finally {
+      setStatusUpdating(false);
     }
   };
 
@@ -115,6 +152,7 @@ export default function TournamentDetail() {
 
     try {
       await tournamentService.delete(tournamentId);
+      setDeleting(false);
       navigate('/dashboard');
     } catch (err: any) {
       setDeleteError(err.response?.data?.detail || 'Fehler beim Löschen des Turniers');
@@ -147,10 +185,27 @@ export default function TournamentDetail() {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem', alignItems: 'center' }}>
         <div>
           <h1 style={{ margin: 0, color: theme.colors.text.primary }}>{tournament.name}</h1>
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <Badge variant={getStatusBadgeVariant(tournament.status)}>
               {tournament.status === 'running' ? 'Laufend' : tournament.status === 'completed' ? 'Abgeschlossen' : 'Geplant'}
             </Badge>
+            {canEdit && tournament.status !== 'completed' && (
+              <>
+                <Select
+                  label=""
+                  value={tournament.status}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  disabled={statusUpdating}
+                  error={statusError || undefined}
+                  options={[
+                    { value: 'planned', label: 'Geplant' },
+                    { value: 'running', label: 'Laufend' },
+                    { value: 'completed', label: 'Abgeschlossen' },
+                  ]}
+                  style={{ width: 'auto', minWidth: '140px', marginBottom: 0 }}
+                />
+              </>
+            )}
             <span style={{ color: theme.colors.text.secondary, fontSize: '0.875rem' }}>
               {tournament.start_date}
             </span>
@@ -192,6 +247,13 @@ export default function TournamentDetail() {
               </Button>
             </>
           )}
+          <Button
+            variant="secondary"
+            onClick={() => window.open(`/tournaments/${tournamentId}/ticker`, '_blank', 'noopener,noreferrer')}
+          >
+            <Television size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+            Live Ticker
+          </Button>
           <Button 
             variant="secondary"
             onClick={() => navigate('/dashboard')}
@@ -269,10 +331,28 @@ export default function TournamentDetail() {
               borderRadius: '0px'
             }}
           >
-            Spiele
+            Gruppenspiele
           </button>
         )}
-        {tournament.show_tables && (
+        {tournament.has_group_phase && tournament.show_matches && (
+          <button
+            onClick={() => handleTabChange('overall')}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: activeTab === 'overall' ? `2px solid ${theme.colors.accent.primary}` : '2px solid transparent',
+              cursor: 'pointer',
+              color: activeTab === 'overall' ? theme.colors.accent.primary : theme.colors.text.secondary,
+              fontWeight: activeTab === 'overall' ? 'bold' : 'normal',
+              marginBottom: '-2px',
+              borderRadius: '0px'
+            }}
+          >
+            Gesamtspielplan
+          </button>
+        )}
+        {tournament.show_tables && tournament.ko_structure !== 'consolation_bracket' && (
           <button
             onClick={() => handleTabChange('tables')}
             style={{
@@ -294,13 +374,15 @@ export default function TournamentDetail() {
 
       {/* Tab Content */}
       <div>
-        {activeTab === 'overview' && <TournamentOverview tournament={tournament} />}
+        {activeTab === 'overview' && <TournamentOverview tournament={tournament} locationName={locationName} />}
         {activeTab === 'participants' && <TournamentParticipantsContent tournamentId={tournamentId} />}
-        {activeTab === 'groups' && tournament.has_group_phase && <TournamentGroupsContent tournamentId={tournamentId} tournament={tournament} />}
         {activeTab === 'matches' && tournament.show_matches && (tournament.has_group_phase || tournament.has_ko_phase) && (
           <TournamentMatchesContent tournamentId={tournamentId} tournament={tournament} />
         )}
-        {activeTab === 'tables' && tournament.show_tables && <TournamentTables tournamentId={tournamentId} tournament={tournament} />}
+        {activeTab === 'overall' && tournament.has_group_phase && tournament.show_matches && (
+          <TournamentOverallScheduleContent tournamentId={tournamentId} tournament={tournament} />
+        )}
+        {activeTab === 'tables' && tournament.show_tables && tournament.ko_structure !== 'consolation_bracket' && <TournamentTables tournamentId={tournamentId} tournament={tournament} />}
       </div>
 
       {/* Delete Confirmation Dialog */}

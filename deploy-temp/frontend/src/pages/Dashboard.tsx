@@ -38,7 +38,7 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Failed to load version:', err);
       // Fallback to package.json version if API fails
-      setAppVersion('1.4.0');
+      setAppVersion('1.4.1');
     }
   };
 

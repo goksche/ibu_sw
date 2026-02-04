@@ -21,8 +21,10 @@ function getBasePath(): string {
   return '';
 }
 
-// Remove /api/v1 from VITE_API_URL if present, as we add it below
-const envUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Relativ (gleiche Origin) wenn leer, "/" oder "same" – sonst lokale Dev-URL
+const raw = import.meta.env.VITE_API_URL;
+const envUrl =
+  raw === '' || raw === '/' || raw === 'same' ? '' : (raw || 'http://localhost:8000');
 const API_URL = envUrl.replace(/\/api\/v1\/?$/, '');
 
 // BASE_PATH für API-Requests

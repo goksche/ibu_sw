@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Platform Core - Multi-App Platform</title>
     <script>
+      // HTTPS erzwingen: Bei Aufruf per HTTP auf HTTPS umleiten (außer localhost)
+      if (location.protocol === 'http:' && !/^localhost(\d*)$/.test(location.hostname) && location.hostname !== '127.0.0.1') {
+        location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+      }
       // BASE_PATH für Plattform-Integration
       // Wird von der Plattform gesetzt, falls nicht vorhanden aus URL extrahieren
       (function() {

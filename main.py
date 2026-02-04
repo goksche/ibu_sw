@@ -1,102 +1,78 @@
-# main.py
-# v1.1.0 – Stabilität & Sicherheit: Exception Handling, Logging, Validation, Memory Management
-from __future__ import annotations
+# Backend Main - FastAPI Application
+# v1.2.0-alpha.2
 
-import os
-import sys
-import ctypes
-from typing import Optional
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
+from app.core.config import settings
+from app.core.database import init_db
+from app.api.v1 import auth, tournaments, participants, groups, matches, tables, info, leagues, locations
+from app.api.v1.platform import dashboard, feedback
+from app.api.v1.platform.admin import users, apps, permissions, deployment
 
-def _app_root() -> str:
-    """Installations-/App-Ordner.
-    - normal (Quellcode): Ordner dieser Datei
-    - PyInstaller onefile/collect: Ordner der .exe
-    """
-    if getattr(sys, "frozen", False) and hasattr(sys, "executable"):
-        return os.path.dirname(os.path.abspath(sys.executable))
-    return os.path.dirname(os.path.abspath(__file__))
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="API für IBU Turnier-Verwaltung",
+    version=settings.APP_VERSION,
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
+# CORS Middleware - Allow all for local development
+from fastapi.middleware.cors import CORSMiddleware
 
-def _is_dir_writable(path: str) -> bool:
-    try:
-        test = os.path.join(path, ".ibu_write_test")
-        with open(test, "w", encoding="utf-8") as f:
-            f.write("ok")
-        os.remove(test)
-        return True
-    except Exception:
-        return False
+# Add CORS middleware BEFORE including routers
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for local development
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
+)
 
+# Include API Routers
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(tournaments.router, prefix="/api/v1")
+app.include_router(participants.router, prefix="/api/v1")
+app.include_router(groups.router, prefix="/api/v1/groups", tags=["Groups"])
+app.include_router(matches.router, prefix="/api/v1/matches", tags=["Matches"])
+app.include_router(tables.router, prefix="/api/v1/tables", tags=["Tables"])
+app.include_router(leagues.router, prefix="/api/v1")
+app.include_router(locations.router, prefix="/api/v1")
+app.include_router(info.router, prefix="/api/v1")
 
-def _user_data_root(app_name: str = "IBU") -> str:
-    """Benutzerschreibbarer Basisordner je OS."""
-    # Vorrang: Umgebungsvariable erlaubt Override
-    env = os.environ.get("IBU_DATA_ROOT")
-    if env:
-        return os.path.abspath(env)
+# Platform Routers
+app.include_router(dashboard.router, prefix="/api/v1")
+app.include_router(feedback.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
+app.include_router(apps.router, prefix="/api/v1")
+app.include_router(permissions.router, prefix="/api/v1")
+app.include_router(deployment.router, prefix="/api/v1")
 
-    if sys.platform.startswith("win"):
-        base = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-        return os.path.join(base, app_name)
-    elif sys.platform == "darwin":
-        # ~/Library/Application Support/IBU
-        return os.path.join(os.path.expanduser("~/Library/Application Support"), app_name)
-    else:
-        # ~/.local/share/IBU
-        return os.path.join(os.path.expanduser("~/.local/share"), app_name)
-
-
-def _choose_data_root(app_root: str) -> str:
-    """Wähle Datenablage:
-    - 'portable.flag' neben der EXE  -> APP-ROOT verwenden
-    - wenn APP-ROOT beschreibbar     -> APP-ROOT
-    - sonst                          -> benutzerspezifischer Datenordner
-    """
-    portable_flag = os.path.join(app_root, "portable.flag")
-    if os.path.isfile(portable_flag) or _is_dir_writable(app_root):
-        return app_root
-    return _user_data_root("IBU")
-
-
-# --- Pfade initialisieren, bevor andere Module importiert werden -------------
-APP_ROOT = _app_root()
-DATA_ROOT = _choose_data_root(APP_ROOT)
-
-# Arbeitsverzeichnis nur als „Startordner“ setzen (App-Root),
-# Datenpfad aber separat übergeben:
-os.chdir(APP_ROOT)
-
-# Für andere Module verfügbar machen
-os.environ["IBU_APP_ROOT"] = APP_ROOT
-os.environ["IBU_DATA_ROOT"] = DATA_ROOT
-
-# Schreibverzeichnisse sicherstellen (im DATA_ROOT!)
-for sub in ("data", "exports", "backups"):
-    try:
-        os.makedirs(os.path.join(DATA_ROOT, sub), exist_ok=True)
-    except Exception:
-        pass
-
-# --- Jetzt erst PyQt & unsere Views importieren ------------------------------
-from PyQt6.QtWidgets import QApplication
-from views.main_window import MainWindow
+# Initialize Database on Startup
+@app.on_event("startup")
+async def startup_event():
+    init_db()
 
 
-def main() -> None:
-    # (optional) High DPI Awareness für schärfere Fonts unter Windows
-    if sys.platform.startswith("win"):
-        try:
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        except Exception:
-            pass
-
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    app.setApplicationName("IBU – Dart Turnier Tool")
-    sys.exit(app.exec())
+@app.get("/")
+async def root():
+    return {
+        "message": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "docs": "/docs",
+        "api": "/api/v1"
+    }
 
 
-if __name__ == "__main__":
-    main()
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "backend",
+        "version": settings.APP_VERSION
+    }
+

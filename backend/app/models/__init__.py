@@ -8,6 +8,8 @@ from app.models.participant import Participant, TournamentParticipant
 from app.models.league import League, league_participants, league_tournaments
 from app.models.group import Group, GroupParticipant
 from app.models.match import GroupMatch, KnockoutMatch
+from app.models.location import Location, Spielfeld
+from app.models.access_request import AccessRequest
 from app.models.platform import (
     App, AppStatus,
     UserAppPermission,
@@ -23,6 +25,8 @@ __all__ = [
     "League", "league_participants", "league_tournaments",
     "Group", "GroupParticipant",
     "GroupMatch", "KnockoutMatch",
+    "Location", "Spielfeld",
+    "AccessRequest",
     # Platform Models
     "App", "AppStatus",
     "UserAppPermission",

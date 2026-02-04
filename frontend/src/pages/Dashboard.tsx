@@ -2,11 +2,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { tournamentService } from '../services/tournamentService';
+import { locationService } from '../services/locationService';
 import { Tournament } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { Button, Badge, Card, Input } from '../components/ui';
 import { theme } from '../theme/theme';
-import { Users, Plus, SignOut, Trash, ArrowSquareOut, Trophy, PlayCircle, CheckCircle, Calendar, MagnifyingGlass, Funnel } from 'phosphor-react';
+import { Users, Plus, SignOut, Trash, ArrowSquareOut, Trophy, PlayCircle, CheckCircle, Calendar, MagnifyingGlass, Funnel, MapPin } from 'phosphor-react';
+import Footer from '../components/Footer';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -23,6 +25,7 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'status'>('date');
+  const [locationNames, setLocationNames] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -34,14 +37,28 @@ export default function Dashboard() {
     loadVersion();
   }, [isAuthenticated, navigate]);
 
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const list = await locationService.getAll();
+        const map: Record<number, string> = {};
+        list.forEach(loc => { map[loc.id] = loc.name; });
+        setLocationNames(map);
+      } catch {
+        setLocationNames({});
+      }
+    };
+    load();
+  }, []);
+
   const loadVersion = async () => {
     try {
       // Temporarily disabled due to CORS issues
-      setAppVersion('1.4.0');
+      setAppVersion('1.4.1');
     } catch (err) {
       console.error('Failed to load version:', err);
       // Fallback to package.json version if API fails
-      setAppVersion('1.4.0');
+      setAppVersion('1.4.1');
     }
   };
 
@@ -77,6 +94,7 @@ export default function Dashboard() {
     setShowDeleteDialog(true);
     setDeleteConfirmText('');
     setDeleteError(null);
+    setDeleting(false);
   };
 
   const handleDeleteCancel = () => {
@@ -106,6 +124,7 @@ export default function Dashboard() {
       setDeleteTournamentId(null);
       setDeleteTournamentName('');
       setDeleteConfirmText('');
+      setDeleting(false);
     } catch (err: any) {
       setDeleteError(err.response?.data?.detail || 'Fehler beim Löschen des Turniers');
       setDeleting(false);
@@ -172,11 +191,16 @@ export default function Dashboard() {
 
   return (
     <div style={{ 
-      padding: '2rem', 
-      background: '#000000', 
+      display: 'flex',
+      flexDirection: 'column',
       minHeight: '100vh',
+      background: '#000000', 
       color: '#ffffff'
     }}>
+      <div style={{ 
+        padding: '2rem', 
+        flex: '1'
+      }}>
       {/* Header */}
       <div style={{ 
         display: 'flex', 
@@ -367,6 +391,16 @@ export default function Dashboard() {
           >
             <Trophy size={20} weight="bold" style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
             Meisterschaften
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => navigate('/locations')}
+            style={{ transition: 'transform 0.2s' }}
+            onMouseEnter={(e: any) => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseLeave={(e: any) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            <MapPin size={20} weight="bold" style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+            Spielorte
           </Button>
           <Button
             variant="success"
@@ -580,6 +614,12 @@ export default function Dashboard() {
                     <Calendar size={16} />
                     <span>{tournament.start_date}</span>
                   </div>
+                  {tournament.location_id && locationNames[tournament.location_id] && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: theme.colors.text.secondary, fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                      <MapPin size={16} />
+                      <span>{locationNames[tournament.location_id]}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Info */}
@@ -754,6 +794,8 @@ export default function Dashboard() {
           </Card>
         </div>
       )}
+      </div>
+      <Footer />
     </div>
   );
 }

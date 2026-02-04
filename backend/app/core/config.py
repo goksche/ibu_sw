@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     
     # App Info
     APP_NAME: str = "IBU Turniere API"
-    APP_VERSION: str = "1.4.0"
+    APP_VERSION: str = "1.4.1"
     DEBUG: bool = False
     
     # Database
@@ -43,7 +43,11 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM: Optional[str] = None
     SMTP_USE_TLS: bool = True
-    
+
+    # Zugangs-Anfragen (Landing Page): E-Mail-Benachrichtigung
+    ACCESS_REQUEST_FROM_EMAIL: str = "noreply@gsmartsol.ch"
+    ACCESS_REQUEST_TO_EMAIL: str = "goksche23@gmail.com"
+
     # CORS (komma-separierte Liste als String) - Allow all for local development
     CORS_ORIGINS: str = "*"
     

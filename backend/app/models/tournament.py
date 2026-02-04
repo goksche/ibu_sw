@@ -128,6 +128,7 @@ class Tournament(Base):
     # Settings
     show_matches = Column(Boolean, default=True, nullable=False)
     show_tables = Column(Boolean, default=True, nullable=False)
+    spielfeld_assignment_mode = Column(String(20), default='random', nullable=True)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -135,7 +136,9 @@ class Tournament(Base):
     
     # Foreign Keys
     creator_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    location_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True)
     
     # Relationships
     creator = relationship("User", backref="tournaments")
+    location = relationship("Location", backref="tournaments")
 

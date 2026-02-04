@@ -8,11 +8,12 @@ from typing import List
 from app.core.database import get_db
 from app.core.dependencies import require_user_or_admin, require_viewer_or_above
 from app.models import GroupMatch, KnockoutMatch, Tournament, Group, Participant, User
+from app.models.tournament import TournamentStatus
 from app.schemas.match import (
     GroupMatchCreate, GroupMatchUpdate, GroupMatchResponse,
     KnockoutMatchCreate, KnockoutMatchUpdate, KnockoutMatchResponse
 )
-from app.services.ko_propagation import save_ko_result_and_propagate, ensure_bronze_from_semis
+from app.services.ko_propagation import save_ko_result_and_propagate, ensure_bronze_from_semis, can_enter_ko_result
 
 router = APIRouter()
 
@@ -25,6 +26,17 @@ def check_tournament_access(db: Session, tournament_id: int):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tournament not found"
+        )
+    return tournament
+
+
+def check_tournament_editable(db: Session, tournament_id: int):
+    """Check tournament exists and is not completed (for write operations)."""
+    tournament = check_tournament_access(db, tournament_id)
+    if tournament.status == TournamentStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Turnier ist abgeschlossen; Änderungen sind nicht mehr möglich"
         )
     return tournament
 
@@ -55,7 +67,7 @@ def create_group_match(
     db: Session = Depends(get_db),
 ):
     """Create a new group match"""
-    check_tournament_access(db, match.tournament_id)
+    check_tournament_editable(db, match.tournament_id)
     
     # Check if group exists
     group = db.query(Group).filter(Group.id == match.group_id).first()
@@ -120,9 +132,9 @@ def update_group_match(
             detail="Match not found"
         )
     
-    check_tournament_access(db, db_match.tournament_id)
+    check_tournament_editable(db, db_match.tournament_id)
     
-    # Update fields
+    # Update fields ??? Gruppenspiele: Ergebnisse jederzeit eintragen und anpassen erlauben
     update_data = match_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_match, field, value)
@@ -181,7 +193,7 @@ def create_knockout_match(
     db: Session = Depends(get_db),
 ):
     """Create a new knockout match"""
-    check_tournament_access(db, match.tournament_id)
+    check_tournament_editable(db, match.tournament_id)
     
     # Check if match already exists
     existing = db.query(KnockoutMatch).filter(
@@ -237,33 +249,47 @@ def update_knockout_match(
             detail="Match not found"
         )
     
-    check_tournament_access(db, db_match.tournament_id)
+    check_tournament_editable(db, db_match.tournament_id)
     
     # Update fields
     update_data = match_update.model_dump(exclude_unset=True)
+    if "score1" in update_data or "score2" in update_data:
+        setting_result = (
+            update_data.get("score1") is not None or update_data.get("score2") is not None
+        )
+        if setting_result:
+            if not can_enter_ko_result(db, db_match):
+                if db_match.player1_id is None and db_match.player2_id is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Keine Paarung ??? bitte zuerst diese Runde auslosen (Button Runde auslosen)."
+                    )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Ergebnis kann erst eingetragen werden, wenn die Vorrunde abgeschlossen ist."
+                )
     for field, value in update_data.items():
         setattr(db_match, field, value)
     
-    db.commit()
-    db.refresh(db_match)
-    
-    # Propagate if scores changed
-    # Handle byes: if one player is None (bye), automatically set score to 3:0
+    # Bye-Matches: Wenn ein Gegner leer ist, automatisch 3:0 setzen und merken,
+    # damit der Gewinner in die nächste Runde übernommen wird (vor dem Commit).
     if db_match.player1_id is None and db_match.player2_id is not None:
-        # Player 2 has a bye, automatically wins 3:0
         if db_match.score1 is None or db_match.score2 is None:
             db_match.score1 = 0
             db_match.score2 = 3
             update_data['score1'] = 0
             update_data['score2'] = 3
     elif db_match.player2_id is None and db_match.player1_id is not None:
-        # Player 1 has a bye, automatically wins 3:0
         if db_match.score1 is None or db_match.score2 is None:
             db_match.score1 = 3
             db_match.score2 = 0
             update_data['score1'] = 3
             update_data['score2'] = 0
     
+    db.commit()
+    db.refresh(db_match)
+    
+    # Propagation auslösen wenn Scores gesetzt (inkl. Bye) oder geändert
     if 'score1' in update_data or 'score2' in update_data:
         save_ko_result_and_propagate(db, match_id, db_match.score1, db_match.score2)
         # Try to ensure bronze match
@@ -287,7 +313,7 @@ def delete_knockout_match(
             detail="Match not found"
         )
     
-    check_tournament_access(db, db_match.tournament_id)
+    check_tournament_editable(db, db_match.tournament_id)
     
     db.delete(db_match)
     db.commit()

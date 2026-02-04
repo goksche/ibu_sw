@@ -15,6 +15,7 @@ export interface GroupMatch extends MatchBase {
   score1: number | null;
   score2: number | null;
   is_decision_match: boolean;
+  spielfeld_id: number | null;
 }
 
 export interface KnockoutMatch extends MatchBase {
@@ -24,6 +25,7 @@ export interface KnockoutMatch extends MatchBase {
   player2_id: number | null;
   score1: number | null;
   score2: number | null;
+  spielfeld_id: number | null;
 }
 
 export interface GroupMatchCreate {
@@ -38,8 +40,9 @@ export interface GroupMatchCreate {
 export interface GroupMatchUpdate {
   player1_id?: number;
   player2_id?: number;
-  score1?: number;
-  score2?: number;
+  score1?: number | null;
+  score2?: number | null;
+  spielfeld_id?: number | null;
 }
 
 export interface KnockoutMatchCreate {
@@ -55,6 +58,7 @@ export interface KnockoutMatchUpdate {
   player2_id?: number;
   score1?: number;
   score2?: number;
+  spielfeld_id?: number | null;
 }
 
 // API Calls

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { tournamentService } from '../../services/tournamentService';
+import { locationService } from '../../services/locationService';
 import { participantService } from '../../services/participantService';
 import { groupService, GroupWithParticipants } from '../../services/groupService';
 import { Tournament, Participant } from '../../types';
@@ -26,10 +27,34 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
   const [generating, setGenerating] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_generateResult, setGenerateResult] = useState<{message: string, groups_processed?: number, matches_created?: number, groups_created?: number, participants_assigned?: number, distribution_method?: string} | null>(null);
+  const [spielfeldIdToName, setSpielfeldIdToName] = useState<Record<number, string>>({});
 
   useEffect(() => {
     loadData();
   }, [tournamentId]);
+
+  useEffect(() => {
+    if (!tournament.location_id) {
+      setSpielfeldIdToName({});
+      return;
+    }
+    const loadLocations = async () => {
+      try {
+        const locations = await locationService.getAll();
+        const loc = locations.find(l => l.id === tournament.location_id);
+        if (loc?.spielfelder) {
+          const map: Record<number, string> = {};
+          loc.spielfelder.forEach(s => { map[s.id] = s.name; });
+          setSpielfeldIdToName(map);
+        } else {
+          setSpielfeldIdToName({});
+        }
+      } catch {
+        setSpielfeldIdToName({});
+      }
+    };
+    loadLocations();
+  }, [tournament.location_id]);
 
   const loadData = async () => {
     try {
@@ -163,6 +188,20 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
       alert(err.response?.data?.detail || 'Fehler beim Generieren des KO-Brackets');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const spielfelderList = tournament.location_id
+    ? Object.entries(spielfeldIdToName).map(([id, name]) => ({ id: Number(id), name }))
+    : [];
+
+  const handleGroupSpielfeldChange = async (groupId: number, spielfeldId: number | null) => {
+    try {
+      await groupService.updateGroup(groupId, { spielfeld_id: spielfeldId });
+      loadData();
+    } catch (err) {
+      console.error('Failed to update group spielfeld:', err);
+      alert('Fehler beim Speichern des Spielfelds');
     }
   };
 
@@ -312,6 +351,46 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
               </div>
 
               <div style={{ padding: '1rem' }}>
+                {tournament.spielfeld_assignment_mode === 'group_fixed' && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ 
+                      display: 'block', 
+                      marginBottom: '0.35rem', 
+                      fontSize: '0.875rem', 
+                      color: theme.colors.text.secondary 
+                    }}>
+                      Spielfeld (Gruppe)
+                    </label>
+                    {spielfelderList.length > 0 ? (
+                      <select
+                        value={group.spielfeld_id ?? ''}
+                        onChange={(e) => handleGroupSpielfeldChange(
+                          group.id,
+                          e.target.value === '' ? null : Number(e.target.value)
+                        )}
+                        style={{ 
+                          width: '100%', 
+                          padding: '0.5rem', 
+                          border: `1px solid ${theme.colors.border.standard}`, 
+                          borderRadius: theme.borderRadius.input,
+                          background: theme.colors.background.secondary,
+                          color: theme.colors.text.primary
+                        }}
+                      >
+                        <option value="">– Kein Spielfeld –</option>
+                        {spielfelderList.map((sf) => (
+                          <option key={sf.id} value={sf.id}>
+                            {sf.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div style={{ color: theme.colors.text.disabled, fontSize: '0.875rem' }}>
+                        Keine Spielfelder verfügbar (Location fehlt oder hat keine Spielfelder)
+                      </div>
+                    )}
+                  </div>
+                )}
                 <h3 style={{ 
                   marginBottom: '0.5rem', 
                   fontSize: '0.875rem', 

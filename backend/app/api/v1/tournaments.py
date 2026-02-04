@@ -2,6 +2,7 @@
 # v1.2.0-alpha.2
 
 import math
+import random
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.orm import Session
 from typing import List, Dict, Tuple, Optional
@@ -15,6 +16,7 @@ from app.models.tournament import Tournament, TournamentMode
 from app.models.group import Group, GroupParticipant
 from app.models.match import GroupMatch, KnockoutMatch
 from app.models.participant import TournamentParticipant, Participant
+from app.models.location import Spielfeld
 from app.services.round_robin import generate_round_robin_rounds, validate_round_robin_participants
 from app.services.group_distribution import distribute_participants_random, distribute_participants_seeded, validate_distribution
 from app.services.ko_bracket import generate_ko_bracket_from_groups, generate_ko_bracket_from_participants
@@ -23,6 +25,22 @@ from app.services.decision_matches import compute_ranking_with_decision_matches,
 from app.models.tournament import KOStartRound
 
 router = APIRouter(prefix="/tournaments", tags=["Tournaments"])
+
+
+def ensure_tournament_editable(db: Session, tournament_id: int) -> Tournament:
+    """Raise 404 if tournament not found, 403 if status is COMPLETED. Return tournament otherwise."""
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tournament with ID {tournament_id} not found"
+        )
+    if tournament.status == TournamentStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Turnier ist abgeschlossen; Änderungen sind nicht mehr möglich"
+        )
+    return tournament
 
 
 class ManualKOPair(BaseModel):
@@ -126,12 +144,7 @@ async def update_tournament(
     db: Session = Depends(get_db)
 ):
     """Update a tournament. Groups and matches are deleted if configuration changes."""
-    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
-    if not tournament:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tournament with ID {tournament_id} not found"
-        )
+    tournament = ensure_tournament_editable(db, tournament_id)
     
     # Fields that require deletion of groups/matches if changed
     config_fields = [
@@ -173,12 +186,7 @@ async def delete_tournament(
     db: Session = Depends(get_db)
 ):
     """Delete a tournament (CASCADE deletes all related data) - DEPRECATED: Use POST /{tournament_id}/delete instead"""
-    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
-    if not tournament:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tournament with ID {tournament_id} not found"
-        )
+    tournament = ensure_tournament_editable(db, tournament_id)
     
     db.delete(tournament)
     db.commit()
@@ -192,12 +200,7 @@ async def delete_tournament(
     db: Session = Depends(get_db)
 ):
     """Delete a tournament (CASCADE deletes all related data)"""
-    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
-    if not tournament:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tournament with ID {tournament_id} not found"
-        )
+    tournament = ensure_tournament_editable(db, tournament_id)
     
     # Delete all related data manually (CASCADE in SQLAlchemy doesn't always work as expected)
     # Delete KO matches
@@ -227,14 +230,7 @@ async def generate_round_robin_matches(
     db: Session = Depends(get_db)
 ):
     """Generate Round Robin matches for all groups in a tournament"""
-    
-    # Check tournament exists
-    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
-    if not tournament:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tournament with ID {tournament_id} not found"
-        )
+    tournament = ensure_tournament_editable(db, tournament_id)
     
     # Get all groups for tournament
     groups = db.query(Group).filter(Group.tournament_id == tournament_id).all()
@@ -244,11 +240,25 @@ async def generate_round_robin_matches(
             detail="Keine Gruppen vorhanden. Bitte zuerst Gruppen erstellen."
         )
     
+    spielfeld_ids: List[int] = []
+    if tournament.location_id:
+        spielfelder = (
+            db.query(Spielfeld)
+            .filter(Spielfeld.location_id == tournament.location_id)
+            .order_by(Spielfeld.sort_order, Spielfeld.id)
+            .all()
+        )
+        spielfeld_ids = [s.id for s in spielfelder]
+    
+    assignment_mode = tournament.spielfeld_assignment_mode or 'random'
+    rng = random.Random(tournament.ko_random_seed) if tournament.ko_random_seed is not None else random.Random()
+    
     # Delete existing matches
     db.query(GroupMatch).filter(GroupMatch.tournament_id == tournament_id).delete()
     
     # Generate matches for each group
     total_matches = 0
+    matches_to_assign: List[Tuple[int, int, int, GroupMatch]] = []
     for group in groups:
         # Get participants in this group
         participant_ids = [gp.participant_id for gp in group.participants]
@@ -278,9 +288,33 @@ async def generate_round_robin_matches(
                     player2_id=player2_id
                 )
                 db.add(match)
+                matches_to_assign.append((round_idx, group.id, match_no, match))
                 total_matches += 1
                 match_no += 1
-    
+
+    if spielfeld_ids:
+        if assignment_mode == 'group_random':
+            group_to_spielfeld = {g.id: rng.choice(spielfeld_ids) for g in groups}
+            for _, group_id, __, match in matches_to_assign:
+                match.spielfeld_id = group_to_spielfeld.get(group_id)
+        elif assignment_mode == 'group_fixed':
+            group_to_spielfeld = {g.id: g.spielfeld_id for g in groups}
+            for _, group_id, __, match in matches_to_assign:
+                match.spielfeld_id = group_to_spielfeld.get(group_id)
+        else:
+            spielfeld_counts = {sid: 0 for sid in spielfeld_ids}
+            for _, group_id, match_no, match in sorted(
+                matches_to_assign,
+                key=lambda item: (item[0], item[1], item[2])
+            ):
+                if match.player1_id is None or match.player2_id is None:
+                    continue
+                min_count = min(spielfeld_counts.values())
+                candidates = [sid for sid, count in spielfeld_counts.items() if count == min_count]
+                chosen = rng.choice(candidates)
+                match.spielfeld_id = chosen
+                spielfeld_counts[chosen] += 1
+
     db.commit()
     
     return {
@@ -296,14 +330,7 @@ async def generate_groups_and_distribute(
     db: Session = Depends(get_db)
 ):
     """Generate groups and randomly distribute participants"""
-    
-    # Check tournament exists
-    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
-    if not tournament:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tournament with ID {tournament_id} not found"
-        )
+    tournament = ensure_tournament_editable(db, tournament_id)
     
     # Get participants registered for this tournament
     tournament_participants = db.query(TournamentParticipant).filter(
@@ -389,13 +416,7 @@ async def auto_distribute_groups(
     Automatically distribute tournament participants into groups.
     Creates groups if they don't exist and generates Round Robin matches.
     """
-    # Check tournament exists
-    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
-    if not tournament:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tournament with ID {tournament_id} not found"
-        )
+    tournament = ensure_tournament_editable(db, tournament_id)
     
     # Get tournament participants
     tournament_participants = db.query(TournamentParticipant).filter(
@@ -909,12 +930,7 @@ async def create_manual_ko_bracket(
     db: Session = Depends(get_db)
 ):
     """Create KO bracket from manual pairings (knockout mode only)."""
-    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
-    if not tournament:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tournament with ID {tournament_id} not found"
-        )
+    tournament = ensure_tournament_editable(db, tournament_id)
 
     if not tournament.has_ko_phase:
         raise HTTPException(
@@ -1052,12 +1068,7 @@ async def duplicate_tournament(
     db: Session = Depends(get_db)
 ):
     """Duplicate a tournament (only configuration, no participants/groups/matches)"""
-    original = db.query(Tournament).filter(Tournament.id == tournament_id).first()
-    if not original:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tournament with ID {tournament_id} not found"
-        )
+    original = ensure_tournament_editable(db, tournament_id)
     
     # Create new tournament with copied settings
     new_tournament_data = {
@@ -1104,12 +1115,7 @@ async def set_tournament_template(
     db: Session = Depends(get_db)
 ):
     """Set or unset tournament as template"""
-    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
-    if not tournament:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tournament with ID {tournament_id} not found"
-        )
+    tournament = ensure_tournament_editable(db, tournament_id)
     
     tournament.is_template = is_template
     db.commit()
@@ -1125,12 +1131,7 @@ async def set_seeded_participants(
     db: Session = Depends(get_db)
 ):
     """Set seeded participants for a tournament"""
-    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
-    if not tournament:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tournament with ID {tournament_id} not found"
-        )
+    tournament = ensure_tournament_editable(db, tournament_id)
     
     # Validate that tournament has groups and seeded distribution
     if tournament.group_distribution != 'seeded':
@@ -1476,12 +1477,7 @@ async def set_manual_qualification_selection(
     from app.models.tournament import LeagueScoringSystem
     from app.services.qualification import rank_candidates_with_keys
 
-    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
-    if not tournament:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tournament with ID {tournament_id} not found"
-        )
+    tournament = ensure_tournament_editable(db, tournament_id)
 
     if not tournament.has_group_phase:
         raise HTTPException(

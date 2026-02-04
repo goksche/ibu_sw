@@ -18,6 +18,6 @@ COPY . .
 # Expose port
 EXPOSE 3000
 
-# Default command (will be overridden by docker-compose)
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+# node ausführen vermeidet Exit 126 (kein direkter Binary-Aufruf)
+CMD ["node", "node_modules/vite/bin/vite.js", "--port", "3000", "--host", "0.0.0.0"]
 

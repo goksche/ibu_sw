@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Card, Input, Button } from '../components/ui';
 import { theme } from '../theme/theme';
 import { Envelope, Key } from 'phosphor-react';
+import Footer from '../components/Footer';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -65,13 +66,20 @@ export default function Login() {
     <div
       style={{
         display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
+        flexDirection: 'column',
         minHeight: '100vh',
         background: theme.colors.background.primary,
       }}
     >
-      <Card style={{ width: '400px' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          flex: '1',
+        }}
+      >
+        <Card style={{ width: '400px' }}>
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
           <h1
             style={{
@@ -189,6 +197,8 @@ export default function Login() {
           </form>
         )}
       </Card>
+      </div>
+      <Footer />
     </div>
   );
 }

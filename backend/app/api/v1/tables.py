@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Tuple
 
 from app.core.database import get_db
 from app.core.dependencies import require_user_or_admin, require_viewer_or_above
-from app.models.tournament import Tournament, LeagueScoringSystem
+from app.models.tournament import Tournament, TournamentStatus, LeagueScoringSystem
 from app.models.group import Group
 from app.models.match import GroupMatch, KnockoutMatch
 from app.models.participant import TournamentParticipant, Participant
@@ -15,6 +15,22 @@ from app.models.group import Group
 from app.services.decision_matches import compute_ranking_with_decision_matches, compute_group_stats, compute_group_ranking_with_rules
 
 router = APIRouter()
+
+
+def _ensure_tournament_editable(db: Session, tournament_id: int) -> Tournament:
+    """Raise 404 if tournament not found, 403 if status is COMPLETED."""
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tournament with ID {tournament_id} not found"
+        )
+    if tournament.status == TournamentStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Turnier ist abgeschlossen; Änderungen sind nicht mehr möglich"
+        )
+    return tournament
 
 
 def _compute_ranking_from_stats_for_table(
@@ -175,6 +191,8 @@ def _create_mini_table_for_tie_group(
         for rule in applicable_rules:
             if rule == 'wins':
                 rule_key.append(stats['wins'])
+            elif rule == 'diff':
+                rule_key.append(stats['diff'])
 
         entry = {
             'participant_id': pid,
@@ -209,8 +227,16 @@ def _create_mini_table_for_tie_group(
         rule_groups.setdefault(entry['_rule_key'], []).append(entry['participant_id'])
     unresolved_tie_groups = [group for group in rule_groups.values() if len(group) > 1]
 
-    # Check if all participants are completely identical (after applying rules, excluding direct encounter)
-    is_completely_tied = len(rule_groups) == 1 and len(mini_table_entries) > 1
+    # "Komplett identisch" nur, wenn alle Teilnehmer in der Minitabelle in allen Statistiken
+    # übereinstimmen (Sp, S, U, N, LF, LA, Diff, ggf. Pkt) – nicht nur nach Tie-Breaker-Regeln
+    stat_keys = ['games', 'wins', 'draws', 'losses', 'goals_for', 'goals_against', 'diff']
+    if scoring_system == LeagueScoringSystem.POINTS:
+        stat_keys.append('points')
+    first = mini_table_entries[0] if mini_table_entries else {}
+    is_completely_tied = len(mini_table_entries) > 1 and all(
+        all(e.get(k) == first.get(k) for k in stat_keys)
+        for e in mini_table_entries
+    )
     
     # Remove sort key before returning
     for entry in mini_table_entries:
@@ -319,14 +345,33 @@ async def get_group_table(
         else:
             stats['scoring_value'] = stats.get('diff', 0)
     
-    # Find tie groups (participants with same scoring value and optional wins rule)
+    # Find tie groups for mini table: when direct_encounter is used, group only by scoring_value
+    # (points), so that all with same points get one mini table (Direktbegegnung = Kriterium Nr. 1).
+    # Otherwise group by scoring_value + wins/diff from rules before direct_encounter.
+    use_direct_encounter_for_tie_group = 'direct_encounter' in (tie_breaking_rules or [])
+
+    def _build_tie_key(stats: Dict) -> Tuple:
+        parts = [stats['scoring_value']]
+        for r in (tie_breaking_rules or []):
+            if r in ('direct_encounter', 'decision_match'):
+                continue
+            if r == 'wins':
+                parts.append(stats.get('wins', 0))
+            elif r == 'diff':
+                parts.append(stats.get('diff', 0))
+        return tuple(parts)
+
+    def _build_tie_group_key_for_mini_table(stats: Dict) -> Tuple:
+        """Key for grouping participants into one mini table. If direct_encounter is a rule,
+        everyone with the same points (or diff) is in one group; else use full tie key."""
+        if use_direct_encounter_for_tie_group:
+            return (stats['scoring_value'],)
+        return _build_tie_key(stats)
+
     tie_groups = {}
     for participant_id in group_participants:
-        scoring_value = all_stats[participant_id]['scoring_value']
-        if 'wins' in tie_breaking_rules:
-            tie_key = (scoring_value, all_stats[participant_id].get('wins', 0))
-        else:
-            tie_key = (scoring_value,)
+        st = all_stats[participant_id]
+        tie_key = _build_tie_group_key_for_mini_table(st)
         if tie_key not in tie_groups:
             tie_groups[tie_key] = []
         tie_groups[tie_key].append(participant_id)
@@ -345,12 +390,8 @@ async def get_group_table(
         # Check if this participant won a decision match
         won_decision_match = decision_winners.get(participant_id, False)
         
-        # Check if this participant is in a tie group with >2 participants
-        scoring_value = stats['scoring_value']
-        if 'wins' in tie_breaking_rules:
-            tie_key = (scoring_value, stats.get('wins', 0))
-        else:
-            tie_key = (scoring_value,)
+        # Check if this participant is in a tie group with >2 participants (same key as for mini table)
+        tie_key = _build_tie_group_key_for_mini_table(stats)
         tie_group = tie_groups.get(tie_key, [])
         is_in_tie_group = len(tie_group) > 2 and participant_id in tie_group
         
@@ -420,6 +461,7 @@ async def generate_decision_matches(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Group with ID {group_id} not found"
         )
+    _ensure_tournament_editable(db, group.tournament_id)
 
     created_matches = generate_decision_matches_for_group(db, group.tournament_id, group_id)
     return {
@@ -441,6 +483,7 @@ async def delete_decision_matches(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Group with ID {group_id} not found"
         )
+    _ensure_tournament_editable(db, group.tournament_id)
 
     deleted = db.query(GroupMatch).filter(
         GroupMatch.tournament_id == group.tournament_id,
@@ -474,6 +517,7 @@ async def generate_tie_break_playoff(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Group with ID {group_id} not found"
         )
+    _ensure_tournament_editable(db, group.tournament_id)
     
     # Validate participants belong to group
     group_participant_ids = [gp.participant_id for gp in group.participants]
@@ -561,6 +605,7 @@ async def resolve_tie_break_random(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Group with ID {group_id} not found"
         )
+    _ensure_tournament_editable(db, group.tournament_id)
     
     # Validate participants belong to group
     group_participant_ids = [gp.participant_id for gp in group.participants]
@@ -636,6 +681,7 @@ async def resolve_tie_break_manual(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Group with ID {group_id} not found"
         )
+    _ensure_tournament_editable(db, group.tournament_id)
     
     # Validate participants belong to group
     group_participant_ids = [gp.participant_id for gp in group.participants]
@@ -708,63 +754,41 @@ async def get_tournament_standings(
         )
     
     standings = []
-    
-    # Get KO phase results
-    if tournament.has_ko_phase:
-        # Get all KO matches
-        ko_matches = db.query(KnockoutMatch).filter(
-            KnockoutMatch.tournament_id == tournament_id
-        ).order_by(KnockoutMatch.round.desc(), KnockoutMatch.match_no.asc()).all()
-        
-        if not ko_matches:
-            return {
-                'tournament_id': tournament_id,
-                'standings': [],
-                'status': 'no_ko_matches'
-            }
-        
-        # Find final match (highest round != 99)
-        final_matches = [m for m in ko_matches if m.round != 99]
-        if not final_matches:
-            return {
-                'tournament_id': tournament_id,
-                'standings': [],
-                'status': 'no_final'
-            }
-        
+
+    # KO-Ergebnisse: Endrangliste aus Finale (und ggf. Bronze)
+    # Gilt für KO-Phase in combined sowie für reine KO-Turniere
+    ko_matches = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == tournament_id
+    ).order_by(KnockoutMatch.round.desc(), KnockoutMatch.match_no.asc()).all()
+
+    # Nur Hauptturnier-Finale (positive Runden, round 99 = Bronze ausnehmen)
+    final_matches = [m for m in ko_matches if m.round is not None and m.round > 0 and m.round != 99]
+    if final_matches:
         max_round = max(m.round for m in final_matches)
         final_match = next((m for m in final_matches if m.round == max_round), None)
-        
-        if not final_match or final_match.score1 is None or final_match.score2 is None:
-            return {
-                'tournament_id': tournament_id,
-                'standings': [],
-                'status': 'final_not_played'
-            }
-        
-        # Get champion and runner-up
-        if final_match.score1 > final_match.score2:
-            champion_id = final_match.player1_id
-            runnerup_id = final_match.player2_id
-        else:
-            champion_id = final_match.player2_id
-            runnerup_id = final_match.player1_id
-        
-        standings.append({'rank': 1, 'participant_id': champion_id})
-        standings.append({'rank': 2, 'participant_id': runnerup_id})
-        
-        # Get bronze match
-        bronze_match = next((m for m in ko_matches if m.round == 99), None)
-        if bronze_match and bronze_match.score1 is not None and bronze_match.score2 is not None:
-            if bronze_match.score1 > bronze_match.score2:
-                bronze_winner_id = bronze_match.player1_id
-                bronze_loser_id = bronze_match.player2_id
+        if final_match and final_match.score1 is not None and final_match.score2 is not None:
+            if final_match.score1 > final_match.score2:
+                champion_id = final_match.player1_id
+                runnerup_id = final_match.player2_id
             else:
-                bronze_winner_id = bronze_match.player2_id
-                bronze_loser_id = bronze_match.player1_id
-            
-            standings.append({'rank': 3, 'participant_id': bronze_winner_id})
-            standings.append({'rank': 4, 'participant_id': bronze_loser_id})
+                champion_id = final_match.player2_id
+                runnerup_id = final_match.player1_id
+            if champion_id:
+                standings.append({'rank': 1, 'participant_id': champion_id})
+            if runnerup_id:
+                standings.append({'rank': 2, 'participant_id': runnerup_id})
+            bronze_match = next((m for m in ko_matches if m.round == 99), None)
+            if bronze_match and bronze_match.score1 is not None and bronze_match.score2 is not None:
+                if bronze_match.score1 > bronze_match.score2:
+                    bronze_winner_id = bronze_match.player1_id
+                    bronze_loser_id = bronze_match.player2_id
+                else:
+                    bronze_winner_id = bronze_match.player2_id
+                    bronze_loser_id = bronze_match.player1_id
+                if bronze_winner_id:
+                    standings.append({'rank': 3, 'participant_id': bronze_winner_id})
+                if bronze_loser_id:
+                    standings.append({'rank': 4, 'participant_id': bronze_loser_id})
     
     # Get participant details
     participant_ids = [s['participant_id'] for s in standings if s.get('participant_id')]

@@ -1,10 +1,11 @@
 // KO Bracket Component - Visual Tournament Bracket Display
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { KnockoutMatch } from '../../services/matchService';
 import { Participant } from '../../types';
 import { theme } from '../../theme/theme';
 import { Button } from '../ui';
 import { tableService } from '../../services/tableService';
+import { tournamentService } from '../../services/tournamentService';
 
 interface KOBracketProps {
   matches: KnockoutMatch[];
@@ -13,13 +14,27 @@ interface KOBracketProps {
   editingMatchId?: number | null;
   drawMode?: string | null;
   tournamentId?: number;
+  koDistribution?: string | null;
+  onRefresh?: () => void;
+  presentationMode?: boolean;
 }
 
-export default function KOBracket({ matches, participants, onMatchEdit, editingMatchId: _editingMatchId, drawMode, tournamentId }: KOBracketProps) {
+export default function KOBracket({ matches, participants, onMatchEdit, editingMatchId: _editingMatchId, drawMode, tournamentId, koDistribution, onRefresh, presentationMode }: KOBracketProps) {
   // Layout toggle state (default to linear for brackets with >4 rounds)
   const [useLinearLayout, setUseLinearLayout] = useState<boolean | null>(null);
   // View mode: 'main' | 'consolation' | 'both' | 'left' | 'right' | 'full'
   const [viewMode, setViewMode] = useState<'main' | 'consolation' | 'both' | 'left' | 'right' | 'full'>('both');
+  
+  // Draw status for random_each_round mode
+  const [drawStatus, setDrawStatus] = useState<{
+    can_draw: boolean;
+    reason?: string;
+    current_round?: number;
+    next_round?: number;
+    winners_count?: number;
+  } | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawError, setDrawError] = useState<string | null>(null);
   
   // Create participant map for quick lookup
   const participantMap = new Map<number, Participant>();
@@ -44,9 +59,28 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
   const consolationMatches = matches.filter(m => m.round < 0);
   const hasConsolation = consolationMatches.length > 0;
   
+  // State for main tournament standings (Endrangliste)
+  const [mainStandings, setMainStandings] = useState<Array<{rank: number, participant_id: number, name: string}> | null>(null);
   // State for consolation standings
   const [consolationStandings, setConsolationStandings] = useState<Array<{rank: number, participant_id: number, name: string}> | null>(null);
-  
+
+  // Load main tournament standings when final is played (Endrangliste)
+  useEffect(() => {
+    if (tournamentId) {
+      tableService.getTournamentStandings(tournamentId)
+        .then(data => {
+          if (data.standings && data.standings.length > 0) {
+            setMainStandings(data.standings);
+          } else {
+            setMainStandings(null);
+          }
+        })
+        .catch(() => setMainStandings(null));
+    } else {
+      setMainStandings(null);
+    }
+  }, [tournamentId, matches]);
+
   // Load consolation standings if tournament has consolation bracket
   useEffect(() => {
     if (hasConsolation && tournamentId) {
@@ -75,6 +109,52 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
       setViewMode('both');
     }
   }, [hasConsolation]);
+
+  // Check draw status for random_each_round mode
+  const checkDrawStatus = useCallback(async () => {
+    if (!tournamentId || koDistribution !== 'random_each_round') {
+      setDrawStatus(null);
+      return;
+    }
+    
+    try {
+      const status = await tournamentService.getDrawStatus(tournamentId);
+      setDrawStatus(status);
+      setDrawError(null);
+    } catch (err) {
+      console.error('Failed to check draw status:', err);
+      setDrawStatus(null);
+    }
+  }, [tournamentId, koDistribution]);
+
+  useEffect(() => {
+    checkDrawStatus();
+  }, [checkDrawStatus, matches]);
+
+  // Handle manual draw for next round
+  const handleDrawNextRound = async () => {
+    if (!tournamentId || !drawStatus?.can_draw) return;
+    
+    setIsDrawing(true);
+    setDrawError(null);
+    
+    try {
+      const result = await tournamentService.drawNextRound(tournamentId);
+      if (result.status === 'success') {
+        // Refresh the bracket after successful draw
+        if (onRefresh) {
+          onRefresh();
+        }
+        // Re-check draw status
+        await checkDrawStatus();
+      }
+    } catch (err: any) {
+      console.error('Draw failed:', err);
+      setDrawError(err.response?.data?.detail || 'Auslosung fehlgeschlagen');
+    } finally {
+      setIsDrawing(false);
+    }
+  };
 
   // Group matches by round (main bracket)
   const matchesByRound = new Map<number, KnockoutMatch[]>();
@@ -332,9 +412,9 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
   const finalResult = getMatchResult(finalMatch);
   const bronzeResult = getMatchResult(bronzeMatch);
   const top4Placements = finalResult && bronzeResult ? [
-    { rank: 1, participantId: finalResult.winnerId, label: '🥇' },
-    { rank: 2, participantId: finalResult.loserId, label: '🥈' },
-    { rank: 3, participantId: bronzeResult.winnerId, label: '🥉' },
+    { rank: 1, participantId: finalResult.winnerId, label: presentationMode ? '1.' : '🥇' },
+    { rank: 2, participantId: finalResult.loserId, label: presentationMode ? '2.' : '🥈' },
+    { rank: 3, participantId: bronzeResult.winnerId, label: presentationMode ? '3.' : '🥉' },
     { rank: 4, participantId: bronzeResult.loserId, label: '4.' },
   ] : null;
 
@@ -397,7 +477,9 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
       width: '100%',
       boxSizing: 'border-box'
     }}>
-      {/* Layout Toggle */}
+      {/* Layout Toggle und Draw-Button – ausgeblendet im Präsentationsmodus */}
+      {!presentationMode && (
+      <>
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
@@ -547,6 +629,61 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
         </div>
       </div>
 
+      {/* Draw Next Round Button (for random_each_round mode) */}
+      {koDistribution === 'random_each_round' && drawStatus && (
+        <div style={{ 
+          marginBottom: '1rem',
+          padding: '1rem',
+          background: drawStatus.can_draw ? theme.colors.accent.success + '20' : theme.colors.background.secondary,
+          borderRadius: theme.borderRadius.card,
+          border: `1px solid ${drawStatus.can_draw ? theme.colors.accent.success : theme.colors.border.standard}`
+        }}>
+          {drawStatus.can_draw ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <div style={{ fontWeight: 'bold', color: theme.colors.text.primary, marginBottom: '0.25rem' }}>
+                  Runde {drawStatus.current_round} abgeschlossen
+                </div>
+                <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+                  {drawStatus.winners_count} Gewinner bereit für Runde {drawStatus.next_round}
+                </div>
+              </div>
+              <Button
+                onClick={handleDrawNextRound}
+                disabled={isDrawing}
+                variant="success"
+                style={{ 
+                  padding: '0.75rem 1.5rem',
+                  fontSize: '1rem',
+                  fontWeight: 'bold'
+                }}
+              >
+                {isDrawing ? 'Auslosung läuft...' : `Runde ${drawStatus.next_round} auslosen`}
+              </Button>
+            </div>
+          ) : (
+            <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+              <strong>Modus:</strong> Jede Runde neu auslosen
+              {drawStatus.reason && ` — ${drawStatus.reason}`}
+            </div>
+          )}
+          {drawError && (
+            <div style={{ 
+              marginTop: '0.5rem', 
+              padding: '0.5rem', 
+              background: theme.colors.accent.error + '20',
+              borderRadius: theme.borderRadius.input,
+              color: theme.colors.accent.error,
+              fontSize: '0.875rem'
+            }}>
+              {drawError}
+            </div>
+          )}
+        </div>
+      )}
+      </>
+      )}
+
       {/* Main Bracket and Consolation Bracket */}
       <div style={{ 
         display: 'flex', 
@@ -636,7 +773,7 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
                         fontSize: '0.8rem',
                         marginBottom: '0.5rem'
                       }}>
-                        Plätze 1–4
+                        {'Pl\u00E4tze 1-4'}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                         {top4Placements.map(entry => (
@@ -916,6 +1053,63 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
                     <div>
                       {sortedMatches.map(match => renderMatchBox(match, round))}
                     </div>
+                    
+                    {/* Endrangliste Hauptturnier nach dem Finale */}
+                    {isFinal && mainStandings && mainStandings.length > 0 && (
+                      <div style={{
+                        marginTop: '0.75rem',
+                        background: theme.colors.background.secondary,
+                        border: `1px solid ${theme.colors.border.standard}`,
+                        borderRadius: theme.borderRadius.card,
+                        padding: '0.75rem'
+                      }}>
+                        <div style={{
+                          textAlign: 'center',
+                          fontWeight: 'bold',
+                          color: theme.colors.text.primary,
+                          fontSize: '0.8rem',
+                          marginBottom: '0.5rem'
+                        }}>
+                          Endrangliste
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                          {mainStandings.map((standing: {rank: number, participant_id: number, name: string}) => (
+                            <div
+                              key={standing.participant_id}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '0.35rem 0.5rem',
+                                background: theme.colors.background.card,
+                                borderRadius: theme.borderRadius.card,
+                                border: `1px solid ${theme.colors.border.standard}`,
+                                fontSize: '0.75rem',
+                                color: theme.colors.text.primary
+                              }}
+                            >
+                              <span style={{ fontWeight: 'bold' }}>
+                                {standing.rank === 1 && '🥇'}
+                                {standing.rank === 2 && '🥈'}
+                                {standing.rank === 3 && '🥉'}
+                                {' '}
+                                {standing.rank}.
+                              </span>
+                              <span style={{
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                marginLeft: '0.5rem',
+                                flex: '1',
+                                textAlign: 'right'
+                              }}>
+                                {standing.name}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     
                     {/* Show consolation standings after final */}
                     {isFinal && consolationStandings && consolationStandings.length > 0 && (

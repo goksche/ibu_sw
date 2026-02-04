@@ -5,7 +5,8 @@ import { tournamentService } from '../services/tournamentService';
 import { authService } from '../services/authService';
 import { participantService } from '../services/participantService';
 import { qualificationService } from '../services/qualificationService';
-import { Tournament, Participant, LeagueVariant, KOStartRound, QualificationPlan } from '../types';
+import { locationService } from '../services/locationService';
+import { Tournament, Participant, LeagueVariant, KOStartRound, QualificationPlan, Location, KOStructure } from '../types';
 import { Button, Card, Input, Textarea } from '../components/ui';
 import { theme } from '../theme/theme';
 import { ArrowLeft } from 'phosphor-react';
@@ -41,7 +42,7 @@ export default function CreateTournament() {
     ko_start_round: null as KOStartRound | null,
     ko_fallback_qualifiers: null as Array<{position: number; count: number; selection: 'best'}> | null,
     ko_distribution: 'random_first_round' as KODrawModeValue,  // Deprecated, kept for backward compatibility
-    ko_structure: null as 'single_elimination' | 'single_elimination_with_third' | 'double_elimination' | 'group_then_single_ko' | 'group_then_double_ko' | 'ko_with_group_winner_advantage' | 'page_playoff' | null,
+    ko_structure: null as KOStructure | null,
     ko_draw_method: null as 'fixed_cross' | 'same_position_cross' | 'overall_seeding' | 'pot_system' | 'full_random' | 'bonus_draw_for_winners' | 'predefined_bracket' | 'manual' | null,
     ko_third_place_match: false,
     ko_group_winner_advantage: false,
@@ -54,13 +55,30 @@ export default function CreateTournament() {
     league_rounds_multiplier: 1,
     is_template: false,
     seeded_participant_ids: [] as number[],
+    location_id: null as number | null,
+    spielfeld_assignment_mode: 'random' as 'random' | 'group_fixed' | 'group_random',
   });
+  const [locations, setLocations] = useState<Location[]>([]);
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
       navigate('/login');
     }
   }, [navigate]);
+
+  // Load locations on mount
+  useEffect(() => {
+    const loadLocations = async () => {
+      try {
+        const locationList = await locationService.getAll();
+        setLocations(locationList);
+      } catch (err) {
+        console.warn('Spielorte konnten nicht geladen werden:', err);
+        setLocations([]);
+      }
+    };
+    loadLocations();
+  }, []);
 
   // Load templates on mount
   useEffect(() => {
@@ -218,6 +236,8 @@ export default function CreateTournament() {
         league_rounds_multiplier: template.league_rounds_multiplier || 1,
         is_template: false, // Don't copy the template flag
         seeded_participant_ids: template.seeded_participant_ids || [],
+        location_id: template.location_id ?? null,
+        spielfeld_assignment_mode: (template.spielfeld_assignment_mode as 'random' | 'group_fixed' | 'group_random') || 'random',
       });
     } catch (err) {
       console.error('Failed to load template:', err);
@@ -294,6 +314,7 @@ export default function CreateTournament() {
         league_rounds_multiplier: formData.mode === 'round_robin' && formData.league_variant === 'multiple' ? formData.league_rounds_multiplier : undefined,
         is_template: formData.is_template,
         seeded_participant_ids: formData.group_distribution === 'seeded' && formData.seeded_participant_ids.length > 0 ? formData.seeded_participant_ids : undefined,
+        location_id: formData.location_id || undefined,
       });
       navigate('/dashboard');
     } catch (err: any) {
@@ -346,13 +367,14 @@ export default function CreateTournament() {
   // Labels für Gleichstandsregeln
   const tieBreakingRuleLabels: Record<string, string> = {
     'wins': 'Siege',
+    'diff': 'Differenz',
     'direct_encounter': 'Direktbegegnung',
     'decision_match': 'Entscheidungsspiel'
   };
 
   // Verfügbare Gleichstandsregeln (abhängig von Wertungssystem)
   const getAvailableTieBreakingRules = () => {
-    return ['wins', 'direct_encounter', 'decision_match'];
+    return ['wins', 'diff', 'direct_encounter', 'decision_match'];
   };
 
   // Hilfsfunktionen für Reihenfolge der Gleichstandsregeln
@@ -486,6 +508,11 @@ export default function CreateTournament() {
       value: 'predefined_bracket', 
       label: 'Vorgegebener Turnierbaum', 
       description: 'Der KO-Baum steht bereits fest. Die Gruppenphase bestimmt nur, welche Teilnehmer welche Positionen im Bracket einnehmen. Struktur ist vorab definiert.' 
+    },
+    { 
+      value: 'manual', 
+      label: 'Manuelle Paarungen', 
+      description: 'Paarungen werden nach Abschluss der Gruppenphase mit den qualifizierten Teilnehmern festgelegt. Runde für Runde befüllbar (Runde 1 speichern, dann Runde 2, …).' 
     }
   ];
 
@@ -653,6 +680,56 @@ export default function CreateTournament() {
                 value={formData.end_date}
                 onChange={handleChange}
               />
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: theme.spacing.sm, fontWeight: 'bold', color: theme.colors.text.primary }}>
+                Spielort (optional)
+              </label>
+              <select
+                name="location_id"
+                value={formData.location_id ?? ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, location_id: e.target.value === '' ? null : Number(e.target.value) }))}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  fontSize: '1rem',
+                  background: theme.colors.background.secondary,
+                  color: theme.colors.text.primary,
+                  border: `1px solid ${theme.colors.border.standard}`,
+                  borderRadius: theme.borderRadius.input,
+                }}
+              >
+                <option value="">— Kein Spielort —</option>
+                {locations.map(loc => (
+                  <option key={loc.id} value={loc.id}>{loc.name}</option>
+                ))}
+              </select>
+              {formData.location_id != null && (formData.mode === 'round_robin' || formData.mode === 'combined') && (
+                <div style={{ marginTop: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: theme.spacing.sm, fontWeight: 'bold', color: theme.colors.text.primary }}>
+                    Spielfeld-Zuweisung (Gruppenphase)
+                  </label>
+                  <select
+                    name="spielfeld_assignment_mode"
+                    value={formData.spielfeld_assignment_mode}
+                    onChange={(e) => setFormData(prev => ({ ...prev, spielfeld_assignment_mode: e.target.value as 'random' | 'group_fixed' | 'group_random' }))}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      fontSize: '1rem',
+                      background: theme.colors.background.secondary,
+                      color: theme.colors.text.primary,
+                      border: `1px solid ${theme.colors.border.standard}`,
+                      borderRadius: theme.borderRadius.input,
+                    }}
+                  >
+                    <option value="random">Gesamtspielplan (fair) – rundenbasiert über alle Gruppen</option>
+                    <option value="group_fixed">Gruppen Zuweisung Fix – pro Gruppe ein Spielfeld (im Gruppen-Tab festlegen)</option>
+                    <option value="group_random">Gruppe Zufällig – jeder Gruppe zufällig ein Spielfeld</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             <div style={{ marginBottom: '1.5rem' }}>
@@ -1192,7 +1269,7 @@ export default function CreateTournament() {
                     value={formData.ko_random_seed || ''}
                     onChange={handleChange}
                     min={0}
-                    placeholder="Leer = automatisch"
+                    placeholder="Leer = zufällig"
                     style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: '4px' }}
                   />
                   <p style={{ marginTop: '0.25rem', fontSize: '0.75rem', color: theme.colors.text.secondary }}>
@@ -1204,8 +1281,9 @@ export default function CreateTournament() {
               {formData.ko_draw_method === 'manual' && (
                 <div style={{ marginBottom: '1rem', padding: '1rem', background: `${theme.colors.accent.warning}20`, borderRadius: '4px', border: '1px solid #ffc107' }}>
                   <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: theme.colors.accent.warning }}>
-                    Bei manueller Auslosung werden die Paarungen der ersten KO-Runde erst nach dem Hinzufügen der Teilnehmer festgelegt. 
-                    Sie können die Paarungen dann im Turnier-Bereich "Spiele" oder "KO-Phase" manuell definieren.
+                    {formData.mode === 'combined'
+                      ? 'Paarungen werden nach Abschluss der Gruppenphase mit den qualifizierten Teilnehmern festgelegt (Spiele → KO-Phase). Runde 1 speichern, dann Runde 2, …'
+                      : 'Die Paarungen der ersten KO-Runde werden im Turnier-Bereich "Spiele" / "KO-Phase" manuell festgelegt (Runde 1 speichern, dann Runde 2, …).'}
                   </p>
                 </div>
               )}

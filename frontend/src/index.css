@@ -50,3 +50,13 @@ button {
   border-radius: var(--border-radius-button);
   transition: all 0.2s ease;
 }
+/* Date-Input: Kalender-Popup sichtbar und nutzbar (z. B. bei dunklem Theme) */
+input[type=" date\] {
+ color-scheme: light;
+ min-height: 2.75rem;
+ cursor: pointer;
+}
+input[type=\date\]::-webkit-calendar-picker-indicator {
+ cursor: pointer;
+ opacity: 0.8;
+}

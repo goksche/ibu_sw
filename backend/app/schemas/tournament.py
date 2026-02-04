@@ -18,6 +18,7 @@ class TournamentBase(BaseModel):
     has_ko_phase: bool = False
     league_variant: LeagueVariant | None = LeagueVariant.CLASSIC
     league_rounds_multiplier: int | None = None
+    spielfeld_assignment_mode: str | None = Field(default=None, pattern='^(random|group_fixed|group_random)$')
 
 
 class TournamentCreate(TournamentBase):
@@ -45,6 +46,8 @@ class TournamentCreate(TournamentBase):
     seeded_participant_ids: list[int] | None = Field(default=None)
     show_matches: bool = True
     show_tables: bool = True
+    location_id: int | None = Field(default=None, description="Optional: Spielort für dieses Turnier")
+    spielfeld_assignment_mode: str | None = Field(default='random', pattern='^(random|group_fixed|group_random)$')
 
 
 class TournamentUpdate(BaseModel):
@@ -78,6 +81,8 @@ class TournamentUpdate(BaseModel):
     league_rounds_multiplier: int | None = Field(default=None, ge=1, le=10)
     show_matches: bool | None = None
     show_tables: bool | None = None
+    location_id: int | None = None
+    spielfeld_assignment_mode: str | None = Field(default=None, pattern='^(random|group_fixed|group_random)$')
 
 
 class TournamentDeleteRequest(BaseModel):
@@ -118,10 +123,12 @@ class TournamentResponse(TournamentBase):
     seeded_participant_ids: list[int] | None
     show_matches: bool
     show_tables: bool
+    location_id: int | None = None
+    spielfeld_assignment_mode: str | None = None
     created_at: datetime
     updated_at: datetime
     creator_id: int | None
-    
+
     class Config:
         from_attributes = True
 

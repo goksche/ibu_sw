@@ -18,6 +18,8 @@ export default function TournamentParticipants() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<number[]>([]);
   const [adding, setAdding] = useState(false);
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [participantSortBy, setParticipantSortBy] = useState<'first_name' | 'last_name'>('last_name');
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -79,7 +81,7 @@ export default function TournamentParticipants() {
   };
 
   const handleSelectAllAvailable = () => {
-    setSelectedParticipantIds(availableParticipants.map(participant => participant.id));
+    setSelectedParticipantIds(sortedAvailableParticipants.map(participant => participant.id));
   };
 
   const handleClearSelected = () => {
@@ -107,10 +109,25 @@ export default function TournamentParticipants() {
   const availableParticipants = allParticipants.filter(
     p => !tournamentParticipants.some(tp => tp.id === p.id)
   );
-  const sortedAvailableParticipants = [...availableParticipants].sort((a, b) => {
-    const firstCompare = a.first_name.localeCompare(b.first_name, 'de', { sensitivity: 'base' });
+  const searchLower = participantSearch.trim().toLowerCase();
+  const filteredAvailable = searchLower
+    ? availableParticipants.filter(
+        p =>
+          (p.first_name || '').toLowerCase().includes(searchLower) ||
+          (p.last_name || '').toLowerCase().includes(searchLower) ||
+          (p.club || '').toLowerCase().includes(searchLower) ||
+          (p.nickname || '').toLowerCase().includes(searchLower)
+      )
+    : availableParticipants;
+  const sortedAvailableParticipants = [...filteredAvailable].sort((a, b) => {
+    if (participantSortBy === 'last_name') {
+      const lastCompare = (a.last_name || '').localeCompare(b.last_name || '', 'de', { sensitivity: 'base' });
+      if (lastCompare !== 0) return lastCompare;
+      return (a.first_name || '').localeCompare(b.first_name || '', 'de', { sensitivity: 'base' });
+    }
+    const firstCompare = (a.first_name || '').localeCompare(b.first_name || '', 'de', { sensitivity: 'base' });
     if (firstCompare !== 0) return firstCompare;
-    return a.last_name.localeCompare(b.last_name, 'de', { sensitivity: 'base' });
+    return (a.last_name || '').localeCompare(b.last_name || '', 'de', { sensitivity: 'base' });
   });
 
   return (
@@ -159,8 +176,43 @@ export default function TournamentParticipants() {
           ) : (
             <>
               <p style={{ marginBottom: '1rem', color: '#666' }}>
-                Wählen Sie Teilnehmer aus (${selectedParticipantIds.length} ausgewählt):
+                Wählen Sie Teilnehmer aus ({selectedParticipantIds.length} ausgewählt):
               </p>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <input
+                  type="text"
+                  placeholder="Spieler suchen (Name, Verein, Spitzname)..."
+                  value={participantSearch}
+                  onChange={(e) => setParticipantSearch(e.target.value)}
+                  style={{ width: '100%', maxWidth: '400px', padding: '0.5rem 0.75rem', marginBottom: '0.5rem', display: 'block', border: '1px solid #ddd', borderRadius: '4px' }}
+                />
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.875rem', color: '#666' }}>Sortierung:</span>
+                  <button
+                    type="button"
+                    onClick={() => setParticipantSortBy('last_name')}
+                    style={{
+                      padding: '0.35rem 0.6rem', fontSize: '0.85rem',
+                      background: participantSortBy === 'last_name' ? '#007bff' : '#6c757d',
+                      color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'
+                    }}
+                  >
+                    Nachname
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setParticipantSortBy('first_name')}
+                    style={{
+                      padding: '0.35rem 0.6rem', fontSize: '0.85rem',
+                      background: participantSortBy === 'first_name' ? '#007bff' : '#6c757d',
+                      color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'
+                    }}
+                  >
+                    Vorname
+                  </button>
+                </div>
+              </div>
 
               <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem' }}>
                 <button

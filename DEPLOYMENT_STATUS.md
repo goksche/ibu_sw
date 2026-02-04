@@ -46,7 +46,7 @@ docker exec ibu_backend_prod curl -f http://localhost:8000/health
 
 Erwartete Ausgabe:
 ```json
-{"status":"healthy","service":"backend","version":"1.4.0"}
+{"status":"healthy","service":"backend","version":"1.4.1"}
 ```
 
 ## Bekannte Probleme

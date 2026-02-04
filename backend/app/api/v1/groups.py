@@ -8,6 +8,7 @@ from typing import List
 from app.core.database import get_db
 from app.core.dependencies import require_user_or_admin, require_viewer_or_above
 from app.models import Group, GroupParticipant, Tournament, Participant
+from app.models.tournament import TournamentStatus
 from app.schemas.group import (
     GroupCreate, GroupUpdate, GroupResponse, GroupWithParticipants,
     GroupParticipantAdd, GroupParticipantRemove
@@ -24,6 +25,17 @@ def check_tournament_access(db: Session, tournament_id: int):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tournament not found"
+        )
+    return tournament
+
+
+def check_tournament_editable(db: Session, tournament_id: int):
+    """Check tournament exists and is not completed (for write operations)."""
+    tournament = check_tournament_access(db, tournament_id)
+    if tournament.status == TournamentStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Turnier ist abgeschlossen; Änderungen sind nicht mehr möglich"
         )
     return tournament
 
@@ -48,7 +60,7 @@ def create_group(
     db: Session = Depends(get_db),
 ):
     """Create a new group for a tournament"""
-    check_tournament_access(db, group.tournament_id)
+    check_tournament_editable(db, group.tournament_id)
     
     # Check if group name already exists in tournament
     existing = db.query(Group).filter(
@@ -111,7 +123,7 @@ def update_group(
             detail="Group not found"
         )
     
-    check_tournament_access(db, db_group.tournament_id)
+    check_tournament_editable(db, db_group.tournament_id)
     
     # Update fields
     update_data = group_update.model_dump(exclude_unset=True)
@@ -138,7 +150,7 @@ def delete_group(
             detail="Group not found"
         )
     
-    check_tournament_access(db, db_group.tournament_id)
+    check_tournament_editable(db, db_group.tournament_id)
     
     db.delete(db_group)
     db.commit()
@@ -161,7 +173,7 @@ def add_participant_to_group(
             detail="Group not found"
         )
     
-    check_tournament_access(db, db_group.tournament_id)
+    check_tournament_editable(db, db_group.tournament_id)
     
     # Check if participant exists
     participant = db.query(Participant).filter(Participant.id == participant_add.participant_id).first()
@@ -217,7 +229,7 @@ def remove_participant_from_group(
             detail="Group not found"
         )
     
-    check_tournament_access(db, db_group.tournament_id)
+    check_tournament_editable(db, db_group.tournament_id)
     
     # Remove participant
     db_participant_group = db.query(GroupParticipant).filter(

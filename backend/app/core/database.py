@@ -47,7 +47,7 @@ def init_db():
             print("Skipping init_db (INIT_DB not set for Postgres)")
             return
     # Import all models
-    from app.models import user, tournament, participant, group, match, league
+    from app.models import user, tournament, participant, group, match, league, location, access_request
     from app.models.platform import app, permission, feedback, deployment
     Base.metadata.create_all(bind=engine)
     print("Database tables initialized")

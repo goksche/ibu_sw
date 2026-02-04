@@ -9,6 +9,11 @@ import Leagues from './pages/Leagues';
 import CreateLeague from './pages/CreateLeague';
 import LeagueDetail from './pages/LeagueDetail';
 import EditLeague from './pages/EditLeague';
+import Locations from './pages/Locations';
+import LiveTicker from './pages/LiveTicker';
+import LocationDetail from './pages/LocationDetail';
+import CreateLocation from './pages/CreateLocation';
+import EditLocation from './pages/EditLocation';
 import UserManagement from './pages/Admin/UserManagement';
 import { useAuth } from './contexts/AuthContext';
 
@@ -134,6 +139,50 @@ function AppRoutes() {
             )
           }
         />
+        <Route
+          path="/locations"
+          element={
+            isAuthenticated ? (
+              <Locations />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/locations/create"
+          element={
+            isAuthenticated && canEdit ? (
+              <CreateLocation />
+            ) : isAuthenticated ? (
+              <Navigate to="/locations" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/locations/:id"
+          element={
+            isAuthenticated ? (
+              <LocationDetail />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/locations/:id/edit"
+          element={
+            isAuthenticated && canEdit ? (
+              <EditLocation />
+            ) : isAuthenticated ? (
+              <Navigate to="/locations" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
         <Route 
           path="/participants" 
           element={
@@ -143,6 +192,16 @@ function AppRoutes() {
               <Navigate to="/login" replace />
             )
           } 
+        />
+        <Route
+          path="/tournaments/:id/ticker"
+          element={
+            isAuthenticated ? (
+              <LiveTicker />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
         <Route 
           path="/tournaments/:id" 

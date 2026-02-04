@@ -5,26 +5,17 @@ Alle wichtigen Änderungen an IBU Turniere werden in dieser Datei dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.3.3] - 2025-01-27
+## [1.4.1] - 2026-01-26
 
 ### Hinzugefügt
-- **Vereinfachtes Login-System**: Username/Password für lokale Entwicklung (kein OTP)
-- **Vollständige Benutzerverwaltung**: CRUD-Operationen für User-Management
-- **Persistente Datenspeicherung**: User-Änderungen werden in localStorage gespeichert
-- **Navigation verbessert**: Zurück-Buttons und intuitive Benutzerführung
-- **Neue UI-Komponenten**: Select, Input, Badge und andere wiederverwendbare Komponenten
-- **Platform-Management**: Erweiterte Verwaltungsfunktionen für Multi-Tenant-Deployment
+- **Gesamtspielplan**: Rundenbasierter Gesamt-Tab über alle Gruppen (nur Gruppenphase)
+- **Ergebnis-Editing**: Inline-Erfassung im Gesamtspielplan, synchron zur Gruppenansicht
+- **Spielfeld-Fairness**: Gleichmäßige Feldzuweisung über alle Gruppenrunden (nur bei Location)
+- **Turnier-Status Sperre**: Status „Abgeschlossen“ verhindert weitere Änderungen (Backend + Frontend)
 
 ### Geändert
-- **Authentifizierung robuster**: Verbessertes Token-Decoding mit Fallback-Mechanismen
-- **Formulare konsistent**: Einheitliche Label-Verwendung und Validierung
-- **UI/UX verbessert**: Bessere Benutzeroberfläche und Benutzererfahrung
-
-### Behoben
-- **Token-Decoding-Fehler**: Base64-Decoding für Mock-Tokens behoben
-- **Select-Komponenten**: Korrekte options-API-Implementierung
-- **Admin-Schutz**: Verhinderung versehentlicher Löschung von Admin-Users
-- **Navigation**: Korrekte Routing und Berechtigungsprüfungen
+- **Tab-UI**: „Spiele“ → „Gruppenspiele“; Reihenfolge vor „Gesamtspielplan“
+- **Platzhalter**: Ergebnisanzeige nutzt `-` statt `???`
 
 ## [1.4.0] - 2025-01-27
 
@@ -179,6 +170,7 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## Release-Status
 
+- **v1.4.1**: ✅ Stable - Gesamtspielplan & Turnier-Abschluss
 - **v1.4.0**: ✅ Stable - Tournament Management Improvements
 - **v1.3.0**: ✅ Stable - Group & Match Management Backend
 - **v1.2.0**: ✅ Stable - Web Interface Initial Release

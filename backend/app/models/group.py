@@ -19,9 +19,11 @@ class Group(Base):
     
     # Group Information
     name = Column(String(50), nullable=False)
+    spielfeld_id = Column(Integer, ForeignKey("spielfelder.id", ondelete="SET NULL"), nullable=True)
     
     # Relationships
     tournament = relationship("Tournament", backref="groups")
+    spielfeld = relationship("Spielfeld", backref="groups")
     participants = relationship(
         "GroupParticipant",
         back_populates="group",

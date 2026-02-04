@@ -1,5 +1,5 @@
 # Info API Endpoints
-# v1.4.0
+# v1.4.1
 
 from fastapi import APIRouter
 from app.core.config import settings

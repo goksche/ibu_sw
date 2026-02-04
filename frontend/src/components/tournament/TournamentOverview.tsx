@@ -4,12 +4,15 @@ import { theme } from '../../theme/theme';
 
 interface TournamentOverviewProps {
   tournament: Tournament;
+  /** Name des zugewiesenen Spielorts (falls Turnier einen Spielort hat) */
+  locationName?: string | null;
 }
 
-export default function TournamentOverview({ tournament }: TournamentOverviewProps) {
+export default function TournamentOverview({ tournament, locationName }: TournamentOverviewProps) {
   // Labels für Gleichstandsregeln
   const tieBreakingRuleLabels: Record<string, string> = {
     'wins': 'Siege',
+    'diff': 'Differenz',
     'direct_encounter': 'Direktbegegnung',
     'decision_match': 'Entscheidungsspiel'
   };
@@ -33,7 +36,8 @@ export default function TournamentOverview({ tournament }: TournamentOverviewPro
     'pot_system': 'Topf-System (teilweise Zufall)',
     'full_random': 'Vollzufällige Auslosung mit Sperrregeln',
     'bonus_draw_for_winners': 'Bonus-Auslosung für Gruppensieger',
-    'predefined_bracket': 'Vorgegebener Turnierbaum'
+    'predefined_bracket': 'Vorgegebener Turnierbaum',
+    'manual': 'Manuell'
   };
 
   const koDrawModeLabels: Record<string, string> = {
@@ -95,6 +99,13 @@ export default function TournamentOverview({ tournament }: TournamentOverviewPro
               <div style={{ fontSize: '1.125rem', fontWeight: '600', color: theme.colors.text.primary }}>{tournament.end_date}</div>
             </div>
           )}
+
+          <div style={{ background: theme.colors.background.secondary, padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border.standard}` }}>
+            <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>Spielort</div>
+            <div style={{ fontSize: '1.125rem', fontWeight: '600', color: theme.colors.text.primary }}>
+              {locationName || '—'}
+            </div>
+          </div>
         </div>
         
         {tournament.description && (
@@ -378,6 +389,7 @@ export default function TournamentOverview({ tournament }: TournamentOverviewPro
                     {tournament.ko_draw_method === 'full_random' && 'Alle kommen in einen Topf und werden zufällig gezogen, gewisse Begegnungen sind verboten.'}
                     {tournament.ko_draw_method === 'bonus_draw_for_winners' && 'Wer seine Gruppe gewinnt, bekommt in der ersten KO-Runde bewusst einen leichteren Gegner.'}
                     {tournament.ko_draw_method === 'predefined_bracket' && 'Der Turnierbaum steht schon vorher fest, die Gruppenphase entscheidet nur über die Position darin.'}
+                    {tournament.ko_draw_method === 'manual' && 'Paarungen werden im Turnier-Bereich „Spiele“ / „KO-Phase“ manuell festgelegt (Runde 1 speichern, dann Runde 2, …).'}
                   </div>
                 </div>
               )}
@@ -393,7 +405,8 @@ export default function TournamentOverview({ tournament }: TournamentOverviewPro
                 </div>
               )}
               
-              {tournament.ko_first_round_size && (
+              {/* Erste KO-Runde nur anzeigen, wenn keine KO-Start-Runde gesetzt ist (sonst kommt die Info von „KO-Start-Runde“) */}
+              {!tournament.ko_start_round && tournament.ko_first_round_size && (
                 <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
                   <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
                     Erste KO-Runde

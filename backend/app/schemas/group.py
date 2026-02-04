@@ -13,17 +13,20 @@ class GroupBase(BaseModel):
 class GroupCreate(GroupBase):
     """Schema for creating a group"""
     tournament_id: int = Field(..., description="Tournament ID")
+    spielfeld_id: Optional[int] = Field(None, description="Spielfeld/Board ID")
 
 
 class GroupUpdate(BaseModel):
     """Schema for updating a group"""
     name: Optional[str] = Field(None, min_length=1, max_length=50, description="Group name")
+    spielfeld_id: Optional[int] = Field(None, description="Spielfeld/Board ID")
 
 
 class GroupResponse(GroupBase):
     """Schema for group response"""
     id: int
     tournament_id: int
+    spielfeld_id: Optional[int] = None
     
     class Config:
         from_attributes = True

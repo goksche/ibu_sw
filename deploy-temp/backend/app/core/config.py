@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     
     # App Info
     APP_NAME: str = "IBU Turniere API"
-    APP_VERSION: str = "1.4.0"
+    APP_VERSION: str = "1.4.1"
     DEBUG: bool = False
     
     # Database

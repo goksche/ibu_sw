@@ -18,7 +18,7 @@
 5. ✅ **Backend erfolgreich deployed**
    - PostgreSQL läuft (healthy)
    - Backend läuft (healthy)
-   - Health-Check funktioniert: `{"status":"healthy","service":"backend","version":"1.4.0"}`
+   - Health-Check funktioniert: `{"status":"healthy","service":"backend","version":"1.4.1"}`
 6. ✅ **Port 80 Konflikt gelöst**
    - Nginx läuft als Container `ibu_sw` (intern)
    - Caddy leitet Traffic weiter (Port 80/443)

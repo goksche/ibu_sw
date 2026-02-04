@@ -11,6 +11,7 @@ export interface User {
 export type KOStructure = 
   | 'single_elimination'
   | 'single_elimination_with_third'
+  | 'consolation_bracket'
   | 'double_elimination'
   | 'group_then_single_ko'
   | 'group_then_double_ko'
@@ -91,9 +92,28 @@ export interface Tournament {
   seeded_participant_ids: number[] | null;
   show_matches: boolean;
   show_tables: boolean;
+  location_id: number | null;
+  spielfeld_assignment_mode?: string;
   created_at: string;
   updated_at: string;
   creator_id: number | null;
+}
+
+export interface Spielfeld {
+  id: number;
+  location_id: number;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Location {
+  id: number;
+  name: string;
+  spielfelder: Spielfeld[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface LeagueParticipantSummary {
@@ -200,6 +220,7 @@ export interface Group {
   id: number;
   tournament_id: number;
   name: string;
+  spielfeld_id?: number | null;
 }
 
 export interface GroupWithParticipants extends Group {

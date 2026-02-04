@@ -27,12 +27,16 @@ class GroupMatch(Base):
     player1_id = Column(Integer, ForeignKey("participants.id", ondelete="SET NULL"), nullable=True)
     player2_id = Column(Integer, ForeignKey("participants.id", ondelete="SET NULL"), nullable=True)
     
+    # Spielfeld (optional)
+    spielfeld_id = Column(Integer, ForeignKey("spielfelder.id", ondelete="SET NULL"), nullable=True)
+    
     # Scores
     score1 = Column(Integer, nullable=True)
     score2 = Column(Integer, nullable=True)
     
     # Relationships
     tournament = relationship("Tournament", backref="group_matches")
+    spielfeld = relationship("Spielfeld", backref="group_matches")
     group = relationship("Group", backref="matches")
     player1 = relationship("Participant", foreign_keys=[player1_id], backref="group_matches_p1")
     player2 = relationship("Participant", foreign_keys=[player2_id], backref="group_matches_p2")
@@ -63,12 +67,16 @@ class KnockoutMatch(Base):
     player1_id = Column(Integer, ForeignKey("participants.id", ondelete="SET NULL"), nullable=True)
     player2_id = Column(Integer, ForeignKey("participants.id", ondelete="SET NULL"), nullable=True)
     
+    # Spielfeld (optional)
+    spielfeld_id = Column(Integer, ForeignKey("spielfelder.id", ondelete="SET NULL"), nullable=True)
+    
     # Scores
     score1 = Column(Integer, nullable=True)
     score2 = Column(Integer, nullable=True)
     
     # Relationships
     tournament = relationship("Tournament", backref="knockout_matches")
+    spielfeld = relationship("Spielfeld", backref="knockout_matches")
     player1 = relationship("Participant", foreign_keys=[player1_id], backref="ko_matches_p1")
     player2 = relationship("Participant", foreign_keys=[player2_id], backref="ko_matches_p2")
     

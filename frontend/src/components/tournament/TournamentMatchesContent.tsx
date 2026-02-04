@@ -6,6 +6,7 @@ import { matchService, GroupMatch, KnockoutMatch } from '../../services/matchSer
 import { participantService } from '../../services/participantService';
 import { tableService } from '../../services/tableService';
 import { tournamentService } from '../../services/tournamentService';
+import { locationService } from '../../services/locationService';
 import { Tournament, Participant } from '../../types';
 import { theme } from '../../theme/theme';
 import { Button } from '../ui';
@@ -34,10 +35,36 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
   const [manualPairs, setManualPairs] = useState<Array<{ player1_id: number | null; player2_id: number | null }>>([]);
   const [manualError, setManualError] = useState<string | null>(null);
   const [manualSaving, setManualSaving] = useState(false);
+  const [qualifiedParticipants, setQualifiedParticipants] = useState<{ id: number; first_name: string; last_name: string }[]>([]);
+  const [qualifiedLoading, setQualifiedLoading] = useState(false);
+  const [spielfeldIdToName, setSpielfeldIdToName] = useState<Record<number, string>>({});
 
   useEffect(() => {
     loadData();
   }, [tournamentId]);
+
+  useEffect(() => {
+    if (!tournament.location_id) {
+      setSpielfeldIdToName({});
+      return;
+    }
+    const loadLocations = async () => {
+      try {
+        const locations = await locationService.getAll();
+        const loc = locations.find(l => l.id === tournament.location_id);
+        if (loc?.spielfelder) {
+          const map: Record<number, string> = {};
+          loc.spielfelder.forEach(s => { map[s.id] = s.name; });
+          setSpielfeldIdToName(map);
+        } else {
+          setSpielfeldIdToName({});
+        }
+      } catch {
+        setSpielfeldIdToName({});
+      }
+    };
+    loadLocations();
+  }, [tournament.location_id]);
 
   const loadData = async () => {
     try {
@@ -74,6 +101,34 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
     }
   };
 
+  // Refresh KO matches only (for use after draw)
+  const refreshKoMatches = async () => {
+    if (tournament.has_ko_phase) {
+      try {
+        const koData = await matchService.getKnockoutMatches(tournamentId);
+        setKoMatches(koData);
+      } catch (err) {
+        console.error('Failed to refresh KO matches:', err);
+      }
+    }
+  };
+
+  const spielfelderList = tournament.location_id
+    ? Object.entries(spielfeldIdToName).map(([id, name]) => ({ id: Number(id), name }))
+    : [];
+
+  const handleKoMatchSpielfeldChange = async (matchId: number, spielfeldId: number | null) => {
+    try {
+      await matchService.updateKnockoutMatch(matchId, { spielfeld_id: spielfeldId });
+      setKoMatches((prev) =>
+        prev.map((m) => (m.id === matchId ? { ...m, spielfeld_id: spielfeldId } : m))
+      );
+    } catch (err) {
+      console.error('Failed to update KO match spielfeld:', err);
+      alert('Fehler beim Speichern des Spielfelds');
+    }
+  };
+
   const getBracketSize = (count: number) => {
     if (count <= 4) return 4;
     if (count <= 8) return 8;
@@ -88,16 +143,37 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
     }
   }, [tournament.has_group_phase, tournament.has_ko_phase]);
 
+  const isManualKo = (tournament.mode === 'knockout' || tournament.mode === 'combined') && tournament.ko_draw_method === 'manual';
+  const r1ParticipantSource = tournament.mode === 'combined' && isManualKo ? qualifiedParticipants : participants;
+  const r1ParticipantIds = r1ParticipantSource.map(p => p.id);
+
   useEffect(() => {
-    if (tournament.mode !== 'knockout' || tournament.ko_draw_method !== 'manual') return;
-    if (koMatches.length > 0) return;
-    const bracketSize = getBracketSize(participants.length);
+    if (!isManualKo || koMatches.length > 0) return;
+    const count = r1ParticipantIds.length;
+    if (count < 2) return;
+    const bracketSize = getBracketSize(count);
     const requiredPairs = bracketSize / 2;
     setManualPairs(prev => {
       if (prev.length === requiredPairs) return prev;
       return Array.from({ length: requiredPairs }, () => ({ player1_id: null, player2_id: null }));
     });
-  }, [participants.length, tournament.mode, tournament.ko_draw_method, koMatches.length]);
+  }, [r1ParticipantIds.length, isManualKo, koMatches.length]);
+
+  useEffect(() => {
+    if (!tournament.has_ko_phase || tournament.mode !== 'combined' || tournament.ko_draw_method !== 'manual') {
+      setQualifiedParticipants([]);
+      return;
+    }
+    let cancelled = false;
+    setQualifiedLoading(true);
+    tournamentService.getQualifiedParticipants(tournamentId)
+      .then(data => {
+        if (!cancelled) setQualifiedParticipants(data.participants || []);
+      })
+      .catch(() => { if (!cancelled) setQualifiedParticipants([]); })
+      .finally(() => { if (!cancelled) setQualifiedLoading(false); });
+    return () => { cancelled = true; };
+  }, [tournamentId, tournament.has_ko_phase, tournament.mode, tournament.ko_draw_method]);
 
   useEffect(() => {
     if (selectedGroupId && matchType === 'group') {
@@ -116,7 +192,29 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
     }
   };
 
-  const handleEdit = (match: GroupMatch | KnockoutMatch) => {
+  const canEnterKoResult = (match: KnockoutMatch): boolean => {
+    if (match.player1_id == null && match.player2_id == null) return false;
+    if (match.round === 1) return true;
+    if (match.round === 99 || match.round >= 2000) return true;
+    if (match.round < 1) return false;
+    const pred1 = koMatches.find((m) => m.round === match.round - 1 && m.match_no === 2 * match.match_no - 1);
+    const pred2 = koMatches.find((m) => m.round === match.round - 1 && m.match_no === 2 * match.match_no);
+    if (!pred1 || !pred2) return false;
+    const complete = (p: KnockoutMatch) => {
+      if (p.player1_id == null && p.player2_id == null) return false;
+      if (p.player1_id == null || p.player2_id == null) return true;
+      return p.score1 != null && p.score2 != null && p.score1 !== p.score2;
+    };
+    return complete(pred1) && complete(pred2);
+  };
+
+    const handleEdit = (match: GroupMatch | KnockoutMatch) => {
+    const isKoMatch = 'round' in match && !('group_id' in match);
+    const hasNoResult = match.score1 == null || match.score2 == null;
+    if (isKoMatch && hasNoResult && !canEnterKoResult(match)) {
+      alert('Ergebnis kann erst eingetragen werden, wenn die Runde ausgelost ist und die Vorrunde abgeschlossen ist.');
+      return;
+    }
     setEditingMatch(match.id);
     setScoreForm({
       score1: match.score1?.toString() || '',
@@ -233,6 +331,89 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
     return '-';
   };
 
+  const getWinnersOfRound = (roundNum: number): number[] => {
+    const matches = koMatches.filter(m => m.round === roundNum).sort((a, b) => a.match_no - b.match_no);
+    const winners: number[] = [];
+    for (const m of matches) {
+      if (m.player1_id == null && m.player2_id != null) winners.push(m.player2_id);
+      else if (m.player2_id == null && m.player1_id != null) winners.push(m.player1_id);
+      else if (m.player1_id != null && m.player2_id != null && m.score1 != null && m.score2 != null && m.score1 !== m.score2) {
+        winners.push(m.score1 > m.score2 ? m.player1_id : m.player2_id);
+      }
+    }
+    return winners;
+  };
+
+  const getLosersOfRound = (roundNum: number): number[] => {
+    const matches = koMatches.filter(m => m.round === roundNum).sort((a, b) => a.match_no - b.match_no);
+    const losers: number[] = [];
+    for (const m of matches) {
+      if (m.player1_id != null && m.player2_id != null && m.score1 != null && m.score2 != null && m.score1 !== m.score2) {
+        losers.push(m.score1 < m.score2 ? m.player1_id : m.player2_id);
+      }
+    }
+    return losers;
+  };
+
+  /** Teilnehmer, die in einer Runde spielen (player1/player2 aller Matches). Fallback wenn noch keine Sieger/Verlierer. */
+  const getParticipantsInRound = (roundNum: number): number[] => {
+    const matches = koMatches.filter(m => m.round === roundNum).sort((a, b) => a.match_no - b.match_no);
+    const seen = new Set<number>();
+    const ids: number[] = [];
+    for (const m of matches) {
+      if (m.player1_id != null && !seen.has(m.player1_id)) {
+        seen.add(m.player1_id);
+        ids.push(m.player1_id);
+      }
+      if (m.player2_id != null && !seen.has(m.player2_id)) {
+        seen.add(m.player2_id);
+        ids.push(m.player2_id);
+      }
+    }
+    return ids;
+  };
+
+  const [roundPairingsEdits, setRoundPairingsEdits] = useState<Record<number, Array<{ match_no: number; player1_id: number | null; player2_id: number | null }>>>({});
+  const [savingRound, setSavingRound] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isManualKo || koMatches.length === 0) return;
+    const rounds = Array.from(new Set(koMatches.map(m => m.round))).filter(r => r >= 1 || r === 99).sort((a, b) => (a === 99 ? 1 : a) - (b === 99 ? 1 : b));
+    setRoundPairingsEdits(prev => {
+      const next = { ...prev };
+      for (const r of rounds) {
+        const matches = koMatches.filter(m => m.round === r).sort((a, b) => a.match_no - b.match_no);
+        next[r] = matches.map(m => ({ match_no: m.match_no, player1_id: m.player1_id ?? null, player2_id: m.player2_id ?? null }));
+      }
+      return next;
+    });
+  }, [isManualKo, koMatches]);
+
+  const updateRoundPairing = (round: number, matchNo: number, slot: 'player1_id' | 'player2_id', value: number | null) => {
+    setRoundPairingsEdits(prev => {
+      const list = prev[round] ?? [];
+      const next = list.map(p => p.match_no === matchNo ? { ...p, [slot]: value } : p);
+      return { ...prev, [round]: next };
+    });
+  };
+
+  const handleSaveRoundPairings = async (round: number) => {
+    const pairs = roundPairingsEdits[round];
+    if (!pairs?.length) return;
+    setSavingRound(round);
+    try {
+      await tournamentService.setKoRoundPairings(tournamentId, round, pairs);
+      await refreshKoMatches();
+    } catch (err: unknown) {
+      const msg = err && typeof err === 'object' && 'response' in err && err.response && typeof (err.response as { data?: { detail?: string } }).data?.detail === 'string'
+        ? (err.response as { data: { detail: string } }).data.detail
+        : 'Fehler beim Speichern der Paarungen.';
+      alert(msg);
+    } finally {
+      setSavingRound(null);
+    }
+  };
+
   const updateManualPair = (index: number, slot: 'player1_id' | 'player2_id', value: string) => {
     const parsed = value ? parseInt(value) : null;
     setManualPairs(prev => {
@@ -253,22 +434,25 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
       return;
     }
 
-    const participantIds = new Set(participants.map(p => p.id));
+    const expectedIds = new Set(r1ParticipantIds);
     for (const id of uniqueIds) {
-      if (!participantIds.has(id)) {
+      if (!expectedIds.has(id)) {
         setManualError('Es wurden ungültige Teilnehmer ausgewählt.');
         return;
       }
     }
 
-    if (uniqueIds.size !== participants.length) {
-      setManualError('Bitte alle Turnier-Teilnehmer genau einmal zuweisen.');
+    if (uniqueIds.size !== expectedIds.size) {
+      setManualError(tournament.mode === 'combined'
+        ? 'Bitte alle qualifizierten Teilnehmer genau einmal zuweisen (Rest Bye).'
+        : 'Bitte alle Turnier-Teilnehmer genau einmal zuweisen.');
       return;
     }
 
     setManualSaving(true);
     try {
-      await tournamentService.createManualKOBracket(tournamentId, manualPairs);
+      const pairsWithMatchNo = manualPairs.map((p, i) => ({ match_no: i + 1, player1_id: p.player1_id, player2_id: p.player2_id }));
+      await tournamentService.setKoRoundPairings(tournamentId, 1, pairsWithMatchNo);
       const koData = await matchService.getKnockoutMatches(tournamentId);
       setKoMatches(koData);
       setManualError(null);
@@ -284,7 +468,6 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
   const selectedGroup = groups.find(g => g.id === selectedGroupId);
   const regularGroupMatches = groupMatches.filter(m => !m.is_decision_match);
   const decisionGroupMatches = groupMatches.filter(m => m.is_decision_match);
-  const isManualKo = tournament.mode === 'knockout' && tournament.ko_draw_method === 'manual';
   const canGenerateKo = canEdit && tournament.mode === 'knockout' && tournament.has_ko_phase && !tournament.has_group_phase && !isManualKo;
 
   return (
@@ -370,6 +553,9 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                           <tr style={{ background: theme.colors.accent.primary, color: theme.colors.background.primary }}>
                             <th style={{ padding: '0.75rem', textAlign: 'left' }}>Runde</th>
                             <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spiel</th>
+                            {tournament.location_id && (
+                              <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spielfeld</th>
+                            )}
                             <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 1</th>
                             <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 2</th>
                             <th style={{ padding: '0.75rem', textAlign: 'center' }}>Ergebnis</th>
@@ -383,6 +569,11 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                             <tr key={match.id} style={{ borderBottom: `1px solid ${theme.colors.border.standard}`, background: theme.colors.background.secondary }}>
                               <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>Runde {match.round}</td>
                               <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>Spiel {match.match_no}</td>
+                              {tournament.location_id && (
+                                <td style={{ padding: '0.75rem', color: theme.colors.text.secondary, fontSize: '0.875rem' }}>
+                                  {match.spielfeld_id ? (spielfeldIdToName[match.spielfeld_id] ?? `#${match.spielfeld_id}`) : '–'}
+                                </td>
+                              )}
                               <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{getParticipantName(match.player1_id)}</td>
                               <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{getParticipantName(match.player2_id)}</td>
                               <td style={{ padding: '0.75rem', textAlign: 'center' }}>
@@ -504,6 +695,9 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                               <tr style={{ background: theme.colors.accent.warning, color: theme.colors.background.primary }}>
                                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Runde</th>
                                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spiel</th>
+                                {tournament.location_id && (
+                                  <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spielfeld</th>
+                                )}
                                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 1</th>
                                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 2</th>
                                 <th style={{ padding: '0.75rem', textAlign: 'center' }}>Ergebnis</th>
@@ -517,6 +711,11 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                                   <tr key={match.id} style={{ borderBottom: `1px solid ${theme.colors.border.standard}`, background: theme.colors.background.secondary }}>
                                     <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>Runde {match.round}</td>
                                     <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>Spiel {match.match_no}</td>
+                                    {tournament.location_id && (
+                                      <td style={{ padding: '0.75rem', color: theme.colors.text.secondary, fontSize: '0.875rem' }}>
+                                        {match.spielfeld_id ? (spielfeldIdToName[match.spielfeld_id] ?? `#${match.spielfeld_id}`) : '–'}
+                                      </td>
+                                    )}
                                     <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{getParticipantName(match.player1_id)}</td>
                                     <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{getParticipantName(match.player2_id)}</td>
                                     <td style={{ padding: '0.75rem', textAlign: 'center' }}>
@@ -648,12 +847,21 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                   borderRadius: theme.borderRadius.card,
                   padding: '1rem'
                 }}>
-                  <h4 style={{ marginTop: 0, color: theme.colors.text.primary }}>Manuelle Paarungen</h4>
+                  <h4 style={{ marginTop: 0, color: theme.colors.text.primary }}>Manuelle Paarungen – Runde 1</h4>
+                  {tournament.mode === 'combined' && (
+                    <p style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginTop: '0.25rem' }}>
+                      Nur qualifizierte Teilnehmer. Bitte zuerst Gruppenphase abschließen.
+                    </p>
+                  )}
                   <p style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginTop: '0.25rem' }}>
-                    Weisen Sie alle Turnier-Teilnehmer genau einmal zu. Leere Slots gelten als Freilos.
+                    {tournament.mode === 'combined' ? 'Weisen Sie alle qualifizierten Teilnehmer genau einmal zu (Rest Bye).' : 'Weisen Sie alle Turnier-Teilnehmer genau einmal zu. Leere Slots = Freilos.'}
                   </p>
-                  {manualPairs.length === 0 ? (
+                  {qualifiedLoading && tournament.mode === 'combined' ? (
+                    <p style={{ color: theme.colors.text.secondary }}>Qualifizierte Teilnehmer werden geladen...</p>
+                  ) : manualPairs.length === 0 ? (
                     <p style={{ color: theme.colors.text.secondary }}>Teilnehmer werden geladen...</p>
+                  ) : r1ParticipantIds.length < 2 && tournament.mode === 'combined' ? (
+                    <p style={{ color: theme.colors.accent.warning }}>Noch keine qualifizierten Teilnehmer. Bitte Gruppenphase abschließen.</p>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
                       {manualPairs.map((pair, index) => {
@@ -663,8 +871,8 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                           if (p.player1_id) usedIds.add(p.player1_id);
                           if (p.player2_id) usedIds.add(p.player2_id);
                         });
-                        const availablePlayer1 = participants.filter(p => (!usedIds.has(p.id) && p.id !== pair.player2_id) || p.id === pair.player1_id);
-                        const availablePlayer2 = participants.filter(p => (!usedIds.has(p.id) && p.id !== pair.player1_id) || p.id === pair.player2_id);
+                        const availablePlayer1 = r1ParticipantSource.filter(p => (!usedIds.has(p.id) && p.id !== pair.player2_id) || p.id === pair.player1_id);
+                        const availablePlayer2 = r1ParticipantSource.filter(p => (!usedIds.has(p.id) && p.id !== pair.player1_id) || p.id === pair.player2_id);
                         return (
                           <div key={`pair-${index}`} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                             <span style={{ minWidth: '60px', color: theme.colors.text.secondary }}>Spiel {index + 1}</span>
@@ -681,7 +889,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                               }}
                             >
                               <option value="">-</option>
-                              {availablePlayer1.map(p => (
+                              {availablePlayer1.map((p: { id: number; first_name: string; last_name: string }) => (
                                 <option key={p.id} value={p.id}>
                                   {p.first_name} {p.last_name}
                                 </option>
@@ -701,7 +909,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                               }}
                             >
                               <option value="">-</option>
-                              {availablePlayer2.map(p => (
+                              {availablePlayer2.map((p: { id: number; first_name: string; last_name: string }) => (
                                 <option key={p.id} value={p.id}>
                                   {p.first_name} {p.last_name}
                                 </option>
@@ -726,7 +934,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                   )}
                   <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
                     <Button onClick={handleSaveManualPairs} variant="success" disabled={manualSaving || manualPairs.length === 0}>
-                      {manualSaving ? 'Speichere...' : 'Paarungen speichern'}
+                      {manualSaving ? 'Speichere...' : 'Runde 1 speichern'}
                     </Button>
                   </div>
                 </div>
@@ -756,6 +964,81 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                   </Button>
                 </div>
               </div>
+
+              {/* Manuelle Paarungen Runde 1, 2, ? und Bronze */}
+              {isManualKo && canEdit && (() => {
+                const rounds = Array.from(new Set(koMatches.map(m => m.round))).filter(r => r >= 1 || r === 99).sort((a, b) => (a === 99 ? 99 : a) - (b === 99 ? 99 : b));
+                const maxMainRound = Math.max(...koMatches.filter(m => m.round !== 99 && m.round >= 1).map(m => m.round), 1);
+                const semiRound = maxMainRound >= 2 ? maxMainRound - 1 : 2;
+                return (
+                  <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    {rounds.map(roundNum => {
+                      const pairs = roundPairingsEdits[roundNum] ?? [];
+                      const winnersOrLosers = roundNum === 1 ? [] : (roundNum === 99 ? getLosersOfRound(semiRound) : getWinnersOfRound(roundNum - 1));
+                      const allowedIds = roundNum === 1
+                        ? r1ParticipantIds
+                        : (winnersOrLosers.length > 0 ? winnersOrLosers : (roundNum === 99 ? getParticipantsInRound(semiRound) : getParticipantsInRound(roundNum - 1)));
+                      const usedInRound = new Set<number>();
+                      pairs.forEach(p => {
+                        if (p.player1_id != null) usedInRound.add(p.player1_id);
+                        if (p.player2_id != null) usedInRound.add(p.player2_id);
+                      });
+                      const roundLabel = roundNum === 99 ? 'Bronze (Platz 3)' : `Runde ${roundNum}`;
+                      return (
+                        <div key={roundNum} style={{ padding: '1rem', background: theme.colors.background.secondary, border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.card }}>
+                          <h4 style={{ marginTop: 0, marginBottom: '0.75rem', color: theme.colors.text.primary }}>{roundLabel}</h4>
+                          <p style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '1rem' }}>
+                            {roundNum === 1 ? (tournament.mode === 'combined' ? 'Qualifizierte Teilnehmer (Auslosung eintragen)' : 'Teilnehmer (Auslosung eintragen)') : roundNum === 99 ? 'Halbfinal-Verlierer' : `Sieger aus Runde ${roundNum - 1}`}
+                          </p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {pairs.map((pair) => {
+                              const usedElse = new Set<number>();
+                              pairs.forEach(p => {
+                                if (p.match_no === pair.match_no) return;
+                                if (p.player1_id != null) usedElse.add(p.player1_id);
+                                if (p.player2_id != null) usedElse.add(p.player2_id);
+                              });
+                              const opt1 = allowedIds.filter(id => id !== pair.player2_id && (!usedElse.has(id) || id === pair.player1_id));
+                              const opt2 = allowedIds.filter(id => id !== pair.player1_id && (!usedElse.has(id) || id === pair.player2_id));
+                              return (
+                                <div key={pair.match_no} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                  <span style={{ minWidth: '80px', color: theme.colors.text.secondary }}>Spiel {pair.match_no}</span>
+                                  <select
+                                    value={pair.player1_id ?? ''}
+                                    onChange={(e) => updateRoundPairing(roundNum, pair.match_no, 'player1_id', e.target.value ? parseInt(e.target.value) : null)}
+                                    style={{ flex: 1, padding: '0.5rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.primary, color: theme.colors.text.primary }}
+                                  >
+                                    <option value="">-</option>
+                                    {opt1.map(id => (
+                                      <option key={id} value={id}>{getParticipantNameById(id)}</option>
+                                    ))}
+                                  </select>
+                                  <span style={{ color: theme.colors.text.secondary }}>vs</span>
+                                  <select
+                                    value={pair.player2_id ?? ''}
+                                    onChange={(e) => updateRoundPairing(roundNum, pair.match_no, 'player2_id', e.target.value ? parseInt(e.target.value) : null)}
+                                    style={{ flex: 1, padding: '0.5rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.primary, color: theme.colors.text.primary }}
+                                  >
+                                    <option value="">-</option>
+                                    {opt2.map(id => (
+                                      <option key={id} value={id}>{getParticipantNameById(id)}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div style={{ marginTop: '1rem' }}>
+                            <Button onClick={() => handleSaveRoundPairings(roundNum)} variant="success" disabled={savingRound !== null}>
+                              {savingRound === roundNum ? 'Speichere...' : `${roundNum === 99 ? 'Bronze' : `Runde ${roundNum}`} speichern`}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {/* Bracket View */}
               {koViewMode === 'bracket' && (
@@ -858,6 +1141,8 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                     editingMatchId={editingMatch}
                     drawMode={tournament.ko_distribution}
                     tournamentId={tournamentId}
+                    koDistribution={tournament.ko_distribution}
+                    onRefresh={refreshKoMatches}
                   />
                 </div>
               )}
@@ -870,6 +1155,9 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                       <tr style={{ background: theme.colors.accent.error, color: theme.colors.text.primary }}>
                         <th style={{ padding: '0.75rem', textAlign: 'left' }}>Runde</th>
                         <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spiel</th>
+                        {tournament.location_id && (
+                          <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spielfeld</th>
+                        )}
                         <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 1</th>
                         <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 2</th>
                         <th style={{ padding: '0.75rem', textAlign: 'center' }}>Ergebnis</th>
@@ -883,6 +1171,34 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                         <tr key={match.id} style={{ borderBottom: `1px solid ${theme.colors.border.standard}`, background: theme.colors.background.secondary }}>
                           <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>Runde {match.round === 99 ? 'Bronze' : match.round}</td>
                           <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>Spiel {match.match_no}</td>
+                          {tournament.location_id && (
+                            <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>
+                              {canEdit && spielfelderList.length > 0 ? (
+                                <select
+                                  value={match.spielfeld_id ?? ''}
+                                  onChange={(e) => handleKoMatchSpielfeldChange(match.id, e.target.value === '' ? null : Number(e.target.value))}
+                                  style={{
+                                    padding: '0.35rem 0.5rem',
+                                    fontSize: '0.875rem',
+                                    border: `1px solid ${theme.colors.border.standard}`,
+                                    borderRadius: theme.borderRadius.input,
+                                    background: theme.colors.background.secondary,
+                                    color: theme.colors.text.primary,
+                                    minWidth: '120px',
+                                  }}
+                                >
+                                  <option value="">—</option>
+                                  {spielfelderList.map((sf) => (
+                                    <option key={sf.id} value={sf.id}>{sf.name}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span style={{ color: theme.colors.text.secondary }}>
+                                  {match.spielfeld_id ? (spielfeldIdToName[match.spielfeld_id] ?? `#${match.spielfeld_id}`) : '–'}
+                                </span>
+                              )}
+                            </td>
+                          )}
                           <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{getKoParticipantLabel(match, 1)}</td>
                           <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{getKoParticipantLabel(match, 2)}</td>
                           <td style={{ padding: '0.75rem', textAlign: 'center' }}>
@@ -947,14 +1263,20 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                                   ✕
                                 </Button>
                               </div>
-                            ) : canEdit ? (
-                              <Button
-                                onClick={() => handleEdit(match)}
-                                variant="info"
-                                style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
-                              >
-                                Ergebnis
-                              </Button>
+                            ) : canEdit && (canEnterKoResult(match) || (match.score1 !== null && match.score2 !== null)) ? (
+                              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                                {canEnterKoResult(match) && (
+                                  <Button
+                                    onClick={() => handleEdit(match)}
+                                    variant="info"
+                                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                                  >
+                                    Ergebnis
+                                  </Button>
+                                )}
+                              </div>
+                            ) : canEdit && !canEnterKoResult(match) ? (
+                              <span style={{ fontSize: '0.75rem', color: theme.colors.text.secondary }}>Runde noch nicht ausgelost</span>
                             ) : (
                               <span style={{ color: theme.colors.text.secondary }}>-</span>
                             )}

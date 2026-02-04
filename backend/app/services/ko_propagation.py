@@ -10,6 +10,101 @@ import random
 BRONZE_ROUND = 99
 
 
+def get_winners_of_round(db: Session, tournament_id: int, round_num: int) -> List[int]:
+    """Return list of winner participant_ids for the given round (from scores or Bye)."""
+    matches = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == tournament_id,
+        KnockoutMatch.round == round_num
+    ).order_by(KnockoutMatch.match_no).all()
+    winners: List[int] = []
+    for m in matches:
+        if m.player1_id is None and m.player2_id is None:
+            continue
+        if m.player1_id is None:
+            winners.append(m.player2_id)
+        elif m.player2_id is None:
+            winners.append(m.player1_id)
+        elif m.score1 is not None and m.score2 is not None and m.score1 != m.score2:
+            winners.append(m.player1_id if m.score1 > m.score2 else m.player2_id)
+    return winners
+
+
+def get_losers_of_round(db: Session, tournament_id: int, round_num: int) -> List[int]:
+    """Return list of loser participant_ids for the given round (for Bronze: semi-final losers)."""
+    matches = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == tournament_id,
+        KnockoutMatch.round == round_num
+    ).order_by(KnockoutMatch.match_no).all()
+    losers: List[int] = []
+    for m in matches:
+        if m.player1_id is None or m.player2_id is None:
+            continue
+        if m.score1 is not None and m.score2 is not None and m.score1 != m.score2:
+            losers.append(m.player1_id if m.score1 < m.score2 else m.player2_id)
+    return losers
+
+
+def get_participants_in_round(db: Session, tournament_id: int, round_num: int) -> List[int]:
+    """Return list of participant_ids that appear in the given round (player1/player2 of each match).
+    Used as fallback for manual pairings when no results yet (no winners/losers)."""
+    matches = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == tournament_id,
+        KnockoutMatch.round == round_num
+    ).order_by(KnockoutMatch.match_no).all()
+    seen: set = set()
+    result: List[int] = []
+    for m in matches:
+        if m.player1_id is not None and m.player1_id not in seen:
+            seen.add(m.player1_id)
+            result.append(m.player1_id)
+        if m.player2_id is not None and m.player2_id not in seen:
+            seen.add(m.player2_id)
+            result.append(m.player2_id)
+    return result
+
+
+def can_enter_ko_result(db: Session, match: KnockoutMatch) -> bool:
+    """
+    Prueft, ob fuer dieses KO-Match ein Ergebnis eingetragen werden darf.
+    Nur erlaubt wenn: Paarung steht (mind. ein Spieler), und Runde 1 bzw. Vorrunde abgeschlossen.
+    """
+    if match.round is None or match.match_no is None:
+        return False
+    if match.player1_id is None and match.player2_id is None:
+        return False
+    if match.round == 1:
+        return True
+    if match.round == BRONZE_ROUND or (match.round >= 2000):
+        return True
+    if match.round < 1:
+        return False
+    pred_no1 = 2 * match.match_no - 1
+    pred_no2 = 2 * match.match_no
+    pred1 = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == match.tournament_id,
+        KnockoutMatch.round == match.round - 1,
+        KnockoutMatch.match_no == pred_no1
+    ).first()
+    pred2 = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == match.tournament_id,
+        KnockoutMatch.round == match.round - 1,
+        KnockoutMatch.match_no == pred_no2
+    ).first()
+    if not pred1 or not pred2:
+        return False
+
+    def _match_complete(m: KnockoutMatch) -> bool:
+        if m.player1_id is None and m.player2_id is None:
+            return False
+        if m.player1_id is None or m.player2_id is None:
+            return True
+        if m.score1 is None or m.score2 is None or m.score1 == m.score2:
+            return False
+        return True
+
+    return _match_complete(pred1) and _match_complete(pred2)
+
+
 def _next_round_slot_for(match_no: int) -> tuple[int, int]:
     """Determine target match and slot for winner
     
@@ -49,6 +144,12 @@ def save_ko_result_and_propagate(
     # Get tournament draw mode
     tournament = db.query(Tournament).filter(Tournament.id == match.tournament_id).first()
     draw_mode = tournament.ko_distribution if tournament else None
+
+    # Don't propagate in manual draw mode ??? user enters next round pairings manually
+    if tournament and tournament.ko_draw_method is not None:
+        draw_method_val = getattr(tournament.ko_draw_method, 'value', None) or tournament.ko_draw_method
+        if draw_method_val == 'manual':
+            return
 
     # Get winner - handle byes FIRST before checking scores
     player1_id = match.player1_id
@@ -109,7 +210,8 @@ def save_ko_result_and_propagate(
         return
 
     if draw_mode == "random_each_round":
-        _assign_next_round_randomly(db, match.tournament_id, match.round, tournament.ko_random_seed if tournament else None)
+        # Bei "random_each_round" NICHT automatisch propagieren
+        # Die Auslosung wird manuell über den /draw-next-round Endpoint ausgelöst
         return
     
     # Handle consolation bracket (negative rounds: -1, -2, etc.)
@@ -456,17 +558,46 @@ def save_ko_result_and_propagate(
                 target_match.player2_id = winner_id
             db.commit()
     
-    # If this is a first round match, try to assign losers to consolation bracket
-    if match.round == 1:
+    # Erste Runde: Trostturnier-Zuweisung und Bye-Propagation nur bei Konsolation-Struktur
+    if match.round == 1 and tournament and tournament.ko_structure and tournament.ko_structure.value == 'consolation_bracket':
         draw_method = None
-        if tournament and tournament.ko_draw_method:
+        if tournament.ko_draw_method:
             draw_method = tournament.ko_draw_method.value
+        # Zuerst Bye-Matches abarbeiten, damit alle Runde-1-Ergebnisse (inkl. Byes) stehen
+        _propagate_round_one_byes(db, match.tournament_id)
+        # Danach Verlierer ins Trostturnier zuweisen (mit aktuellem DB-Stand)
         assign_consolation_first_round_losers(
-            db, 
-            match.tournament_id, 
+            db,
+            match.tournament_id,
             tournament.ko_random_seed if tournament else None,
             draw_method=draw_method
         )
+
+
+def _propagate_round_one_byes(db: Session, tournament_id: int) -> None:
+    """
+    Findet alle Runde-1-Matches mit Bye (ein Spieler leer), setzt automatisch 3:0/0:3,
+    speichert und propagiert den Gewinner in die nächste Runde.
+    Wird nach dem Speichern eines Runde-1-Ergebnisses aufgerufen, damit Bye-Gewinner
+    auch ohne manuelle Ergebnis-Eingabe im Turnierbaum erscheinen.
+    """
+    first_round = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == tournament_id,
+        KnockoutMatch.round == 1
+    ).all()
+    for m in first_round:
+        if m.score1 is not None and m.score2 is not None:
+            continue
+        if m.player1_id is None and m.player2_id is not None:
+            m.score1 = 0
+            m.score2 = 3
+            db.commit()
+            save_ko_result_and_propagate(db, m.id, 0, 3)
+        elif m.player2_id is None and m.player1_id is not None:
+            m.score1 = 3
+            m.score2 = 0
+            db.commit()
+            save_ko_result_and_propagate(db, m.id, 3, 0)
 
 
 def _assign_next_round_randomly(db: Session, tournament_id: int, current_round: int, rng_seed: Optional[int]) -> None:
@@ -525,18 +656,228 @@ def _assign_next_round_randomly(db: Session, tournament_id: int, current_round: 
     db.commit()
 
 
+def draw_next_round_manually(db: Session, tournament_id: int, current_round: int) -> dict:
+    """
+    Manuelle Auslosung für die nächste Runde durchführen.
+    Wird aufgerufen wenn ko_distribution = 'random_each_round' und User den Button klickt.
+    
+    Returns:
+        dict mit status, message und ggf. den neuen Paarungen
+    """
+    from sqlalchemy import func
+    
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        return {"status": "error", "message": "Turnier nicht gefunden"}
+    
+    # Prüfe ob random_each_round aktiv ist
+    if tournament.ko_distribution != "random_each_round":
+        return {"status": "error", "message": "Turnier ist nicht auf 'Jede Runde neu auslosen' eingestellt"}
+    
+    # Finde die höchste Runde (Finale) - ohne Bronze-Match
+    max_round = db.query(func.max(KnockoutMatch.round)).filter(
+        KnockoutMatch.tournament_id == tournament_id,
+        KnockoutMatch.round != BRONZE_ROUND,
+        KnockoutMatch.round > 0
+    ).scalar()
+    
+    if not max_round:
+        return {"status": "error", "message": "Keine KO-Matches gefunden"}
+    
+    # Prüfe ob aktuelle Runde das Finale ist
+    if current_round >= max_round:
+        return {"status": "error", "message": "Finale erreicht - keine weitere Auslosung möglich"}
+    
+    # Hole alle Matches der aktuellen Runde
+    current_round_matches = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == tournament_id,
+        KnockoutMatch.round == current_round
+    ).all()
+    
+    if not current_round_matches:
+        return {"status": "error", "message": f"Keine Matches in Runde {current_round} gefunden"}
+    
+    # Prüfe ob alle Matches der Runde fertig sind und sammle Gewinner
+    winners: List[int] = []
+    incomplete_matches = []
+    
+    for match in current_round_matches:
+        # Bye-Matches (ein Spieler fehlt) überspringen
+        if match.player1_id is None and match.player2_id is None:
+            continue
+        if match.player1_id is None or match.player2_id is None:
+            # Bye - automatischer Gewinner
+            winner_id = match.player1_id or match.player2_id
+            winners.append(winner_id)
+            continue
+            
+        # Normale Matches müssen ein Ergebnis haben
+        if match.score1 is None or match.score2 is None:
+            incomplete_matches.append(match.match_no)
+            continue
+        if match.score1 == match.score2:
+            incomplete_matches.append(match.match_no)
+            continue
+            
+        winner_id = match.player1_id if match.score1 > match.score2 else match.player2_id
+        winners.append(winner_id)
+    
+    if incomplete_matches:
+        return {
+            "status": "error", 
+            "message": f"Nicht alle Matches fertig. Fehlende: Spiel {', '.join(map(str, incomplete_matches))}"
+        }
+    
+    if not winners:
+        return {"status": "error", "message": "Keine Gewinner gefunden"}
+    
+    # Hole Matches der nächsten Runde
+    next_round = current_round + 1
+    next_round_matches = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == tournament_id,
+        KnockoutMatch.round == next_round
+    ).order_by(KnockoutMatch.match_no.asc()).all()
+    
+    if not next_round_matches:
+        return {"status": "error", "message": f"Keine Matches für Runde {next_round} gefunden"}
+    
+    # Prüfe ob nächste Runde bereits Ergebnisse hat
+    if any(m.score1 is not None or m.score2 is not None for m in next_round_matches):
+        return {"status": "error", "message": "Nächste Runde hat bereits Ergebnisse - Auslosung nicht möglich"}
+    
+    # Zufällige Auslosung durchführen
+    rng_seed = tournament.ko_random_seed
+    rng = random.Random(rng_seed + next_round) if rng_seed is not None else random
+    rng.shuffle(winners)
+    
+    # Bestehende Zuweisungen löschen
+    for match in next_round_matches:
+        match.player1_id = None
+        match.player2_id = None
+    
+    # Gewinner zuweisen
+    pairings = []
+    idx = 0
+    for match in next_round_matches:
+        player1_id = winners[idx] if idx < len(winners) else None
+        idx += 1
+        player2_id = winners[idx] if idx < len(winners) else None
+        idx += 1
+        
+        match.player1_id = player1_id
+        match.player2_id = player2_id
+        
+        pairings.append({
+            "match_no": match.match_no,
+            "player1_id": player1_id,
+            "player2_id": player2_id
+        })
+    
+    db.commit()
+    
+    return {
+        "status": "success",
+        "message": f"Auslosung für Runde {next_round} erfolgreich",
+        "round": next_round,
+        "pairings": pairings
+    }
+
+
+def get_draw_status(db: Session, tournament_id: int) -> dict:
+    """
+    Prüft ob eine manuelle Auslosung möglich/nötig ist.
+    
+    Returns:
+        dict mit can_draw, current_round, next_round, winners_count
+    """
+    from sqlalchemy import func
+    
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        return {"can_draw": False, "reason": "Turnier nicht gefunden"}
+    
+    # Nur bei random_each_round relevant
+    if tournament.ko_distribution != "random_each_round":
+        return {"can_draw": False, "reason": "Nicht auf 'Jede Runde neu auslosen' eingestellt"}
+    
+    # Finde die höchste Runde mit Spielern (aktuelle Runde)
+    # und prüfe welche Runde ausgelost werden muss
+    
+    all_matches = db.query(KnockoutMatch).filter(
+        KnockoutMatch.tournament_id == tournament_id,
+        KnockoutMatch.round > 0,
+        KnockoutMatch.round != BRONZE_ROUND
+    ).order_by(KnockoutMatch.round.asc()).all()
+    
+    if not all_matches:
+        return {"can_draw": False, "reason": "Keine KO-Matches"}
+    
+    # Finde die aktuelle Runde (letzte Runde mit Spielern, die noch nicht alle gespielt haben ODER
+    # die nächste Runde die noch keine Spieler hat)
+    max_round = max(m.round for m in all_matches)
+    
+    for round_num in range(1, max_round + 1):
+        round_matches = [m for m in all_matches if m.round == round_num]
+        
+        # Prüfe ob alle Matches dieser Runde komplett sind
+        all_complete = True
+        winners = []
+        
+        for m in round_matches:
+            if m.player1_id is None and m.player2_id is None:
+                continue  # Leeres Match
+            if m.player1_id is None or m.player2_id is None:
+                # Bye
+                winners.append(m.player1_id or m.player2_id)
+                continue
+            if m.score1 is None or m.score2 is None or m.score1 == m.score2:
+                all_complete = False
+                break
+            winners.append(m.player1_id if m.score1 > m.score2 else m.player2_id)
+        
+        if not all_complete:
+            return {
+                "can_draw": False,
+                "reason": f"Runde {round_num} noch nicht fertig",
+                "current_round": round_num
+            }
+        
+        # Prüfe ob nächste Runde bereits Spieler hat
+        if round_num < max_round:
+            next_round_matches = [m for m in all_matches if m.round == round_num + 1]
+            has_players = any(m.player1_id is not None or m.player2_id is not None for m in next_round_matches)
+            has_scores = any(m.score1 is not None or m.score2 is not None for m in next_round_matches)
+            
+            if not has_players and not has_scores:
+                # Nächste Runde hat keine Spieler - Auslosung möglich!
+                return {
+                    "can_draw": True,
+                    "current_round": round_num,
+                    "next_round": round_num + 1,
+                    "winners_count": len(winners)
+                }
+    
+    return {"can_draw": False, "reason": "Turnier abgeschlossen oder keine Auslosung nötig"}
+
+
 def assign_consolation_first_round_losers(db: Session, tournament_id: int, rng_seed: Optional[int] = None, draw_method: Optional[str] = None) -> bool:
     """
     Assign losers from first round (round 1) to consolation bracket first round (round -1).
-    Only assigns if all first round matches are completed.
+    Only assigns if all first round matches (with two players) are completed.
     Applies draw method to assign losers to consolation bracket matches.
     
     Returns:
         True if assignment was successful, False otherwise
     """
-    # Get tournament to check draw method
+    # Session-Cache leeren, damit Runde-1-Matches mit aktuellen Ergebnissen gelesen werden
+    db.expire_all()
+    
     tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
     if not tournament:
+        return False
+    
+    # Nur bei Trostturnier-Struktur Consolation-Matches suchen
+    if not tournament.ko_structure or tournament.ko_structure.value != 'consolation_bracket':
         return False
     
     # Get draw method from tournament

@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.dependencies import require_user_or_admin, require_viewer_or_above
 from app.schemas.participant import ParticipantCreate, ParticipantUpdate, ParticipantResponse
 from app.models.participant import Participant, TournamentParticipant
+from app.models.tournament import Tournament, TournamentStatus
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/participants", tags=["Participants"])
@@ -263,13 +264,16 @@ async def add_manual_tournament_participant(
     db.add(participant)
     db.flush()  # Get participant ID
     
-    # Check if tournament exists
-    from app.models.tournament import Tournament
     tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
     if not tournament:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Tournament with ID {tournament_id} not found"
+        )
+    if tournament.status == TournamentStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Turnier ist abgeschlossen; Änderungen sind nicht mehr möglich"
         )
     
     # Check if already in tournament (shouldn't happen for new participant, but check anyway)
@@ -321,6 +325,17 @@ async def remove_tournament_participant(
     db: Session = Depends(get_db)
 ):
     """Remove a participant from a tournament"""
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tournament with ID {tournament_id} not found"
+        )
+    if tournament.status == TournamentStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Turnier ist abgeschlossen; Änderungen sind nicht mehr möglich"
+        )
     tp = db.query(TournamentParticipant).filter(
         TournamentParticipant.tournament_id == tournament_id,
         TournamentParticipant.participant_id == participant_id

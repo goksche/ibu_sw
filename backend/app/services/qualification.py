@@ -156,6 +156,8 @@ def _build_candidate_sort_key(stats: Dict, tie_breaking_rules: Optional[List[str
     for rule in tie_breaking_rules or []:
         if rule == "wins":
             key_parts.append(stats.get("wins", 0))
+        elif rule == "diff":
+            key_parts.append(stats.get("diff", 0))
 
     if scoring_system == "points":
         key_parts.append(stats.get("diff", 0))
