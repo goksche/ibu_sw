@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     
     # App Info
     APP_NAME: str = "IBU Turniere API"
-    APP_VERSION: str = "1.4.1"
+    APP_VERSION: str = "1.6.0"
     DEBUG: bool = False
     
     # Database
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "changeme-change-me-in-production"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 600
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 720
 
     # OTP / Email
     OTP_EXPIRY_MINUTES: int = 10
@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     
     # Logging
     LOG_LEVEL: str = "INFO"
+    LOG_RETENTION_DAYS: int = 90
     
     # Platform Settings
     UPLOAD_DIR: str = "/app/uploads"

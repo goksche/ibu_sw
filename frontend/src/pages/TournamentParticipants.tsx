@@ -5,6 +5,8 @@ import { tournamentService } from '../services/tournamentService';
 import { participantService } from '../services/participantService';
 import { Tournament, Participant } from '../types';
 import { useNavigate, useParams } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+import { Button, Card, Input } from '@/components/ui';
 
 export default function TournamentParticipants() {
   const navigate = useNavigate();
@@ -72,9 +74,10 @@ export default function TournamentParticipants() {
       setShowAddForm(false);
       setSelectedParticipantIds([]);
       loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errObj = err as { response?: { data?: { detail?: string } } };
       console.error('Failed to add participants:', err);
-      alert(err.response?.data?.detail || 'Fehler beim Hinzufügen der Teilnehmer');
+      alert(errObj.response?.data?.detail || 'Fehler beim Hinzufügen der Teilnehmer');
     } finally {
       setAdding(false);
     }
@@ -96,14 +99,14 @@ export default function TournamentParticipants() {
     try {
       await participantService.removeTournamentParticipant(tournamentId, participantId);
       loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to remove participant:', err);
       alert('Fehler beim Entfernen des Teilnehmers');
     }
   };
 
-  if (loading) return <div style={{ padding: '2rem' }}>Wird geladen...</div>;
-  if (!tournament) return <div style={{ padding: '2rem' }}>Turnier nicht gefunden.</div>;
+  if (loading) return <div className="p-8">Wird geladen...</div>;
+  if (!tournament) return <div className="p-8">Turnier nicht gefunden.</div>;
 
   // Get participants that are not yet in the tournament
   const availableParticipants = allParticipants.filter(
@@ -131,216 +134,170 @@ export default function TournamentParticipants() {
   });
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
+    <div className="p-8 max-w-[1400px] mx-auto bg-background min-h-screen text-foreground">
+      <div className="flex justify-between mb-8">
         <div>
           <h1>{tournament.name}</h1>
-          <p style={{ color: '#666', marginTop: '0.5rem' }}>Teilnehmer-Verwaltung</p>
+          <p className="text-muted-foreground mt-2">Teilnehmer-Verwaltung</p>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
+        <div className="flex gap-4">
           {tournament.has_group_phase && (
-            <button 
-              onClick={() => navigate(`/tournaments/${tournamentId}/groups`)}
-              style={{ padding: '0.5rem 1rem', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-            >
+            <Button variant="info" onClick={() => navigate(`/tournaments/${tournamentId}/groups`)}>
               Gruppen
-            </button>
+            </Button>
           )}
-          <button 
-            onClick={() => navigate('/dashboard')}
-            style={{ padding: '0.5rem 1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
+          <Button variant="outline" onClick={() => navigate('/dashboard')}>
             Zurück
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div className="flex justify-between items-center mb-8">
         <h2>Turnier-Teilnehmer ({tournamentParticipants.length})</h2>
         {!showAddForm && (
-          <button 
-            onClick={() => setShowAddForm(true)}
-            style={{ padding: '0.5rem 1rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
+          <Button onClick={() => setShowAddForm(true)}>
             + Teilnehmer hinzufügen
-          </button>
+          </Button>
         )}
       </div>
 
       {showAddForm && (
-        <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#e7f3ff', border: '1px solid #86cfff', borderRadius: '8px' }}>
+        <Card className="mb-8 p-6 bg-muted border border-border">
           <h2>Teilnehmer hinzufügen</h2>
-          
+
           {availableParticipants.length === 0 ? (
             <p>Alle Teilnehmer sind bereits für dieses Turnier registriert.</p>
           ) : (
             <>
-              <p style={{ marginBottom: '1rem', color: '#666' }}>
+              <p className="mb-4 text-muted-foreground">
                 Wählen Sie Teilnehmer aus ({selectedParticipantIds.length} ausgewählt):
               </p>
 
-              <div style={{ marginBottom: '1rem' }}>
-                <input
+              <div className="mb-4">
+                <Input
                   type="text"
                   placeholder="Spieler suchen (Name, Verein, Spitzname)..."
                   value={participantSearch}
                   onChange={(e) => setParticipantSearch(e.target.value)}
-                  style={{ width: '100%', maxWidth: '400px', padding: '0.5rem 0.75rem', marginBottom: '0.5rem', display: 'block', border: '1px solid #ddd', borderRadius: '4px' }}
+                  className="max-w-[400px] mb-2"
                 />
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.875rem', color: '#666' }}>Sortierung:</span>
-                  <button
+                <div className="flex gap-2 items-center flex-wrap">
+                  <span className="text-sm text-muted-foreground">Sortierung:</span>
+                  <Button
                     type="button"
+                    variant={participantSortBy === 'last_name' ? 'info' : 'outline'}
+                    size="sm"
                     onClick={() => setParticipantSortBy('last_name')}
-                    style={{
-                      padding: '0.35rem 0.6rem', fontSize: '0.85rem',
-                      background: participantSortBy === 'last_name' ? '#007bff' : '#6c757d',
-                      color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'
-                    }}
                   >
                     Nachname
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant={participantSortBy === 'first_name' ? 'info' : 'outline'}
+                    size="sm"
                     onClick={() => setParticipantSortBy('first_name')}
-                    style={{
-                      padding: '0.35rem 0.6rem', fontSize: '0.85rem',
-                      background: participantSortBy === 'first_name' ? '#007bff' : '#6c757d',
-                      color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'
-                    }}
                   >
                     Vorname
-                  </button>
+                  </Button>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                <button
+              <div className="flex gap-3 mb-3">
+                <Button
+                  variant="info"
+                  size="sm"
                   onClick={handleSelectAllAvailable}
                   disabled={availableParticipants.length === 0}
-                  style={{
-                    padding: '0.4rem 0.75rem',
-                    background: availableParticipants.length === 0 ? '#6c757d' : '#17a2b8',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: availableParticipants.length === 0 ? 'not-allowed' : 'pointer'
-                  }}
                 >
                   Alle auswählen
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
                   onClick={handleClearSelected}
                   disabled={selectedParticipantIds.length === 0}
-                  style={{
-                    padding: '0.4rem 0.75rem',
-                    background: selectedParticipantIds.length === 0 ? '#6c757d' : '#dc3545',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: selectedParticipantIds.length === 0 ? 'not-allowed' : 'pointer'
-                  }}
                 >
                   Alle löschen
-                </button>
+                </Button>
               </div>
-              
-              <div style={{ maxHeight: '300px', overflowY: 'auto', background: 'white', border: '1px solid #ddd', borderRadius: '4px', padding: '1rem' }}>
+
+              <div className="max-h-[300px] overflow-y-auto bg-muted border border-border rounded-md p-4">
                 {sortedAvailableParticipants.map(participant => (
-                  <label 
+                  <label
                     key={participant.id}
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      padding: '0.5rem',
-                      cursor: 'pointer',
-                      borderBottom: '1px solid #eee'
-                    }}
+                    className={cn(
+                      'flex items-center p-2 cursor-pointer border-b border-border last:border-b-0'
+                    )}
                   >
                     <input
                       type="checkbox"
                       checked={selectedParticipantIds.includes(participant.id)}
                       onChange={() => handleToggleParticipant(participant.id)}
-                      style={{ marginRight: '0.75rem', cursor: 'pointer' }}
+                      className="mr-3 cursor-pointer"
                     />
                     <span>
                       <strong>{participant.first_name} {participant.last_name}</strong>
-                      {participant.club && <span style={{ color: '#666', marginLeft: '0.5rem' }}>({participant.club})</span>}
+                      {participant.club && <span className="text-muted-foreground ml-2">({participant.club})</span>}
                     </span>
                   </label>
                 ))}
               </div>
-              
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                <button
+
+              <div className="flex gap-4 mt-4">
+                <Button
                   onClick={handleAddParticipants}
                   disabled={adding || selectedParticipantIds.length === 0}
-                  style={{
-                    padding: '0.75rem 2rem',
-                    fontSize: '1rem',
-                    background: adding || selectedParticipantIds.length === 0 ? '#6c757d' : '#007bff',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: adding || selectedParticipantIds.length === 0 ? 'not-allowed' : 'pointer'
-                  }}
                 >
                   {adding ? 'Hinzufügen...' : 'Ausgewählte hinzufügen'}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
                   onClick={() => { setShowAddForm(false); setSelectedParticipantIds([]); }}
-                  style={{
-                    padding: '0.75rem 2rem',
-                    fontSize: '1rem',
-                    background: '#6c757d',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
                 >
                   Abbrechen
-                </button>
+                </Button>
               </div>
             </>
           )}
-        </div>
+        </Card>
       )}
 
       {tournamentParticipants.length === 0 ? (
         <p>Noch keine Teilnehmer für dieses Turnier registriert.</p>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #ddd', background: '#f8f9fa' }}>
-              <th style={{ padding: '0.75rem', textAlign: 'left' }}>Name</th>
-              <th style={{ padding: '0.75rem', textAlign: 'left' }}>Verein</th>
-              <th style={{ padding: '0.75rem', textAlign: 'left' }}>Scolia ID</th>
-              <th style={{ padding: '0.75rem', textAlign: 'right' }}>Aktionen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tournamentParticipants.map(participant => (
-              <tr key={participant.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '0.75rem', fontWeight: 'bold' }}>
-                  {participant.first_name} {participant.last_name}
-                </td>
-                <td style={{ padding: '0.75rem' }}>{participant.club || '-'}</td>
-                <td style={{ padding: '0.75rem' }}>{participant.scolia_id || '-'}</td>
-                <td style={{ padding: '0.75rem', textAlign: 'right' }}>
-                  <button
-                    onClick={() => handleRemoveParticipant(participant.id)}
-                    style={{ padding: '0.25rem 0.75rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                  >
-                    Entfernen
-                  </button>
-                </td>
+        <div className="bg-muted border border-border rounded-lg overflow-hidden">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b-2 border-border bg-muted">
+                <th className="p-3 text-left">Name</th>
+                <th className="p-3 text-left">Verein</th>
+                <th className="p-3 text-left">Scolia ID</th>
+                <th className="p-3 text-right">Aktionen</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {tournamentParticipants.map(participant => (
+                <tr key={participant.id} className="border-b border-border">
+                  <td className="p-3 font-bold">
+                    {participant.first_name} {participant.last_name}
+                  </td>
+                  <td className="p-3">{participant.club || '-'}</td>
+                  <td className="p-3">{participant.scolia_id || '-'}</td>
+                  <td className="p-3 text-right">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleRemoveParticipant(participant.id)}
+                    >
+                      Entfernen
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 }
-

@@ -4,8 +4,8 @@ import { AuthResponse, LoginCredentials, User, UserWithPermissions } from '../ty
 
 export type UserRole = 'admin' | 'user' | 'viewer';
 
-// Token refresh interval (9 hours, tokens expire after 10 hours)
-const TOKEN_REFRESH_INTERVAL = 9 * 60 * 60 * 1000;
+// Token refresh interval (11 hours, tokens expire after 12 hours)
+const TOKEN_REFRESH_INTERVAL = 11 * 60 * 60 * 1000;
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
 export const authService = {

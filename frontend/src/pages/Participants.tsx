@@ -5,7 +5,7 @@ import { participantService } from '../services/participantService';
 import { Participant } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Input } from '../components/ui';
-import { theme } from '../theme/theme';
+import { cn } from '@/lib/utils';
 import { ArrowLeft, Upload, Plus, PencilSimple, Trash, CheckCircle, XCircle } from 'phosphor-react';
 
 // BASE_PATH für Plattform-Integration
@@ -14,7 +14,7 @@ function getBasePath(): string {
   if (typeof window !== 'undefined' && (window as any).BASE_PATH) {
     return (window as any).BASE_PATH;
   }
-  
+
   // Fallback: Extrahiere aus URL (z.B. /App-4/...)
   if (typeof window !== 'undefined') {
     const parts = window.location.pathname.split('/');
@@ -22,7 +22,7 @@ function getBasePath(): string {
       return '/' + parts[1];
     }
   }
-  
+
   // Lokale Entwicklung ohne Prefix
   return '';
 }
@@ -150,7 +150,7 @@ export default function Participants() {
       const basePath = getBasePath();
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
       const baseApiUrl = apiUrl.replace(/\/api\/v1\/?$/, '');
-      
+
       // Wenn BASE_PATH gesetzt ist (Plattform), verwende BASE_PATH für API-Requests
       // Wenn BASE_PATH leer ist (lokale Entwicklung), verwende API_URL
       const importUrl = basePath
@@ -182,36 +182,36 @@ export default function Participants() {
     }
   };
 
-  if (loading) return <div style={{ padding: '2rem', color: theme.colors.text.primary }}>Wird geladen...</div>;
+  if (loading) return <div className="p-8 text-foreground">Wird geladen...</div>;
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', background: theme.colors.background.primary, minHeight: '100vh' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem', alignItems: 'center' }}>
-        <h1 style={{ margin: 0, color: theme.colors.text.primary }}>Teilnehmer-Verwaltung</h1>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <Button 
+    <div className="p-8 max-w-[1200px] mx-auto bg-background min-h-screen">
+      <div className="flex justify-between mb-8 items-center">
+        <h1 className="m-0 text-foreground">Teilnehmer-Verwaltung</h1>
+        <div className="flex gap-2">
+          <Button
             variant="secondary"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/settings')}
           >
-            <ArrowLeft size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+            <ArrowLeft size={20} className="mr-2 align-middle" />
             Zurück
           </Button>
           {canEdit && (
             <>
-              <Button 
+              <Button
                 variant="info"
                 onClick={() => { setShowImportForm(true); setShowSkippedItems(false); }}
                 disabled={importing}
               >
-                <Upload size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+                <Upload size={20} className="mr-2 align-middle" />
                 CSV Import
               </Button>
-              <Button 
+              <Button
                 variant="success"
                 onClick={() => { setShowCreateForm(true); setEditingId(null); resetForm(); }}
                 disabled={showCreateForm}
               >
-                <Plus size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+                <Plus size={20} className="mr-2 align-middle" />
                 Neuer Teilnehmer
               </Button>
             </>
@@ -220,9 +220,9 @@ export default function Participants() {
       </div>
 
       {showCreateForm && (
-        <Card style={{ marginBottom: '2rem' }}>
-          <h2 style={{ marginTop: 0, color: theme.colors.text.primary }}>{editingId ? 'Teilnehmer bearbeiten' : 'Neuer Teilnehmer'}</h2>
-          <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <Card className="mb-8">
+          <h2 className="mt-0 text-foreground">{editingId ? 'Teilnehmer bearbeiten' : 'Neuer Teilnehmer'}</h2>
+          <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
             <Input
               label="Vorname *"
               type="text"
@@ -273,7 +273,7 @@ export default function Participants() {
               onChange={handleChange}
             />
 
-            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+            <div className="col-span-2 flex gap-4 mt-4">
               <Button
                 type="submit"
                 variant="primary"
@@ -293,80 +293,64 @@ export default function Participants() {
       )}
 
       {showImportForm && (
-        <Card style={{ marginBottom: '2rem', border: `1px solid ${theme.colors.accent.info}` }}>
-          <h2 style={{ marginTop: 0, color: theme.colors.text.primary }}>CSV Import</h2>
-          <p style={{ marginBottom: '1rem', color: theme.colors.text.secondary }}>
+        <Card className="mb-8 border border-info">
+          <h2 className="mt-0 text-foreground">CSV Import</h2>
+          <p className="mb-4 text-muted-foreground">
             Importieren Sie eine CSV-Datei mit Teilnehmerdaten. Erforderliche Felder: Vorname, Nachname. Optionale Felder: E-Mail, Spitzname.
           </p>
-          
+
           <input
             type="file"
             accept=".csv"
             onChange={handleFileChange}
-            style={{ 
-              marginBottom: '1rem', 
-              padding: '0.5rem', 
-              fontSize: '1rem',
-              background: theme.colors.background.secondary,
-              color: theme.colors.text.primary,
-              border: `1px solid ${theme.colors.border.standard}`,
-              borderRadius: theme.borderRadius.input
-            }}
+            className="mb-4 p-2 text-base bg-muted text-foreground border border-border rounded-md"
           />
-          
+
           {importing && (
-            <div style={{ 
-              padding: '1rem', 
-              background: `${theme.colors.accent.warning}20`, 
-              border: `1px solid ${theme.colors.accent.warning}`,
-              borderRadius: theme.borderRadius.card,
-              color: theme.colors.text.primary 
-            }}>
+            <div className="p-4 bg-warning/10 border border-warning rounded-lg text-foreground">
               Wird importiert...
             </div>
           )}
-          
+
           {importResult && (
-            <div style={{ 
-              padding: '1rem', 
-              background: importResult.errors.length > 0 ? `${theme.colors.accent.warning}20` : `${theme.colors.accent.success}20`, 
-              border: `1px solid ${importResult.errors.length > 0 ? theme.colors.accent.warning : theme.colors.accent.success}`,
-              borderRadius: theme.borderRadius.card, 
-              marginBottom: '1rem',
-              color: theme.colors.text.primary
-            }}>
-              <h3 style={{ marginBottom: '0.5rem', marginTop: 0 }}>Import abgeschlossen</h3>
-              <p><CheckCircle size={16} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} /> Importiert: {importResult.imported} Teilnehmer</p>
-              <p><XCircle size={16} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} /> Übersprungen: {importResult.skipped} (bereits vorhanden oder ungültig)</p>
-              
+            <div
+              className={cn(
+                'p-4 rounded-lg mb-4 text-foreground',
+                importResult.errors.length > 0 ? 'bg-warning/10 border border-warning' : 'bg-success/10 border border-success'
+              )}
+            >
+              <h3 className="mb-2 mt-0">Import abgeschlossen</h3>
+              <p><CheckCircle size={16} className="align-middle mr-2" /> Importiert: {importResult.imported} Teilnehmer</p>
+              <p><XCircle size={16} className="align-middle mr-2" /> Übersprungen: {importResult.skipped} (bereits vorhanden oder ungültig)</p>
+
               {importResult.skipped > 0 && importResult.skipped_items && (
-                <div style={{ marginTop: '1rem' }}>
+                <div className="mt-4">
                   <Button
                     variant="info"
                     onClick={() => setShowSkippedItems(!showSkippedItems)}
-                    style={{ padding: '0.5rem 1rem' }}
+                    className="py-2 px-4"
                   >
                     {showSkippedItems ? '▼' : '▶'} Übersprungene Details anzeigen
                   </Button>
-                  
+
                   {showSkippedItems && (
-                    <Card style={{ marginTop: '1rem' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                    <Card className="mt-4 p-0 overflow-hidden">
+                      <table className="w-full border-collapse text-sm">
                         <thead>
-                          <tr style={{ borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                            <th style={{ padding: '0.5rem', textAlign: 'left', color: theme.colors.text.primary }}>Zeile</th>
-                            <th style={{ padding: '0.5rem', textAlign: 'left', color: theme.colors.text.primary }}>Name</th>
-                            <th style={{ padding: '0.5rem', textAlign: 'left', color: theme.colors.text.primary }}>Scolia ID</th>
-                            <th style={{ padding: '0.5rem', textAlign: 'left', color: theme.colors.text.primary }}>Grund</th>
+                          <tr className="border-b border-border">
+                            <th className="p-2 text-left text-foreground">Zeile</th>
+                            <th className="p-2 text-left text-foreground">Name</th>
+                            <th className="p-2 text-left text-foreground">Scolia ID</th>
+                            <th className="p-2 text-left text-foreground">Grund</th>
                           </tr>
                         </thead>
                         <tbody>
                           {importResult.skipped_items.map((item, idx) => (
-                            <tr key={idx} style={{ borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                              <td style={{ padding: '0.5rem', color: theme.colors.text.primary }}>{item.row}</td>
-                              <td style={{ padding: '0.5rem', color: theme.colors.text.primary }}>{item.name}</td>
-                              <td style={{ padding: '0.5rem', color: theme.colors.text.primary }}>{item.scolia_id || '-'}</td>
-                              <td style={{ padding: '0.5rem', color: theme.colors.text.secondary }}>{item.reason}</td>
+                            <tr key={idx} className="border-b border-border">
+                              <td className="p-2 text-foreground">{item.row}</td>
+                              <td className="p-2 text-foreground">{item.name}</td>
+                              <td className="p-2 text-foreground">{item.scolia_id || '-'}</td>
+                              <td className="p-2 text-muted-foreground">{item.reason}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -375,11 +359,11 @@ export default function Participants() {
                   )}
                 </div>
               )}
-              
+
               {importResult.errors.length > 0 && (
-                <div style={{ marginTop: '0.5rem' }}>
-                  <strong style={{ color: theme.colors.accent.error }}>Fehler ({importResult.errors.length}):</strong>
-                  <ul style={{ color: theme.colors.text.primary }}>
+                <div className="mt-2">
+                  <strong className="text-destructive">Fehler ({importResult.errors.length}):</strong>
+                  <ul className="text-foreground">
                     {importResult.errors.map((error, idx) => (
                       <li key={idx}>{error}</li>
                     ))}
@@ -388,7 +372,7 @@ export default function Participants() {
               )}
             </div>
           )}
-          
+
           <Button
             variant="secondary"
             onClick={() => { setShowImportForm(false); setImportResult(null); setShowSkippedItems(false); }}
@@ -399,51 +383,51 @@ export default function Participants() {
       )}
 
       <div>
-        <h2 style={{ color: theme.colors.text.primary }}>Teilnehmer ({participants.length})</h2>
+        <h2 className="text-foreground">Teilnehmer ({participants.length})</h2>
         {participants.length === 0 ? (
-          <p style={{ color: theme.colors.text.secondary }}>Noch keine Teilnehmer vorhanden.</p>
+          <p className="text-muted-foreground">Noch keine Teilnehmer vorhanden.</p>
         ) : (
-          <Card style={{ padding: 0, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <Card className="p-0 overflow-hidden">
+            <table className="w-full border-collapse">
               <thead>
-                <tr style={{ borderBottom: `2px solid ${theme.colors.border.standard}`, background: theme.colors.background.secondary }}>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>ID</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>Name</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>Verein</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>Scolia ID</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>E-Mail</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>Nickname</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'right', color: theme.colors.text.primary }}>Aktionen</th>
+                <tr className="border-b-2 border-border bg-muted">
+                  <th className="p-3 text-left text-foreground">ID</th>
+                  <th className="p-3 text-left text-foreground">Name</th>
+                  <th className="p-3 text-left text-foreground">Verein</th>
+                  <th className="p-3 text-left text-foreground">Scolia ID</th>
+                  <th className="p-3 text-left text-foreground">E-Mail</th>
+                  <th className="p-3 text-left text-foreground">Nickname</th>
+                  <th className="p-3 text-right text-foreground">Aktionen</th>
                 </tr>
               </thead>
               <tbody>
                 {participants.map((participant, index) => (
-                  <tr key={participant.id} style={{ borderBottom: index < participants.length - 1 ? `1px solid ${theme.colors.border.standard}` : 'none' }}>
-                    <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{participant.id}</td>
-                    <td style={{ padding: '0.75rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+                  <tr key={participant.id} className={cn(index < participants.length - 1 && 'border-b border-border')}>
+                    <td className="p-3 text-foreground">{participant.id}</td>
+                    <td className="p-3 font-bold text-foreground">
                       {participant.first_name} {participant.last_name}
                     </td>
-                    <td style={{ padding: '0.75rem', color: theme.colors.text.secondary }}>{participant.club || '-'}</td>
-                    <td style={{ padding: '0.75rem', color: theme.colors.text.secondary }}>{participant.scolia_id || '-'}</td>
-                    <td style={{ padding: '0.75rem', color: theme.colors.text.secondary }}>{participant.email || '-'}</td>
-                    <td style={{ padding: '0.75rem', color: theme.colors.text.secondary }}>{participant.nickname || '-'}</td>
-                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                    <td className="p-3 text-muted-foreground">{participant.club || '-'}</td>
+                    <td className="p-3 text-muted-foreground">{participant.scolia_id || '-'}</td>
+                    <td className="p-3 text-muted-foreground">{participant.email || '-'}</td>
+                    <td className="p-3 text-muted-foreground">{participant.nickname || '-'}</td>
+                    <td className="p-3 text-right">
                       {canEdit && (
                         <>
                           <Button
                             variant="warning"
                             onClick={() => handleEdit(participant)}
-                            style={{ marginRight: '0.5rem', padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
+                            className="mr-2 py-2 px-3 text-sm"
                           >
-                            <PencilSimple size={16} style={{ marginRight: '0.25rem', verticalAlign: 'middle' }} />
+                            <PencilSimple size={16} className="mr-1 align-middle" />
                             Bearbeiten
                           </Button>
                           <Button
                             variant="danger"
                             onClick={() => handleDelete(participant.id)}
-                            style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
+                            className="py-2 px-3 text-sm"
                           >
-                            <Trash size={16} style={{ marginRight: '0.25rem', verticalAlign: 'middle' }} />
+                            <Trash size={16} className="mr-1 align-middle" />
                             Löschen
                           </Button>
                         </>
@@ -459,4 +443,3 @@ export default function Participants() {
     </div>
   );
 }
-

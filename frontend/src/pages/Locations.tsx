@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { locationService } from '../services/locationService';
 import { Location } from '../types';
-import { Button, Card, Input } from '../components/ui';
-import { theme } from '../theme/theme';
+import { Button, Card, CardContent, Input } from '@/components/ui';
 import { Plus, MagnifyingGlass, MapPin, ArrowLeft } from 'phosphor-react';
 
 export default function Locations() {
@@ -39,65 +38,61 @@ export default function Locations() {
   );
 
   if (loading) {
-    return <div style={{ padding: '2rem', color: theme.colors.text.primary }}>Wird geladen...</div>;
+    return <div className="p-8 text-foreground">Wird geladen...</div>;
   }
 
   return (
-    <div style={{ padding: '2rem', background: '#000000', minHeight: '100vh', color: '#ffffff' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <Button variant="secondary" onClick={() => navigate('/dashboard')}>
-            <ArrowLeft size={18} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+    <div className="p-8 bg-background min-h-screen text-foreground">
+      <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={() => navigate('/settings')}>
+            <ArrowLeft size={18} className="mr-2 align-middle" />
             Zurück
           </Button>
-          <MapPin size={28} color="#ffd700" />
-          <h1 style={{ margin: 0, color: '#ffd700', fontSize: '1.5rem', fontWeight: 'bold' }}>
+          <MapPin size={28} className="text-primary" />
+          <h1 className="m-0 text-foreground text-2xl font-semibold">
             Spielorte / Locations
           </h1>
         </div>
         {canEdit && (
           <Button onClick={() => navigate('/locations/create')}>
-            <Plus size={18} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+            <Plus size={18} className="mr-2 align-middle" />
             Neuer Spielort
           </Button>
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div style={{ position: 'relative', maxWidth: '320px', width: '100%' }}>
+      <div className="flex gap-4 mb-6">
+        <div className="relative max-w-[320px] w-full">
           <MagnifyingGlass
             size={18}
-            style={{
-              position: 'absolute',
-              left: '10px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: '#888',
-            }}
+            className="absolute left-[10px] top-1/2 -translate-y-1/2 text-muted-foreground"
           />
           <Input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Nach Name suchen..."
-            style={{ paddingLeft: '36px' }}
+            className="pl-9"
           />
         </div>
       </div>
 
       {filteredLocations.length === 0 ? (
-        <Card style={{ padding: '1.5rem', textAlign: 'center', color: '#cccccc' }}>
-          Keine Spielorte gefunden.
+        <Card>
+          <CardContent className="p-6 text-center text-muted-foreground">
+            Keine Spielorte gefunden.
+          </CardContent>
         </Card>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
           {filteredLocations.map((loc) => (
             <Card
               key={loc.id}
-              style={{ padding: '1rem', cursor: 'pointer' }}
+              className="p-4 cursor-pointer hover:bg-accent/50 transition-colors"
               onClick={() => navigate(`/locations/${loc.id}`)}
             >
-              <h3 style={{ margin: '0 0 0.5rem 0', color: '#ffd700' }}>{loc.name}</h3>
-              <div style={{ color: '#cccccc', fontSize: '0.85rem' }}>
+              <h3 className="m-0 mb-2 text-foreground">{loc.name}</h3>
+              <div className="text-muted-foreground text-sm">
                 {loc.spielfelder?.length ?? 0} Spielfelder
               </div>
             </Card>

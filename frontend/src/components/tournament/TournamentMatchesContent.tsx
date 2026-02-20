@@ -8,16 +8,17 @@ import { tableService } from '../../services/tableService';
 import { tournamentService } from '../../services/tournamentService';
 import { locationService } from '../../services/locationService';
 import { Tournament, Participant } from '../../types';
-import { theme } from '../../theme/theme';
+import { cn } from '@/lib/utils';
 import { Button } from '../ui';
 import KOBracket from './KOBracket';
 
 interface TournamentMatchesContentProps {
   tournamentId: number;
   tournament: Tournament;
+  view?: 'group' | 'ko' | 'both';
 }
 
-export default function TournamentMatchesContent({ tournamentId, tournament }: TournamentMatchesContentProps) {
+export default function TournamentMatchesContent({ tournamentId, tournament, view = 'both' }: TournamentMatchesContentProps) {
   const { canEdit } = useAuth();
   const [groups, setGroups] = useState<GroupWithParticipants[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
@@ -27,9 +28,11 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
   const [loading, setLoading] = useState(true);
   const [editingMatch, setEditingMatch] = useState<number | null>(null);
   const [scoreForm, setScoreForm] = useState({ score1: '', score2: '' });
-  const [matchType, setMatchType] = useState<'group' | 'ko'>(() => (
-    tournament.has_group_phase ? 'group' : 'ko'
-  ));
+  const [matchType, setMatchType] = useState<'group' | 'ko'>(() => {
+    if (view === 'group') return 'group';
+    if (view === 'ko') return 'ko';
+    return tournament.has_group_phase ? 'group' : 'ko';
+  });
   const [koViewMode, setKoViewMode] = useState<'table' | 'bracket'>('bracket');
   const [decisionMatchesLoading, setDecisionMatchesLoading] = useState(false);
   const [manualPairs, setManualPairs] = useState<Array<{ player1_id: number | null; player2_id: number | null }>>([]);
@@ -68,16 +71,18 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
 
   const loadData = async () => {
     try {
-      // Load tournament participants first
-      try {
-        const participantsData = await participantService.getTournamentParticipants(tournamentId);
-        setParticipants(participantsData);
-      } catch (err) {
-        const participantsData = await participantService.getAll();
-        setParticipants(participantsData);
+      // Load tournament participants (needed for KO view)
+      if (view !== 'group') {
+        try {
+          const participantsData = await participantService.getTournamentParticipants(tournamentId);
+          setParticipants(participantsData);
+        } catch (err) {
+          const participantsData = await participantService.getAll();
+          setParticipants(participantsData);
+        }
       }
-      
-      if (tournament.has_group_phase) {
+
+      if (view !== 'ko' && tournament.has_group_phase) {
         const groupsData = await groupService.getGroups(tournamentId);
         
         const fullGroups = await Promise.all(
@@ -90,7 +95,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
         }
       }
       
-      if (tournament.has_ko_phase) {
+      if (view !== 'group' && tournament.has_ko_phase) {
         const koData = await matchService.getKnockoutMatches(tournamentId);
         setKoMatches(koData);
       }
@@ -138,16 +143,25 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
   };
 
   useEffect(() => {
+    if (view === 'group') {
+      setMatchType('group');
+      return;
+    }
+    if (view === 'ko') {
+      setMatchType('ko');
+      return;
+    }
     if (!tournament.has_group_phase && tournament.has_ko_phase) {
       setMatchType('ko');
     }
-  }, [tournament.has_group_phase, tournament.has_ko_phase]);
+  }, [view, tournament.has_group_phase, tournament.has_ko_phase]);
 
   const isManualKo = (tournament.mode === 'knockout' || tournament.mode === 'combined') && tournament.ko_draw_method === 'manual';
   const r1ParticipantSource = tournament.mode === 'combined' && isManualKo ? qualifiedParticipants : participants;
   const r1ParticipantIds = r1ParticipantSource.map(p => p.id);
 
   useEffect(() => {
+    if (view === 'group') return;
     if (!isManualKo || koMatches.length > 0) return;
     const count = r1ParticipantIds.length;
     if (count < 2) return;
@@ -160,6 +174,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
   }, [r1ParticipantIds.length, isManualKo, koMatches.length]);
 
   useEffect(() => {
+    if (view === 'group') return;
     if (!tournament.has_ko_phase || tournament.mode !== 'combined' || tournament.ko_draw_method !== 'manual') {
       setQualifiedParticipants([]);
       return;
@@ -463,33 +478,35 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
     }
   };
 
-  if (loading) return <div style={{ color: theme.colors.text.secondary }}>Wird geladen...</div>;
+  if (loading) return <div className="text-muted-foreground">Wird geladen...</div>;
 
   const selectedGroup = groups.find(g => g.id === selectedGroupId);
   const regularGroupMatches = groupMatches.filter(m => !m.is_decision_match);
   const decisionGroupMatches = groupMatches.filter(m => m.is_decision_match);
   const canGenerateKo = canEdit && tournament.mode === 'knockout' && tournament.has_ko_phase && !tournament.has_group_phase && !isManualKo;
 
+  const scoreInputClasses = 'w-[60px] py-1 text-center border border-border rounded-md bg-background text-foreground';
+
   return (
     <div>
       {/* Phase Selection */}
-      {tournament.has_group_phase && tournament.has_ko_phase && (
-        <div style={{ marginBottom: '2rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+      {view === 'both' && tournament.has_group_phase && tournament.has_ko_phase && (
+        <div className="mb-8">
+          <label className="block mb-2 font-bold text-foreground">
             Phase auswählen:
           </label>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className="flex gap-2">
             <Button
               onClick={() => setMatchType('group')}
               variant={matchType === 'group' ? 'info' : 'secondary'}
-              style={{ fontWeight: matchType === 'group' ? 'bold' : 'normal' }}
+              className={cn(matchType === 'group' && 'font-bold')}
             >
               Gruppenphase
             </Button>
             <Button
               onClick={() => setMatchType('ko')}
               variant={matchType === 'ko' ? 'danger' : 'secondary'}
-              style={{ fontWeight: matchType === 'ko' ? 'bold' : 'normal' }}
+              className={cn(matchType === 'ko' && 'font-bold')}
             >
               KO-Phase
             </Button>
@@ -498,36 +515,26 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
       )}
 
       {/* Group Phase Matches */}
-      {matchType === 'group' && (
+      {view !== 'ko' && matchType === 'group' && (
         <>
           {groups.length === 0 ? (
-            <div style={{ padding: '2rem', textAlign: 'center', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-              <p style={{ color: theme.colors.text.primary }}>Noch keine Gruppen vorhanden.</p>
-              <p style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>Bitte erstellen Sie zuerst Gruppen im Tab "Gruppen".</p>
+            <div className="p-8 text-center bg-card rounded-lg border border-border">
+              <p className="text-foreground">Noch keine Gruppen vorhanden.</p>
+              <p className="text-sm text-muted-foreground">Bitte erstellen Sie zuerst Gruppen im Tab "Gruppen".</p>
             </div>
           ) : (
             <>
               {/* Group Tabs */}
-              <div style={{ 
-                marginBottom: '2rem',
-                display: 'flex',
-                gap: '0.5rem',
-                flexWrap: 'wrap',
-                borderBottom: `2px solid ${theme.colors.border.standard}`,
-                paddingBottom: '0.5rem'
-              }}>
+              <div className="mb-8 flex gap-2 flex-wrap border-b-2 border-border pb-2">
                 {groups.map(group => (
                   <Button
                     key={group.id}
                     onClick={() => setSelectedGroupId(group.id)}
                     variant={selectedGroupId === group.id ? 'primary' : 'secondary'}
-                    style={{ 
-                      fontWeight: selectedGroupId === group.id ? 'bold' : 'normal',
-                      whiteSpace: 'nowrap',
-                      borderRadius: `${theme.borderRadius.card} ${theme.borderRadius.card} 0 0`,
-                      borderBottom: selectedGroupId === group.id ? `3px solid ${theme.colors.accent.primary}` : 'none',
-                      marginBottom: selectedGroupId === group.id ? '-2px' : '0'
-                    }}
+                    className={cn(
+                      'whitespace-nowrap rounded-t-lg',
+                      selectedGroupId === group.id && 'font-bold border-b-2 border-b-primary -mb-0.5'
+                    )}
                   >
                     {group.name} ({group.participants.length})
                   </Button>
@@ -536,83 +543,67 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
 
               {selectedGroup && (
                 <>
-                  <h3 style={{ color: theme.colors.text.primary }}>Gruppe: {selectedGroup.name}</h3>
-                  <div style={{ marginBottom: '1rem', color: theme.colors.text.secondary }}>
+                  <h3 className="text-foreground">Gruppe: {selectedGroup.name}</h3>
+                  <div className="mb-4 text-muted-foreground">
                     {selectedGroup.participants.length} Teilnehmer
                   </div>
 
                   {regularGroupMatches.length === 0 ? (
-                    <div style={{ padding: '2rem', textAlign: 'center', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-                      <p style={{ color: theme.colors.text.primary }}>Noch keine Spiele vorhanden.</p>
-                      <p style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>Bitte generieren Sie die Spiele im Tab "Gruppen".</p>
+                    <div className="p-8 text-center bg-card rounded-lg border border-border">
+                      <p className="text-foreground">Noch keine Spiele vorhanden.</p>
+                      <p className="text-sm text-muted-foreground">Bitte generieren Sie die Spiele im Tab "Gruppen".</p>
                     </div>
                   ) : (
-                    <div style={{ background: theme.colors.background.card, border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.card, overflow: 'hidden' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <div className="bg-card border border-border rounded-lg overflow-hidden">
+                      <table className="w-full border-collapse">
                         <thead>
-                          <tr style={{ background: theme.colors.accent.primary, color: theme.colors.background.primary }}>
-                            <th style={{ padding: '0.75rem', textAlign: 'left' }}>Runde</th>
-                            <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spiel</th>
+                          <tr className="bg-primary text-primary-foreground">
+                            <th className="p-3 text-left">Runde</th>
+                            <th className="p-3 text-left">Spiel</th>
                             {tournament.location_id && (
-                              <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spielfeld</th>
+                              <th className="p-3 text-left">Spielfeld</th>
                             )}
-                            <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 1</th>
-                            <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 2</th>
-                            <th style={{ padding: '0.75rem', textAlign: 'center' }}>Ergebnis</th>
-                            <th style={{ padding: '0.75rem', textAlign: 'center' }}>Aktion</th>
+                            <th className="p-3 text-left">Spieler 1</th>
+                            <th className="p-3 text-left">Spieler 2</th>
+                            <th className="p-3 text-center">Ergebnis</th>
+                            <th className="p-3 text-center">Aktion</th>
                           </tr>
                         </thead>
                         <tbody>
                           {regularGroupMatches
                             .sort((a, b) => (a.round - b.round) || (a.match_no - b.match_no))
                             .map((match) => (
-                            <tr key={match.id} style={{ borderBottom: `1px solid ${theme.colors.border.standard}`, background: theme.colors.background.secondary }}>
-                              <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>Runde {match.round}</td>
-                              <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>Spiel {match.match_no}</td>
+                            <tr key={match.id} className="border-b border-border bg-muted">
+                              <td className="p-3 text-foreground">Runde {match.round}</td>
+                              <td className="p-3 text-foreground">Spiel {match.match_no}</td>
                               {tournament.location_id && (
-                                <td style={{ padding: '0.75rem', color: theme.colors.text.secondary, fontSize: '0.875rem' }}>
+                                <td className="p-3 text-muted-foreground text-sm">
                                   {match.spielfeld_id ? (spielfeldIdToName[match.spielfeld_id] ?? `#${match.spielfeld_id}`) : '–'}
                                 </td>
                               )}
-                              <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{getParticipantName(match.player1_id)}</td>
-                              <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{getParticipantName(match.player2_id)}</td>
-                              <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                              <td className="p-3 text-foreground">{getParticipantName(match.player1_id)}</td>
+                              <td className="p-3 text-foreground">{getParticipantName(match.player2_id)}</td>
+                              <td className="p-3 text-center">
                                 {editingMatch === match.id ? (
-                                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center' }}>
+                                  <div className="flex gap-2 items-center justify-center">
                                     <input
                                       type="number"
                                       value={scoreForm.score1}
                                       onChange={(e) => setScoreForm({ ...scoreForm, score1: e.target.value })}
-                                      style={{ 
-                                        width: '60px', 
-                                        padding: '0.25rem', 
-                                        textAlign: 'center', 
-                                        border: `1px solid ${theme.colors.border.standard}`, 
-                                        borderRadius: theme.borderRadius.input,
-                                        background: theme.colors.background.primary,
-                                        color: theme.colors.text.primary
-                                      }}
+                                      className={scoreInputClasses}
                                       min="0"
                                     />
-                                    <span style={{ color: theme.colors.text.primary }}>:</span>
+                                    <span className="text-foreground">:</span>
                                     <input
                                       type="number"
                                       value={scoreForm.score2}
                                       onChange={(e) => setScoreForm({ ...scoreForm, score2: e.target.value })}
-                                      style={{ 
-                                        width: '60px', 
-                                        padding: '0.25rem', 
-                                        textAlign: 'center', 
-                                        border: `1px solid ${theme.colors.border.standard}`, 
-                                        borderRadius: theme.borderRadius.input,
-                                        background: theme.colors.background.primary,
-                                        color: theme.colors.text.primary
-                                      }}
+                                      className={scoreInputClasses}
                                       min="0"
                                     />
                                   </div>
                                 ) : (
-                                  <span style={{ fontWeight: 'bold', color: theme.colors.text.primary }}>
+                                  <span className="font-bold text-foreground">
                                     {match.score1 !== null && match.score2 !== null 
                                       ? `${match.score1} : ${match.score2}`
                                       : '- : -'
@@ -620,20 +611,20 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                                   </span>
                                 )}
                               </td>
-                              <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                              <td className="p-3 text-center">
                                 {canEdit && editingMatch === match.id ? (
-                                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                                  <div className="flex gap-2 justify-center">
                                     <Button
                                       onClick={() => handleSave(match.id)}
                                       variant="success"
-                                      style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                                      className="py-1 px-3 text-sm"
                                     >
                                       ✓
                                     </Button>
                                     <Button
                                       onClick={handleCancel}
                                       variant="danger"
-                                      style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                                      className="py-1 px-3 text-sm"
                                     >
                                       ✕
                                     </Button>
@@ -642,12 +633,12 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                                   <Button
                                     onClick={() => handleEdit(match)}
                                     variant="info"
-                                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                                    className="py-1 px-3 text-sm"
                                   >
                                     Ergebnis
                                   </Button>
                                 ) : (
-                                  <span style={{ color: theme.colors.text.secondary }}>-</span>
+                                  <span className="text-muted-foreground">-</span>
                                 )}
                               </td>
                             </tr>
@@ -658,16 +649,16 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                   )}
                   {/* Decision Matches */}
                   {(tournament.tie_breaking_rules?.includes('decision_match') || decisionGroupMatches.length > 0) && (
-                    <div style={{ marginTop: '2rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                        <h4 style={{ margin: 0, color: theme.colors.text.primary }}>Entscheidungsspiele</h4>
+                    <div className="mt-8">
+                      <div className="flex justify-between items-center mb-3">
+                        <h4 className="m-0 text-foreground">Entscheidungsspiele</h4>
                         {canEdit && (
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <div className="flex gap-2">
                             <Button
                               onClick={handleGenerateDecisionMatches}
                               variant="info"
                               disabled={decisionMatchesLoading}
-                              style={{ fontSize: '0.875rem' }}
+                              className="text-sm"
                             >
                               Erzeugen
                             </Button>
@@ -675,7 +666,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                               onClick={handleDeleteDecisionMatches}
                               variant="danger"
                               disabled={decisionMatchesLoading || decisionGroupMatches.length === 0}
-                              style={{ fontSize: '0.875rem' }}
+                              className="text-sm"
                             >
                               Löschen
                             </Button>
@@ -683,78 +674,62 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                         )}
                       </div>
                       {decisionGroupMatches.length === 0 ? (
-                        <div style={{ padding: '1rem', background: theme.colors.background.secondary, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-                          <p style={{ margin: 0, fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+                        <div className="p-4 bg-muted rounded-lg border border-border">
+                          <p className="m-0 text-sm text-muted-foreground">
                             Noch keine Entscheidungsspiele vorhanden.
                           </p>
                         </div>
                       ) : (
-                        <div style={{ background: theme.colors.background.card, border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.card, overflow: 'hidden' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <div className="bg-card border border-border rounded-lg overflow-hidden">
+                          <table className="w-full border-collapse">
                             <thead>
-                              <tr style={{ background: theme.colors.accent.warning, color: theme.colors.background.primary }}>
-                                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Runde</th>
-                                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spiel</th>
+                              <tr className="bg-warning text-warning-foreground">
+                                <th className="p-3 text-left">Runde</th>
+                                <th className="p-3 text-left">Spiel</th>
                                 {tournament.location_id && (
-                                  <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spielfeld</th>
+                                  <th className="p-3 text-left">Spielfeld</th>
                                 )}
-                                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 1</th>
-                                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 2</th>
-                                <th style={{ padding: '0.75rem', textAlign: 'center' }}>Ergebnis</th>
-                                <th style={{ padding: '0.75rem', textAlign: 'center' }}>Aktion</th>
+                                <th className="p-3 text-left">Spieler 1</th>
+                                <th className="p-3 text-left">Spieler 2</th>
+                                <th className="p-3 text-center">Ergebnis</th>
+                                <th className="p-3 text-center">Aktion</th>
                               </tr>
                             </thead>
                             <tbody>
                               {decisionGroupMatches
                                 .sort((a, b) => (a.round - b.round) || (a.match_no - b.match_no))
                                 .map((match) => (
-                                  <tr key={match.id} style={{ borderBottom: `1px solid ${theme.colors.border.standard}`, background: theme.colors.background.secondary }}>
-                                    <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>Runde {match.round}</td>
-                                    <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>Spiel {match.match_no}</td>
+                                  <tr key={match.id} className="border-b border-border bg-muted">
+                                    <td className="p-3 text-foreground">Runde {match.round}</td>
+                                    <td className="p-3 text-foreground">Spiel {match.match_no}</td>
                                     {tournament.location_id && (
-                                      <td style={{ padding: '0.75rem', color: theme.colors.text.secondary, fontSize: '0.875rem' }}>
+                                      <td className="p-3 text-muted-foreground text-sm">
                                         {match.spielfeld_id ? (spielfeldIdToName[match.spielfeld_id] ?? `#${match.spielfeld_id}`) : '–'}
                                       </td>
                                     )}
-                                    <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{getParticipantName(match.player1_id)}</td>
-                                    <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{getParticipantName(match.player2_id)}</td>
-                                    <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                                    <td className="p-3 text-foreground">{getParticipantName(match.player1_id)}</td>
+                                    <td className="p-3 text-foreground">{getParticipantName(match.player2_id)}</td>
+                                    <td className="p-3 text-center">
                                       {editingMatch === match.id ? (
-                                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center' }}>
+                                        <div className="flex gap-2 items-center justify-center">
                                           <input
                                             type="number"
                                             value={scoreForm.score1}
                                             onChange={(e) => setScoreForm({ ...scoreForm, score1: e.target.value })}
-                                            style={{ 
-                                              width: '60px', 
-                                              padding: '0.25rem', 
-                                              textAlign: 'center', 
-                                              border: `1px solid ${theme.colors.border.standard}`, 
-                                              borderRadius: theme.borderRadius.input,
-                                              background: theme.colors.background.primary,
-                                              color: theme.colors.text.primary
-                                            }}
+                                            className={scoreInputClasses}
                                             min="0"
                                           />
-                                          <span style={{ color: theme.colors.text.primary }}>:</span>
+                                          <span className="text-foreground">:</span>
                                           <input
                                             type="number"
                                             value={scoreForm.score2}
                                             onChange={(e) => setScoreForm({ ...scoreForm, score2: e.target.value })}
-                                            style={{ 
-                                              width: '60px', 
-                                              padding: '0.25rem', 
-                                              textAlign: 'center', 
-                                              border: `1px solid ${theme.colors.border.standard}`, 
-                                              borderRadius: theme.borderRadius.input,
-                                              background: theme.colors.background.primary,
-                                              color: theme.colors.text.primary
-                                            }}
+                                            className={scoreInputClasses}
                                             min="0"
                                           />
                                         </div>
                                       ) : (
-                                        <span style={{ fontWeight: 'bold', color: theme.colors.text.primary }}>
+                                        <span className="font-bold text-foreground">
                                           {match.score1 !== null && match.score2 !== null 
                                             ? `${match.score1} : ${match.score2}`
                                             : '- : -'
@@ -762,20 +737,20 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                                         </span>
                                       )}
                                     </td>
-                                    <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                                    <td className="p-3 text-center">
                                       {canEdit && editingMatch === match.id ? (
-                                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                                        <div className="flex gap-2 justify-center">
                                           <Button
                                             onClick={() => handleSave(match.id)}
                                             variant="success"
-                                            style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                                            className="py-1 px-3 text-sm"
                                           >
                                             ✓
                                           </Button>
                                           <Button
                                             onClick={handleCancel}
                                             variant="danger"
-                                            style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                                            className="py-1 px-3 text-sm"
                                           >
                                             ✕
                                           </Button>
@@ -784,12 +759,12 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                                         <Button
                                           onClick={() => handleEdit(match)}
                                           variant="info"
-                                          style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                                          className="py-1 px-3 text-sm"
                                         >
                                           Ergebnis
                                         </Button>
                                       ) : (
-                                        <span style={{ color: theme.colors.text.secondary }}>-</span>
+                                        <span className="text-muted-foreground">-</span>
                                       )}
                                     </td>
                                   </tr>
@@ -808,15 +783,15 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
       )}
 
       {/* KO Phase Matches */}
-      {matchType === 'ko' && (
+      {view !== 'group' && matchType === 'ko' && (
         <>
           {/* Regenerate Button (always visible if can edit and has KO phase) */}
           {canEdit && tournament.has_ko_phase && !isManualKo && (
-            <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+            <div className="mb-6 flex justify-end">
               <Button 
                 onClick={handleGenerateKOBracket} 
                 variant="warning"
-                style={{ fontSize: '0.875rem' }}
+                className="text-sm"
               >
                 {koMatches.length > 0 ? '🔄 KO-Bracket neu generieren' : '🏆 KO-Bracket generieren'}
               </Button>
@@ -824,46 +799,39 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
           )}
           
           {koMatches.length === 0 ? (
-            <div style={{ padding: '2rem', textAlign: 'center', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-              <p style={{ color: theme.colors.text.primary }}>Noch keine KO-Spiele vorhanden.</p>
+            <div className="p-8 text-center bg-card rounded-lg border border-border">
+              <p className="text-foreground">Noch keine KO-Spiele vorhanden.</p>
               {tournament.has_group_phase ? (
-                <p style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>Bitte generieren Sie das KO-Bracket im Tab "Gruppen".</p>
+                <p className="text-sm text-muted-foreground">Bitte generieren Sie das KO-Bracket hier.</p>
               ) : (
-                <p style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>Bitte erstellen Sie das KO-Bracket für dieses Turnier.</p>
+                <p className="text-sm text-muted-foreground">Bitte erstellen Sie das KO-Bracket für dieses Turnier.</p>
               )}
               {canGenerateKo && (
-                <div style={{ marginTop: '1rem' }}>
+                <div className="mt-4">
                   <Button onClick={handleGenerateKOBracket} variant="danger">
                     🏆 KO-Bracket generieren
                   </Button>
                 </div>
               )}
               {isManualKo && (
-                <div style={{
-                  marginTop: '1.5rem',
-                  textAlign: 'left',
-                  background: theme.colors.background.secondary,
-                  border: `1px solid ${theme.colors.border.standard}`,
-                  borderRadius: theme.borderRadius.card,
-                  padding: '1rem'
-                }}>
-                  <h4 style={{ marginTop: 0, color: theme.colors.text.primary }}>Manuelle Paarungen – Runde 1</h4>
+                <div className="mt-6 text-left bg-muted border border-border rounded-lg p-4">
+                  <h4 className="mt-0 text-foreground">Manuelle Paarungen – Runde 1</h4>
                   {tournament.mode === 'combined' && (
-                    <p style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginTop: '0.25rem' }}>
+                    <p className="text-sm text-muted-foreground mt-1">
                       Nur qualifizierte Teilnehmer. Bitte zuerst Gruppenphase abschließen.
                     </p>
                   )}
-                  <p style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginTop: '0.25rem' }}>
+                  <p className="text-sm text-muted-foreground mt-1">
                     {tournament.mode === 'combined' ? 'Weisen Sie alle qualifizierten Teilnehmer genau einmal zu (Rest Bye).' : 'Weisen Sie alle Turnier-Teilnehmer genau einmal zu. Leere Slots = Freilos.'}
                   </p>
                   {qualifiedLoading && tournament.mode === 'combined' ? (
-                    <p style={{ color: theme.colors.text.secondary }}>Qualifizierte Teilnehmer werden geladen...</p>
+                    <p className="text-muted-foreground">Qualifizierte Teilnehmer werden geladen...</p>
                   ) : manualPairs.length === 0 ? (
-                    <p style={{ color: theme.colors.text.secondary }}>Teilnehmer werden geladen...</p>
+                    <p className="text-muted-foreground">Teilnehmer werden geladen...</p>
                   ) : r1ParticipantIds.length < 2 && tournament.mode === 'combined' ? (
-                    <p style={{ color: theme.colors.accent.warning }}>Noch keine qualifizierten Teilnehmer. Bitte Gruppenphase abschließen.</p>
+                    <p className="text-warning">Noch keine qualifizierten Teilnehmer. Bitte Gruppenphase abschließen.</p>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
+                    <div className="flex flex-col gap-3 mt-4">
                       {manualPairs.map((pair, index) => {
                         const usedIds = new Set<number>();
                         manualPairs.forEach((p, idx) => {
@@ -874,19 +842,12 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                         const availablePlayer1 = r1ParticipantSource.filter(p => (!usedIds.has(p.id) && p.id !== pair.player2_id) || p.id === pair.player1_id);
                         const availablePlayer2 = r1ParticipantSource.filter(p => (!usedIds.has(p.id) && p.id !== pair.player1_id) || p.id === pair.player2_id);
                         return (
-                          <div key={`pair-${index}`} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                            <span style={{ minWidth: '60px', color: theme.colors.text.secondary }}>Spiel {index + 1}</span>
+                          <div key={`pair-${index}`} className="flex gap-2 items-center">
+                            <span className="min-w-[60px] text-muted-foreground">Spiel {index + 1}</span>
                             <select
                               value={pair.player1_id ?? ''}
                               onChange={(e) => updateManualPair(index, 'player1_id', e.target.value)}
-                              style={{
-                                flex: 1,
-                                padding: '0.5rem',
-                                border: `1px solid ${theme.colors.border.standard}`,
-                                borderRadius: theme.borderRadius.input,
-                                background: theme.colors.background.primary,
-                                color: theme.colors.text.primary
-                              }}
+                              className="flex-1 py-2 px-2 border border-border rounded-md bg-background text-foreground"
                             >
                               <option value="">-</option>
                               {availablePlayer1.map((p: { id: number; first_name: string; last_name: string }) => (
@@ -895,18 +856,11 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                                 </option>
                               ))}
                             </select>
-                            <span style={{ color: theme.colors.text.secondary }}>vs</span>
+                            <span className="text-muted-foreground">vs</span>
                             <select
                               value={pair.player2_id ?? ''}
                               onChange={(e) => updateManualPair(index, 'player2_id', e.target.value)}
-                              style={{
-                                flex: 1,
-                                padding: '0.5rem',
-                                border: `1px solid ${theme.colors.border.standard}`,
-                                borderRadius: theme.borderRadius.input,
-                                background: theme.colors.background.primary,
-                                color: theme.colors.text.primary
-                              }}
+                              className="flex-1 py-2 px-2 border border-border rounded-md bg-background text-foreground"
                             >
                               <option value="">-</option>
                               {availablePlayer2.map((p: { id: number; first_name: string; last_name: string }) => (
@@ -921,18 +875,11 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                     </div>
                   )}
                   {manualError && (
-                    <div style={{
-                      marginTop: '1rem',
-                      padding: '0.75rem',
-                      background: `${theme.colors.accent.error}20`,
-                      border: `1px solid ${theme.colors.accent.error}`,
-                      borderRadius: theme.borderRadius.card,
-                      color: theme.colors.accent.error
-                    }}>
+                    <div className="mt-4 p-3 bg-destructive/20 border border-destructive rounded-lg text-destructive">
                       {manualError}
                     </div>
                   )}
-                  <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                  <div className="mt-4 flex justify-end">
                     <Button onClick={handleSaveManualPairs} variant="success" disabled={manualSaving || manualPairs.length === 0}>
                       {manualSaving ? 'Speichere...' : 'Runde 1 speichern'}
                     </Button>
@@ -943,22 +890,22 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
           ) : (
             <>
               {/* View Mode Toggle */}
-              <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label style={{ fontWeight: 'bold', color: theme.colors.text.primary }}>
+              <div className="mb-8 flex justify-between items-center">
+                <label className="font-bold text-foreground">
                   Ansicht:
                 </label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <div className="flex gap-2">
                   <Button
                     onClick={() => setKoViewMode('bracket')}
                     variant={koViewMode === 'bracket' ? 'danger' : 'secondary'}
-                    style={{ fontWeight: koViewMode === 'bracket' ? 'bold' : 'normal' }}
+                    className={cn(koViewMode === 'bracket' && 'font-bold')}
                   >
                     Turnierbaum
                   </Button>
                   <Button
                     onClick={() => setKoViewMode('table')}
                     variant={koViewMode === 'table' ? 'danger' : 'secondary'}
-                    style={{ fontWeight: koViewMode === 'table' ? 'bold' : 'normal' }}
+                    className={cn(koViewMode === 'table' && 'font-bold')}
                   >
                     Tabelle
                   </Button>
@@ -971,7 +918,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                 const maxMainRound = Math.max(...koMatches.filter(m => m.round !== 99 && m.round >= 1).map(m => m.round), 1);
                 const semiRound = maxMainRound >= 2 ? maxMainRound - 1 : 2;
                 return (
-                  <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                  <div className="mb-8 flex flex-col gap-6">
                     {rounds.map(roundNum => {
                       const pairs = roundPairingsEdits[roundNum] ?? [];
                       const winnersOrLosers = roundNum === 1 ? [] : (roundNum === 99 ? getLosersOfRound(semiRound) : getWinnersOfRound(roundNum - 1));
@@ -985,12 +932,12 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                       });
                       const roundLabel = roundNum === 99 ? 'Bronze (Platz 3)' : `Runde ${roundNum}`;
                       return (
-                        <div key={roundNum} style={{ padding: '1rem', background: theme.colors.background.secondary, border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.card }}>
-                          <h4 style={{ marginTop: 0, marginBottom: '0.75rem', color: theme.colors.text.primary }}>{roundLabel}</h4>
-                          <p style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '1rem' }}>
+                        <div key={roundNum} className="p-4 bg-muted border border-border rounded-lg">
+                          <h4 className="mt-0 mb-3 text-foreground">{roundLabel}</h4>
+                          <p className="text-sm text-muted-foreground mb-4">
                             {roundNum === 1 ? (tournament.mode === 'combined' ? 'Qualifizierte Teilnehmer (Auslosung eintragen)' : 'Teilnehmer (Auslosung eintragen)') : roundNum === 99 ? 'Halbfinal-Verlierer' : `Sieger aus Runde ${roundNum - 1}`}
                           </p>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <div className="flex flex-col gap-2">
                             {pairs.map((pair) => {
                               const usedElse = new Set<number>();
                               pairs.forEach(p => {
@@ -1001,23 +948,23 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                               const opt1 = allowedIds.filter(id => id !== pair.player2_id && (!usedElse.has(id) || id === pair.player1_id));
                               const opt2 = allowedIds.filter(id => id !== pair.player1_id && (!usedElse.has(id) || id === pair.player2_id));
                               return (
-                                <div key={pair.match_no} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                  <span style={{ minWidth: '80px', color: theme.colors.text.secondary }}>Spiel {pair.match_no}</span>
+                                <div key={pair.match_no} className="flex gap-2 items-center">
+                                  <span className="min-w-[80px] text-muted-foreground">Spiel {pair.match_no}</span>
                                   <select
                                     value={pair.player1_id ?? ''}
                                     onChange={(e) => updateRoundPairing(roundNum, pair.match_no, 'player1_id', e.target.value ? parseInt(e.target.value) : null)}
-                                    style={{ flex: 1, padding: '0.5rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.primary, color: theme.colors.text.primary }}
+                                    className="flex-1 py-2 px-2 border border-border rounded-md bg-background text-foreground"
                                   >
                                     <option value="">-</option>
                                     {opt1.map(id => (
                                       <option key={id} value={id}>{getParticipantNameById(id)}</option>
                                     ))}
                                   </select>
-                                  <span style={{ color: theme.colors.text.secondary }}>vs</span>
+                                  <span className="text-muted-foreground">vs</span>
                                   <select
                                     value={pair.player2_id ?? ''}
                                     onChange={(e) => updateRoundPairing(roundNum, pair.match_no, 'player2_id', e.target.value ? parseInt(e.target.value) : null)}
-                                    style={{ flex: 1, padding: '0.5rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.primary, color: theme.colors.text.primary }}
+                                    className="flex-1 py-2 px-2 border border-border rounded-md bg-background text-foreground"
                                   >
                                     <option value="">-</option>
                                     {opt2.map(id => (
@@ -1028,7 +975,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                               );
                             })}
                           </div>
-                          <div style={{ marginTop: '1rem' }}>
+                          <div className="mt-4">
                             <Button onClick={() => handleSaveRoundPairings(roundNum)} variant="success" disabled={savingRound !== null}>
                               {savingRound === roundNum ? 'Speichere...' : `${roundNum === 99 ? 'Bronze' : `Runde ${roundNum}`} speichern`}
                             </Button>
@@ -1042,77 +989,41 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
 
               {/* Bracket View */}
               {koViewMode === 'bracket' && (
-                <div style={{ position: 'relative' }}>
+                <div className="relative">
                   {/* Edit Dialog Overlay */}
                   {editingMatch && (
-                    <div style={{
-                      position: 'fixed',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      background: 'rgba(0, 0, 0, 0.5)',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      zIndex: 1000
-                    }}>
-                      <div style={{
-                        background: theme.colors.background.card,
-                        padding: '2rem',
-                        borderRadius: theme.borderRadius.modal,
-                        minWidth: '400px',
-                        boxShadow: theme.shadows.card,
-                        border: `1px solid ${theme.colors.border.standard}`
-                      }}>
-                        <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: theme.colors.text.primary }}>Ergebnis eintragen</h3>
+                    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
+                      <div className="bg-card p-8 rounded-lg min-w-[400px] shadow-lg border border-border">
+                        <h3 className="mt-0 mb-6 text-foreground">Ergebnis eintragen</h3>
                         {(() => {
                           const match = koMatches.find(m => m.id === editingMatch);
                           if (!match) return null;
                           return (
                             <>
-                              <div style={{ marginBottom: '1rem' }}>
-                                <div style={{ marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>{getParticipantNameById(match.player1_id)}</div>
-                                <div style={{ marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>{getParticipantNameById(match.player2_id)}</div>
+                              <div className="mb-4">
+                                <div className="mb-2 font-bold text-foreground">{getParticipantNameById(match.player1_id)}</div>
+                                <div className="mb-2 font-bold text-foreground">{getParticipantNameById(match.player2_id)}</div>
                               </div>
-                              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem' }}>
+                              <div className="flex gap-4 items-center mb-6">
                                 <input
                                   type="number"
                                   value={scoreForm.score1}
                                   onChange={(e) => setScoreForm({ ...scoreForm, score1: e.target.value })}
-                                  style={{ 
-                                    width: '80px', 
-                                    padding: '0.5rem', 
-                                    textAlign: 'center', 
-                                    border: `2px solid ${theme.colors.border.standard}`, 
-                                    borderRadius: theme.borderRadius.input, 
-                                    fontSize: '1.25rem',
-                                    background: theme.colors.background.primary,
-                                    color: theme.colors.text.primary
-                                  }}
+                                  className="w-20 py-2 text-center border-2 border-border rounded-md text-xl bg-background text-foreground"
                                   min="0"
                                   autoFocus
                                 />
-                                <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>:</span>
+                                <span className="text-2xl font-bold text-foreground">:</span>
                                 <input
                                   type="number"
                                   value={scoreForm.score2}
                                   onChange={(e) => setScoreForm({ ...scoreForm, score2: e.target.value })}
-                                  style={{ 
-                                    width: '80px', 
-                                    padding: '0.5rem', 
-                                    textAlign: 'center', 
-                                    border: `2px solid ${theme.colors.border.standard}`, 
-                                    borderRadius: theme.borderRadius.input, 
-                                    fontSize: '1.25rem',
-                                    background: theme.colors.background.primary,
-                                    color: theme.colors.text.primary
-                                  }}
+                                  className="w-20 py-2 text-center border-2 border-border rounded-md text-xl bg-background text-foreground"
                                   min="0"
                                 />
                               </div>
                               {canEdit && (
-                                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                                <div className="flex gap-4 justify-end">
                                   <Button
                                     onClick={handleCancel}
                                     variant="secondary"
@@ -1149,43 +1060,35 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
 
               {/* Table View */}
               {koViewMode === 'table' && (
-                <div style={{ background: theme.colors.background.card, border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.card, overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <div className="bg-card border border-border rounded-lg overflow-hidden">
+                  <table className="w-full border-collapse">
                     <thead>
-                      <tr style={{ background: theme.colors.accent.error, color: theme.colors.text.primary }}>
-                        <th style={{ padding: '0.75rem', textAlign: 'left' }}>Runde</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spiel</th>
+                      <tr className="bg-destructive text-foreground">
+                        <th className="p-3 text-left">Runde</th>
+                        <th className="p-3 text-left">Spiel</th>
                         {tournament.location_id && (
-                          <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spielfeld</th>
+                          <th className="p-3 text-left">Spielfeld</th>
                         )}
-                        <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 1</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 2</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center' }}>Ergebnis</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center' }}>Aktion</th>
+                        <th className="p-3 text-left">Spieler 1</th>
+                        <th className="p-3 text-left">Spieler 2</th>
+                        <th className="p-3 text-center">Ergebnis</th>
+                        <th className="p-3 text-center">Aktion</th>
                       </tr>
                     </thead>
                     <tbody>
                       {koMatches
                         .sort((a, b) => (a.round - b.round) || (a.match_no - b.match_no))
                         .map((match) => (
-                        <tr key={match.id} style={{ borderBottom: `1px solid ${theme.colors.border.standard}`, background: theme.colors.background.secondary }}>
-                          <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>Runde {match.round === 99 ? 'Bronze' : match.round}</td>
-                          <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>Spiel {match.match_no}</td>
+                        <tr key={match.id} className="border-b border-border bg-muted">
+                          <td className="p-3 text-foreground">Runde {match.round === 99 ? 'Bronze' : match.round}</td>
+                          <td className="p-3 text-foreground">Spiel {match.match_no}</td>
                           {tournament.location_id && (
-                            <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>
+                            <td className="p-3 text-sm">
                               {canEdit && spielfelderList.length > 0 ? (
                                 <select
                                   value={match.spielfeld_id ?? ''}
                                   onChange={(e) => handleKoMatchSpielfeldChange(match.id, e.target.value === '' ? null : Number(e.target.value))}
-                                  style={{
-                                    padding: '0.35rem 0.5rem',
-                                    fontSize: '0.875rem',
-                                    border: `1px solid ${theme.colors.border.standard}`,
-                                    borderRadius: theme.borderRadius.input,
-                                    background: theme.colors.background.secondary,
-                                    color: theme.colors.text.primary,
-                                    minWidth: '120px',
-                                  }}
+                                  className="py-1.5 px-2 text-sm border border-border rounded-md bg-muted text-foreground min-w-[120px]"
                                 >
                                   <option value="">—</option>
                                   {spielfelderList.map((sf) => (
@@ -1193,51 +1096,35 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                                   ))}
                                 </select>
                               ) : (
-                                <span style={{ color: theme.colors.text.secondary }}>
+                                <span className="text-muted-foreground">
                                   {match.spielfeld_id ? (spielfeldIdToName[match.spielfeld_id] ?? `#${match.spielfeld_id}`) : '–'}
                                 </span>
                               )}
                             </td>
                           )}
-                          <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{getKoParticipantLabel(match, 1)}</td>
-                          <td style={{ padding: '0.75rem', color: theme.colors.text.primary }}>{getKoParticipantLabel(match, 2)}</td>
-                          <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                          <td className="p-3 text-foreground">{getKoParticipantLabel(match, 1)}</td>
+                          <td className="p-3 text-foreground">{getKoParticipantLabel(match, 2)}</td>
+                          <td className="p-3 text-center">
                             {editingMatch === match.id ? (
-                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center' }}>
+                              <div className="flex gap-2 items-center justify-center">
                                 <input
                                   type="number"
                                   value={scoreForm.score1}
                                   onChange={(e) => setScoreForm({ ...scoreForm, score1: e.target.value })}
-                                  style={{ 
-                                    width: '60px', 
-                                    padding: '0.25rem', 
-                                    textAlign: 'center', 
-                                    border: `1px solid ${theme.colors.border.standard}`, 
-                                    borderRadius: theme.borderRadius.input,
-                                    background: theme.colors.background.primary,
-                                    color: theme.colors.text.primary
-                                  }}
+                                  className={scoreInputClasses}
                                   min="0"
                                 />
-                                <span style={{ color: theme.colors.text.primary }}>:</span>
+                                <span className="text-foreground">:</span>
                                 <input
                                   type="number"
                                   value={scoreForm.score2}
                                   onChange={(e) => setScoreForm({ ...scoreForm, score2: e.target.value })}
-                                  style={{ 
-                                    width: '60px', 
-                                    padding: '0.25rem', 
-                                    textAlign: 'center', 
-                                    border: `1px solid ${theme.colors.border.standard}`, 
-                                    borderRadius: theme.borderRadius.input,
-                                    background: theme.colors.background.primary,
-                                    color: theme.colors.text.primary
-                                  }}
+                                  className={scoreInputClasses}
                                   min="0"
                                 />
                               </div>
                             ) : (
-                              <span style={{ fontWeight: 'bold', color: theme.colors.text.primary }}>
+                              <span className="font-bold text-foreground">
                                 {match.score1 !== null && match.score2 !== null 
                                   ? `${match.score1} : ${match.score2}`
                                   : '- : -'
@@ -1245,40 +1132,40 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
                               </span>
                             )}
                           </td>
-                          <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                          <td className="p-3 text-center">
                             {canEdit && editingMatch === match.id ? (
-                              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                              <div className="flex gap-2 justify-center">
                                 <Button
                                   onClick={() => handleSave(match.id)}
                                   variant="success"
-                                  style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                                  className="py-1 px-3 text-sm"
                                 >
                                   ✓
                                 </Button>
                                 <Button
                                   onClick={handleCancel}
                                   variant="danger"
-                                  style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                                  className="py-1 px-3 text-sm"
                                 >
                                   ✕
                                 </Button>
                               </div>
                             ) : canEdit && (canEnterKoResult(match) || (match.score1 !== null && match.score2 !== null)) ? (
-                              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                              <div className="flex gap-2 justify-center">
                                 {canEnterKoResult(match) && (
                                   <Button
                                     onClick={() => handleEdit(match)}
                                     variant="info"
-                                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                                    className="py-1 px-3 text-sm"
                                   >
                                     Ergebnis
                                   </Button>
                                 )}
                               </div>
                             ) : canEdit && !canEnterKoResult(match) ? (
-                              <span style={{ fontSize: '0.75rem', color: theme.colors.text.secondary }}>Runde noch nicht ausgelost</span>
+                              <span className="text-xs text-muted-foreground">Runde noch nicht ausgelost</span>
                             ) : (
-                              <span style={{ color: theme.colors.text.secondary }}>-</span>
+                              <span className="text-muted-foreground">-</span>
                             )}
                           </td>
                         </tr>
@@ -1294,4 +1181,3 @@ export default function TournamentMatchesContent({ tournamentId, tournament }: T
     </div>
   );
 }
-

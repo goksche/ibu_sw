@@ -3,8 +3,11 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { participantService } from '../../services/participantService';
 import { Participant } from '../../types';
-import { theme } from '../../theme/theme';
-import { Button, Card, Input } from '../ui';
+import { cn } from '@/lib/utils';
+import { Button } from '../ui/Button';
+import { Card, CardContent } from '../ui/Card';
+import { Input } from '../ui/Input';
+import { Label } from '../ui/label';
 
 interface TournamentParticipantsContentProps {
   tournamentId: number;
@@ -146,7 +149,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
     }
   };
 
-  if (loading) return <div style={{ color: theme.colors.text.primary }}>Wird geladen...</div>;
+  if (loading) return <div className="text-foreground">Wird geladen...</div>;
 
   // Get participants that are not yet in the tournament
   const availableParticipants = allParticipants.filter(
@@ -176,10 +179,10 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h2 style={{ color: theme.colors.text.primary }}>Turnier-Teilnehmer ({tournamentParticipants.length})</h2>
+      <div className="flex justify-between items-center mb-8">
+        <h2 className="text-foreground">Turnier-Teilnehmer ({tournamentParticipants.length})</h2>
         {canEdit && !showAddForm && !showManualForm && (
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className="flex gap-2">
             <Button 
               variant="success"
               onClick={() => setShowAddForm(true)}
@@ -197,280 +200,263 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
       </div>
 
       {showAddForm && (
-        <Card style={{ marginBottom: '2rem', background: theme.colors.background.card, border: `1px solid ${theme.colors.border.standard}` }}>
-          <h3 style={{ color: theme.colors.text.primary, marginTop: 0 }}>Teilnehmer hinzufügen</h3>
-          
-          {availableParticipants.length === 0 ? (
-            <p style={{ color: theme.colors.text.secondary }}>Alle Teilnehmer sind bereits für dieses Turnier registriert.</p>
-          ) : (
-            <>
-              <p style={{ marginBottom: '1rem', color: theme.colors.text.secondary }}>
-                Wählen Sie Teilnehmer aus ({selectedParticipantIds.length} ausgewählt):
-              </p>
+        <Card className="mb-8">
+          <CardContent className="pt-6">
+            <h3 className="text-foreground mt-0 font-semibold">Teilnehmer hinzufügen</h3>
+            
+            {availableParticipants.length === 0 ? (
+              <p className="text-muted-foreground">Alle Teilnehmer sind bereits für dieses Turnier registriert.</p>
+            ) : (
+              <>
+                <p className="mb-4 text-muted-foreground">
+                  Wählen Sie Teilnehmer aus ({selectedParticipantIds.length} ausgewählt):
+                </p>
 
-              <div style={{ marginBottom: '1rem' }}>
-                <Input
-                  type="text"
-                  placeholder="Spieler suchen (Name, Verein, Spitzname)..."
-                  value={participantSearch}
-                  onChange={(e) => setParticipantSearch(e.target.value)}
-                  style={{ marginBottom: '0.5rem' }}
-                />
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>Sortierung:</span>
+                <div className="mb-4">
+                  <Input
+                    type="text"
+                    placeholder="Spieler suchen (Name, Verein, Spitzname)..."
+                    value={participantSearch}
+                    onChange={(e) => setParticipantSearch(e.target.value)}
+                    className="mb-2"
+                  />
+                  <div className="flex gap-2 items-center flex-wrap">
+                    <span className="text-sm text-muted-foreground">Sortierung:</span>
+                    <Button
+                      variant={participantSortBy === 'last_name' ? 'primary' : 'secondary'}
+                      onClick={() => setParticipantSortBy('last_name')}
+                      className="py-1.5 px-2.5 text-sm"
+                    >
+                      Nachname
+                    </Button>
+                    <Button
+                      variant={participantSortBy === 'first_name' ? 'primary' : 'secondary'}
+                      onClick={() => setParticipantSortBy('first_name')}
+                      className="py-1.5 px-2.5 text-sm"
+                    >
+                      Vorname
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mb-3">
                   <Button
-                    variant={participantSortBy === 'last_name' ? 'primary' : 'secondary'}
-                    onClick={() => setParticipantSortBy('last_name')}
-                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.85rem' }}
+                    variant="info"
+                    onClick={handleSelectAllAvailable}
+                    disabled={availableParticipants.length === 0}
+                    className="py-1.5 px-3 text-sm"
                   >
-                    Nachname
+                    Alle auswählen
                   </Button>
                   <Button
-                    variant={participantSortBy === 'first_name' ? 'primary' : 'secondary'}
-                    onClick={() => setParticipantSortBy('first_name')}
-                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.85rem' }}
+                    variant="danger"
+                    onClick={handleClearSelected}
+                    disabled={selectedParticipantIds.length === 0}
+                    className="py-1.5 px-3 text-sm"
                   >
-                    Vorname
+                    Alle löschen
                   </Button>
                 </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                <Button
-                  variant="info"
-                  onClick={handleSelectAllAvailable}
-                  disabled={availableParticipants.length === 0}
-                  style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}
-                >
-                  Alle auswählen
-                </Button>
-                <Button
-                  variant="danger"
-                  onClick={handleClearSelected}
-                  disabled={selectedParticipantIds.length === 0}
-                  style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}
-                >
-                  Alle löschen
-                </Button>
-              </div>
-              
-              <div style={{ 
-                maxHeight: '300px', 
-                overflowY: 'auto', 
-                background: theme.colors.background.secondary, 
-                border: `1px solid ${theme.colors.border.standard}`, 
-                borderRadius: theme.borderRadius.card, 
-                padding: '1rem' 
-              }}>
-                {sortedAvailableParticipants.map(participant => (
-                  <label 
-                    key={participant.id}
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      padding: '0.75rem',
-                      cursor: 'pointer',
-                      borderBottom: `1px solid ${theme.colors.border.standard}`,
-                      color: theme.colors.text.primary
-                    }}
+                
+                <div className="max-h-[300px] overflow-y-auto bg-muted border border-border rounded-lg p-4">
+                  {sortedAvailableParticipants.map(participant => (
+                    <label 
+                      key={participant.id}
+                      className={cn(
+                        "flex items-center p-3 cursor-pointer border-b border-border last:border-b-0 text-foreground",
+                        "hover:bg-accent/50"
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedParticipantIds.includes(participant.id)}
+                        onChange={() => handleToggleParticipant(participant.id)}
+                        className="mr-3 cursor-pointer w-4 h-4"
+                      />
+                      <span>
+                        <strong>{participant.first_name} {participant.last_name}</strong>
+                        {participant.club && <span className="text-muted-foreground ml-2">({participant.club})</span>}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                
+                <div className="flex gap-4 mt-4">
+                  <Button
+                    variant="primary"
+                    onClick={handleAddParticipants}
+                    disabled={adding || selectedParticipantIds.length === 0}
                   >
-                    <input
-                      type="checkbox"
-                      checked={selectedParticipantIds.includes(participant.id)}
-                      onChange={() => handleToggleParticipant(participant.id)}
-                      style={{ marginRight: '0.75rem', cursor: 'pointer', width: '16px', height: '16px' }}
-                    />
-                    <span>
-                      <strong>{participant.first_name} {participant.last_name}</strong>
-                      {participant.club && <span style={{ color: theme.colors.text.secondary, marginLeft: '0.5rem' }}>({participant.club})</span>}
-                    </span>
-                  </label>
-                ))}
-              </div>
-              
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                <Button
-                  variant="primary"
-                  onClick={handleAddParticipants}
-                  disabled={adding || selectedParticipantIds.length === 0}
-                >
-                  {adding ? 'Hinzufügen...' : 'Ausgewählte hinzufügen'}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => { setShowAddForm(false); setSelectedParticipantIds([]); }}
-                >
-                  Abbrechen
-                </Button>
-              </div>
-            </>
-          )}
+                    {adding ? 'Hinzufügen...' : 'Ausgewählte hinzufügen'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => { setShowAddForm(false); setSelectedParticipantIds([]); }}
+                  >
+                    Abbrechen
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
         </Card>
       )}
 
       {showManualForm && (
-        <Card style={{ marginBottom: '2rem', background: theme.colors.background.card, border: `1px solid ${theme.colors.accent.warning}` }}>
-          <h3 style={{ color: theme.colors.text.primary, marginTop: 0 }}>Teilnehmer manuell eintragen</h3>
-          <p style={{ marginBottom: '1rem', color: theme.colors.text.secondary, fontSize: '0.9rem' }}>
-            Geben Sie die Daten des Teilnehmers ein. Dieser wird nur für dieses Turnier erstellt.
-          </p>
-          
-          <form onSubmit={handleAddManualParticipant}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
-                  Vorname *
-                </label>
-                <Input
-                  type="text"
-                  name="first_name"
-                  value={manualFormData.first_name}
-                  onChange={handleManualFormChange}
-                  required
-                  style={{ width: '100%' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
-                  Nachname *
-                </label>
-                <Input
-                  type="text"
-                  name="last_name"
-                  value={manualFormData.last_name}
-                  onChange={handleManualFormChange}
-                  required
-                  style={{ width: '100%' }}
-                />
-              </div>
-            </div>
+        <Card className="mb-8 border-warning">
+          <CardContent className="pt-6">
+            <h3 className="text-foreground mt-0 font-semibold">Teilnehmer manuell eintragen</h3>
+            <p className="mb-4 text-muted-foreground text-sm">
+              Geben Sie die Daten des Teilnehmers ein. Dieser wird nur für dieses Turnier erstellt.
+            </p>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', color: theme.colors.text.primary }}>
-                  Verein
-                </label>
-                <Input
-                  type="text"
-                  name="club"
-                  value={manualFormData.club}
-                  onChange={handleManualFormChange}
-                  style={{ width: '100%' }}
-                />
+            <form onSubmit={handleAddManualParticipant}>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <Label className="block mb-2 font-bold text-foreground">
+                    Vorname *
+                  </Label>
+                  <Input
+                    type="text"
+                    name="first_name"
+                    value={manualFormData.first_name}
+                    onChange={handleManualFormChange}
+                    required
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <Label className="block mb-2 font-bold text-foreground">
+                    Nachname *
+                  </Label>
+                  <Input
+                    type="text"
+                    name="last_name"
+                    value={manualFormData.last_name}
+                    onChange={handleManualFormChange}
+                    required
+                    className="w-full"
+                  />
+                </div>
               </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', color: theme.colors.text.primary }}>
-                  Scolia ID
-                </label>
-                <Input
-                  type="text"
-                  name="scolia_id"
-                  value={manualFormData.scolia_id}
-                  onChange={handleManualFormChange}
-                  style={{ width: '100%' }}
-                />
+              
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <Label className="block mb-2 text-foreground">
+                    Verein
+                  </Label>
+                  <Input
+                    type="text"
+                    name="club"
+                    value={manualFormData.club}
+                    onChange={handleManualFormChange}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <Label className="block mb-2 text-foreground">
+                    Scolia ID
+                  </Label>
+                  <Input
+                    type="text"
+                    name="scolia_id"
+                    value={manualFormData.scolia_id}
+                    onChange={handleManualFormChange}
+                    className="w-full"
+                  />
+                </div>
               </div>
-            </div>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', color: theme.colors.text.primary }}>
-                  E-Mail
-                </label>
-                <Input
-                  type="email"
-                  name="email"
-                  value={manualFormData.email}
-                  onChange={handleManualFormChange}
-                  style={{ width: '100%' }}
-                />
+              
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <Label className="block mb-2 text-foreground">
+                    E-Mail
+                  </Label>
+                  <Input
+                    type="email"
+                    name="email"
+                    value={manualFormData.email}
+                    onChange={handleManualFormChange}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <Label className="block mb-2 text-foreground">
+                    Spitzname
+                  </Label>
+                  <Input
+                    type="text"
+                    name="nickname"
+                    value={manualFormData.nickname}
+                    onChange={handleManualFormChange}
+                    className="w-full"
+                  />
+                </div>
               </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', color: theme.colors.text.primary }}>
-                  Spitzname
-                </label>
-                <Input
-                  type="text"
-                  name="nickname"
-                  value={manualFormData.nickname}
-                  onChange={handleManualFormChange}
-                  style={{ width: '100%' }}
-                />
+              
+              <div className="flex gap-4 mt-4">
+                <Button
+                  type="submit"
+                  variant="info"
+                  disabled={adding}
+                >
+                  {adding ? 'Hinzufügen...' : 'Teilnehmer hinzufügen'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowManualForm(false);
+                    setManualFormData({
+                      first_name: '',
+                      last_name: '',
+                      club: '',
+                      scolia_id: '',
+                      email: '',
+                      nickname: ''
+                    });
+                  }}
+                  disabled={adding}
+                >
+                  Abbrechen
+                </Button>
               </div>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              <Button
-                type="submit"
-                variant="info"
-                disabled={adding}
-              >
-                {adding ? 'Hinzufügen...' : 'Teilnehmer hinzufügen'}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setShowManualForm(false);
-                  setManualFormData({
-                    first_name: '',
-                    last_name: '',
-                    club: '',
-                    scolia_id: '',
-                    email: '',
-                    nickname: ''
-                  });
-                }}
-                disabled={adding}
-              >
-                Abbrechen
-              </Button>
-            </div>
-          </form>
+            </form>
+          </CardContent>
         </Card>
       )}
 
       {tournamentParticipants.length === 0 ? (
-        <p style={{ color: theme.colors.text.secondary }}>Noch keine Teilnehmer für dieses Turnier registriert.</p>
+        <p className="text-muted-foreground">Noch keine Teilnehmer für dieses Turnier registriert.</p>
       ) : (
-        <div style={{
-          background: theme.colors.background.card,
-          border: `1px solid ${theme.colors.border.standard}`,
-          borderRadius: theme.borderRadius.card,
-          overflow: 'hidden'
-        }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <table className="w-full border-collapse">
             <thead>
-              <tr style={{ 
-                borderBottom: `2px solid ${theme.colors.border.standard}`, 
-                background: theme.colors.background.secondary 
-              }}>
-                <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary, fontWeight: '600' }}>Name</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary, fontWeight: '600' }}>Verein</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary, fontWeight: '600' }}>Scolia ID</th>
-                <th style={{ padding: '0.75rem', textAlign: 'right', color: theme.colors.text.primary, fontWeight: '600' }}>Aktionen</th>
+              <tr className="border-b-2 border-border bg-muted">
+                <th className="p-3 text-left text-foreground font-semibold">Name</th>
+                <th className="p-3 text-left text-foreground font-semibold">Verein</th>
+                <th className="p-3 text-left text-foreground font-semibold">Scolia ID</th>
+                <th className="p-3 text-right text-foreground font-semibold">Aktionen</th>
               </tr>
             </thead>
             <tbody>
               {tournamentParticipants.map(participant => (
                 <tr 
                   key={participant.id} 
-                  style={{ 
-                    borderBottom: `1px solid ${theme.colors.border.standard}`,
-                    background: theme.colors.background.card
-                  }}
+                  className="border-b border-border bg-card"
                 >
-                  <td style={{ padding: '0.75rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+                  <td className="p-3 font-bold text-foreground">
                     {participant.first_name} {participant.last_name}
                   </td>
-                  <td style={{ padding: '0.75rem', color: theme.colors.text.secondary }}>{participant.club || '-'}</td>
-                  <td style={{ padding: '0.75rem', color: theme.colors.text.secondary }}>{participant.scolia_id || '-'}</td>
-                  <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                  <td className="p-3 text-muted-foreground">{participant.club || '-'}</td>
+                  <td className="p-3 text-muted-foreground">{participant.scolia_id || '-'}</td>
+                  <td className="p-3 text-right">
                     {canEdit && (
                       <Button
                         variant="danger"
                         onClick={() => handleRemoveParticipant(participant.id)}
-                        style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                        size="sm"
+                        className="px-3 py-1 text-sm"
                       >
                         Entfernen
                       </Button>
@@ -485,4 +471,3 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
     </div>
   );
 }
-

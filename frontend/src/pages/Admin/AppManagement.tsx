@@ -2,8 +2,7 @@
 import { useState, useEffect } from 'react';
 import { platformService } from '../../services/platformService';
 import { App } from '../../types';
-import { Button, Card } from '../../components/ui';
-import { theme } from '../../theme/theme';
+import { Button, Card } from '@/components/ui';
 
 export default function AppManagement() {
   const [apps, setApps] = useState<App[]>([]);
@@ -25,25 +24,25 @@ export default function AppManagement() {
   };
 
   if (loading) {
-    return <div style={{ padding: '2rem', color: theme.colors.text.secondary }}>Loading...</div>;
+    return <div className="p-8 text-muted-foreground">Loading...</div>;
   }
 
   return (
-    <div style={{ padding: '2rem', background: theme.colors.background.primary, minHeight: '100vh' }}>
-      <h1 style={{ color: theme.colors.text.primary }}>App-Verwaltung</h1>
-      <div style={{ marginBottom: '1rem' }}>
+    <div className="p-8 bg-background min-h-screen">
+      <h1 className="text-foreground">App-Verwaltung</h1>
+      <div className="mb-4">
         <Button variant="success">Neue App</Button>
       </div>
       <div>
         {apps.map((app) => (
-          <Card key={app.id} style={{ marginBottom: '1rem', padding: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Card key={app.id} className="mb-4 p-4">
+            <div className="flex justify-between items-center">
               <div>
-                <h3 style={{ margin: 0, marginBottom: '0.5rem', color: theme.colors.text.primary }}>{app.display_name}</h3>
-                <p style={{ margin: '0.25rem 0', color: theme.colors.text.secondary }}>{app.description}</p>
-                <p style={{ margin: '0.25rem 0', color: theme.colors.text.secondary }}>Status: {app.status}</p>
+                <h3 className="m-0 mb-2 text-foreground">{app.display_name}</h3>
+                <p className="m-1 text-muted-foreground">{app.description}</p>
+                <p className="m-1 text-muted-foreground">Status: {app.status}</p>
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div className="flex gap-2">
                 <Button variant="warning">Bearbeiten</Button>
                 <Button variant="danger">Löschen</Button>
               </div>
@@ -54,5 +53,3 @@ export default function AppManagement() {
     </div>
   );
 }
-
-

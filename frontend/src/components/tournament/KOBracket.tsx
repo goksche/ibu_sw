@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { KnockoutMatch } from '../../services/matchService';
 import { Participant } from '../../types';
-import { theme } from '../../theme/theme';
+import { cn } from '@/lib/utils';
 import { Button } from '../ui';
 import { tableService } from '../../services/tableService';
 import { tournamentService } from '../../services/tournamentService';
@@ -241,61 +241,37 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
     return (
       <div
         key={match.id}
-        style={{
-          position: 'relative',
-          width: '100%',
-          marginBottom: '12px',
-          background: theme.colors.background.secondary,
-          border: `2px solid ${theme.colors.border.standard}`,
-          borderRadius: theme.borderRadius.card,
-          boxShadow: hasResult ? `0 2px 8px ${theme.colors.accent.info}40` : theme.shadows.card,
-          transition: 'all 0.2s ease',
-          boxSizing: 'border-box'
-        }}
+        className={cn(
+          "relative w-full mb-3 bg-muted border-2 border-border rounded-lg transition-all duration-200 box-border",
+          hasResult && "shadow-[0_2px_8px_rgba(37,99,235,0.25)]"
+        )}
       >
         {/* Match Header */}
-        <div style={{
-          padding: '0.375rem 0.5rem',
-          background: round === maxRound ? theme.colors.accent.error : theme.colors.accent.primary,
-          color: round === maxRound ? theme.colors.text.primary : theme.colors.background.primary,
-          fontSize: '0.7rem',
-          fontWeight: 'bold',
-          borderRadius: `${theme.borderRadius.card} ${theme.borderRadius.card} 0 0`,
-          textAlign: 'center'
-        }}>
+        <div
+          className={cn(
+            "py-1.5 px-2 text-[0.7rem] font-bold rounded-t-lg text-center",
+            round === maxRound ? "bg-[#00CD00] text-[#000000]" : "bg-primary text-primary-foreground"
+          )}
+        >
           {round === maxRound ? 'Finale' : `Spiel ${match.match_no}`}
         </div>
 
         {/* Players */}
-        <div style={{ padding: '0.5rem' }}>
+        <div className="p-2">
           {/* Player 1 */}
-          <div style={{
-            padding: '0.375rem 0.5rem',
-            marginBottom: '0.25rem',
-            background: winnerId === match.player1_id ? `${theme.colors.accent.success}30` : theme.colors.background.card,
-            border: winnerId === match.player1_id ? `2px solid ${theme.colors.accent.success}` : `1px solid ${theme.colors.border.standard}`,
-            borderRadius: theme.borderRadius.card,
-            fontWeight: winnerId === match.player1_id ? 'bold' : 'normal'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ 
-                color: theme.colors.text.primary, 
-                fontSize: '0.8rem',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                flex: '1',
-                minWidth: '0'
-              }}>
+          <div className={cn(
+            "py-1.5 px-2 mb-1 rounded-lg",
+            winnerId === match.player1_id ? "bg-success/30 border-2 border-success font-bold" : "bg-card border border-border"
+          )}>
+            <div className="flex justify-between items-center gap-2">
+              <span className="text-foreground text-[0.8rem] overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0">
                 {getParticipantName(match.player1_id, match, 1)}
               </span>
               {hasResult && (
-                <span style={{
-                  fontSize: '1rem',
-                  fontWeight: 'bold',
-                  color: winnerId === match.player1_id ? theme.colors.accent.success : theme.colors.text.secondary,
-                  flex: '0 0 auto'
-                }}>
+                <span className={cn(
+                  "text-base font-bold flex-none",
+                  winnerId === match.player1_id ? "text-success" : "text-muted-foreground"
+                )}>
                   {match.score1}
                 </span>
               )}
@@ -303,43 +279,24 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
           </div>
 
           {/* VS Separator */}
-          <div style={{
-            textAlign: 'center',
-            padding: '0.125rem 0',
-            color: theme.colors.text.secondary,
-            fontSize: '0.65rem',
-            fontWeight: 'bold'
-          }}>
+          <div className="text-center py-0.5 text-muted-foreground text-[0.65rem] font-bold">
             VS
           </div>
 
           {/* Player 2 */}
-          <div style={{
-            padding: '0.375rem 0.5rem',
-            background: winnerId === match.player2_id ? `${theme.colors.accent.success}30` : theme.colors.background.card,
-            border: winnerId === match.player2_id ? `2px solid ${theme.colors.accent.success}` : `1px solid ${theme.colors.border.standard}`,
-            borderRadius: theme.borderRadius.card,
-            fontWeight: winnerId === match.player2_id ? 'bold' : 'normal'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ 
-                color: theme.colors.text.primary, 
-                fontSize: '0.8rem',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                flex: '1',
-                minWidth: '0'
-              }}>
+          <div className={cn(
+            "py-1.5 px-2 rounded-lg",
+            winnerId === match.player2_id ? "bg-success/30 border-2 border-success font-bold" : "bg-card border border-border"
+          )}>
+            <div className="flex justify-between items-center gap-2">
+              <span className="text-foreground text-[0.8rem] overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0">
                 {getParticipantName(match.player2_id, match, 2)}
               </span>
               {hasResult && (
-                <span style={{
-                  fontSize: '1rem',
-                  fontWeight: 'bold',
-                  color: winnerId === match.player2_id ? theme.colors.accent.success : theme.colors.text.secondary,
-                  flex: '0 0 auto'
-                }}>
+                <span className={cn(
+                  "text-base font-bold flex-none",
+                  winnerId === match.player2_id ? "text-success" : "text-muted-foreground"
+                )}>
                   {match.score2}
                 </span>
               )}
@@ -351,8 +308,7 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
             <Button
               onClick={() => onMatchEdit(match.id)}
               variant={hasResult ? 'secondary' : 'info'}
-              fullWidth
-              style={{ marginTop: '0.375rem', padding: '0.375rem', fontSize: '0.75rem' }}
+              className="mt-1.5 w-full p-1.5 text-xs"
             >
               {hasResult ? 'Ändern' : 'Eintragen'}
             </Button>
@@ -364,7 +320,7 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
 
   if (matches.length === 0) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: theme.colors.text.secondary }}>
+      <div className="p-8 text-center text-muted-foreground">
         Noch keine KO-Spiele vorhanden.
       </div>
     );
@@ -468,67 +424,39 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
     // For 'main' (when not left/right/full) - show full bracket
   }
 
+  const isMainOrFull = (viewMode === 'full' || (!hasConsolation && viewMode === 'main') || (hasConsolation && viewMode === 'main'));
+
   return (
-    <div style={{ 
-      padding: '1rem',
-      background: theme.colors.background.card,
-      borderRadius: theme.borderRadius.card,
-      border: `1px solid ${theme.colors.border.standard}`,
-      width: '100%',
-      boxSizing: 'border-box'
-    }}>
+    <div className="p-4 bg-card rounded-lg border border-border w-full box-border">
       {/* Layout Toggle und Draw-Button – ausgeblendet im Präsentationsmodus */}
       {!presentationMode && (
       <>
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        marginBottom: '1rem',
-        gap: '0.5rem',
-        alignItems: 'center',
-        flexWrap: 'wrap'
-      }}>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="flex justify-between mb-4 gap-2 items-center flex-wrap">
+        <div className="flex gap-2 items-center flex-wrap">
           {/* Bracket Type Tabs (Main/Consolation/Both) */}
           {hasConsolation && (
             <>
-              <span style={{ 
-                fontSize: '0.875rem', 
-                color: theme.colors.text.secondary,
-                marginRight: '0.25rem'
-              }}>
+              <span className="text-sm text-muted-foreground mr-1">
                 Turnier:
               </span>
               <Button
                 onClick={() => setViewMode('main')}
                 variant={viewMode === 'main' ? 'primary' : 'secondary'}
-                style={{ 
-                  padding: '0.375rem 0.75rem', 
-                  fontSize: '0.875rem',
-                  fontWeight: viewMode === 'main' ? 'bold' : 'normal'
-                }}
+                className={cn("py-1.5 px-3 text-sm", viewMode === 'main' && "font-bold")}
               >
                 Hauptturnier
               </Button>
               <Button
                 onClick={() => setViewMode('consolation')}
                 variant={viewMode === 'consolation' ? 'primary' : 'secondary'}
-                style={{ 
-                  padding: '0.375rem 0.75rem', 
-                  fontSize: '0.875rem',
-                  fontWeight: viewMode === 'consolation' ? 'bold' : 'normal'
-                }}
+                className={cn("py-1.5 px-3 text-sm", viewMode === 'consolation' && "font-bold")}
               >
                 Trostturnier
               </Button>
               <Button
                 onClick={() => setViewMode('both')}
                 variant={viewMode === 'both' ? 'primary' : 'secondary'}
-                style={{ 
-                  padding: '0.375rem 0.75rem', 
-                  fontSize: '0.875rem',
-                  fontWeight: viewMode === 'both' ? 'bold' : 'normal'
-                }}
+                className={cn("py-1.5 px-3 text-sm", viewMode === 'both' && "font-bold")}
               >
                 Beides
               </Button>
@@ -538,44 +466,30 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
           {/* Bracket Split Tabs (Left/Right/Full) - only for large brackets in classic view, and only when showing main bracket */}
           {showBracketSplitTabs && shouldShowMain && viewMode !== 'both' && (
             <>
-              <span style={{ 
-                fontSize: '0.875rem', 
-                color: theme.colors.text.secondary,
-                marginLeft: hasConsolation ? '1rem' : '0',
-                marginRight: '0.25rem'
-              }}>
+              <span className={cn(
+                "text-sm text-muted-foreground mr-1",
+                hasConsolation && "ml-4"
+              )}>
                 Ansicht:
               </span>
               <Button
                 onClick={() => setViewMode('left')}
                 variant={viewMode === 'left' ? 'primary' : 'secondary'}
-                style={{ 
-                  padding: '0.375rem 0.75rem', 
-                  fontSize: '0.875rem',
-                  fontWeight: viewMode === 'left' ? 'bold' : 'normal'
-                }}
+                className={cn("py-1.5 px-3 text-sm", viewMode === 'left' && "font-bold")}
               >
                 Links
               </Button>
               <Button
                 onClick={() => setViewMode('right')}
                 variant={viewMode === 'right' ? 'primary' : 'secondary'}
-                style={{ 
-                  padding: '0.375rem 0.75rem', 
-                  fontSize: '0.875rem',
-                  fontWeight: viewMode === 'right' ? 'bold' : 'normal'
-                }}
+                className={cn("py-1.5 px-3 text-sm", viewMode === 'right' && "font-bold")}
               >
                 Rechts
               </Button>
               <Button
                 onClick={() => setViewMode(hasConsolation ? 'main' : 'full')}
-                variant={(viewMode === 'full' || (!hasConsolation && viewMode === 'main') || (hasConsolation && viewMode === 'main')) ? 'primary' : 'secondary'}
-                style={{ 
-                  padding: '0.375rem 0.75rem', 
-                  fontSize: '0.875rem',
-                  fontWeight: (viewMode === 'full' || (!hasConsolation && viewMode === 'main') || (hasConsolation && viewMode === 'main')) ? 'bold' : 'normal'
-                }}
+                variant={isMainOrFull ? 'primary' : 'secondary'}
+                className={cn("py-1.5 px-3 text-sm", isMainOrFull && "font-bold")}
               >
                 Gesamt
               </Button>
@@ -584,12 +498,8 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
         </div>
         
         {/* Layout Style Toggle */}
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <span style={{ 
-            fontSize: '0.875rem', 
-            color: theme.colors.text.secondary,
-            marginRight: '0.5rem'
-          }}>
+        <div className="flex gap-2 items-center">
+          <span className="text-sm text-muted-foreground mr-2">
             Layout:
           </span>
           <Button
@@ -601,11 +511,7 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
               }
             }}
             variant={!actualUseLinear ? 'primary' : 'secondary'}
-            style={{ 
-              padding: '0.375rem 0.75rem', 
-              fontSize: '0.875rem',
-              fontWeight: !actualUseLinear ? 'bold' : 'normal'
-            }}
+            className={cn("py-1.5 px-3 text-sm", !actualUseLinear && "font-bold")}
           >
             Klassisch
           </Button>
@@ -618,11 +524,7 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
               }
             }}
             variant={actualUseLinear ? 'primary' : 'secondary'}
-            style={{ 
-              padding: '0.375rem 0.75rem', 
-              fontSize: '0.875rem',
-              fontWeight: actualUseLinear ? 'bold' : 'normal'
-            }}
+            className={cn("py-1.5 px-3 text-sm", actualUseLinear && "font-bold")}
           >
             Linear
           </Button>
@@ -631,20 +533,17 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
 
       {/* Draw Next Round Button (for random_each_round mode) */}
       {koDistribution === 'random_each_round' && drawStatus && (
-        <div style={{ 
-          marginBottom: '1rem',
-          padding: '1rem',
-          background: drawStatus.can_draw ? theme.colors.accent.success + '20' : theme.colors.background.secondary,
-          borderRadius: theme.borderRadius.card,
-          border: `1px solid ${drawStatus.can_draw ? theme.colors.accent.success : theme.colors.border.standard}`
-        }}>
+        <div className={cn(
+          "mb-4 p-4 rounded-lg border",
+          drawStatus.can_draw ? "bg-success/20 border-success" : "bg-muted border-border"
+        )}>
           {drawStatus.can_draw ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+            <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <div style={{ fontWeight: 'bold', color: theme.colors.text.primary, marginBottom: '0.25rem' }}>
+                <div className="font-bold text-foreground mb-1">
                   Runde {drawStatus.current_round} abgeschlossen
                 </div>
-                <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+                <div className="text-sm text-muted-foreground">
                   {drawStatus.winners_count} Gewinner bereit für Runde {drawStatus.next_round}
                 </div>
               </div>
@@ -652,30 +551,19 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
                 onClick={handleDrawNextRound}
                 disabled={isDrawing}
                 variant="success"
-                style={{ 
-                  padding: '0.75rem 1.5rem',
-                  fontSize: '1rem',
-                  fontWeight: 'bold'
-                }}
+                className="py-3 px-6 text-base font-bold"
               >
                 {isDrawing ? 'Auslosung läuft...' : `Runde ${drawStatus.next_round} auslosen`}
               </Button>
             </div>
           ) : (
-            <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+            <div className="text-sm text-muted-foreground">
               <strong>Modus:</strong> Jede Runde neu auslosen
               {drawStatus.reason && ` — ${drawStatus.reason}`}
             </div>
           )}
           {drawError && (
-            <div style={{ 
-              marginTop: '0.5rem', 
-              padding: '0.5rem', 
-              background: theme.colors.accent.error + '20',
-              borderRadius: theme.borderRadius.input,
-              color: theme.colors.accent.error,
-              fontSize: '0.875rem'
-            }}>
+            <div className="mt-2 p-2 bg-destructive/20 rounded-md text-destructive text-sm">
               {drawError}
             </div>
           )}
@@ -685,46 +573,24 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
       )}
 
       {/* Main Bracket and Consolation Bracket */}
-      <div style={{ 
-        display: 'flex', 
-        gap: '2rem', 
-        alignItems: 'flex-start',
-        flexWrap: (hasConsolation && shouldShowConsolation && shouldShowMain) ? 'nowrap' : 'wrap'
-      }}>
+      <div className={cn(
+        "flex gap-8 items-start",
+        (hasConsolation && shouldShowConsolation && shouldShowMain) ? "flex-nowrap" : "flex-wrap"
+      )}>
         {/* Main Bracket */}
         {shouldShowMain && (
-          <div style={{ 
-            flex: (hasConsolation && shouldShowConsolation) ? '1 1 50%' : '1 1 100%',
-            overflowX: 'auto', 
-            padding: '1rem 0',
-            minWidth: (hasConsolation && shouldShowConsolation) ? '400px' : '0'
-          }}>
+          <div className={cn(
+            "overflow-x-auto py-4",
+            (hasConsolation && shouldShowConsolation) ? "flex-[1_1_50%] min-w-[400px]" : "flex-[1_1_100%] min-w-0"
+          )}>
             {(hasConsolation || viewMode === 'main') && (
-              <div style={{
-                textAlign: 'center',
-                marginBottom: '1rem',
-                padding: '0.5rem',
-                background: theme.colors.accent.primary,
-                color: theme.colors.background.primary,
-                borderRadius: theme.borderRadius.card,
-                fontWeight: 'bold',
-                fontSize: '1rem'
-              }}>
+              <div className="text-center mb-4 py-2 bg-primary text-primary-foreground rounded-lg font-bold text-base">
                 Hauptturnier
               </div>
             )}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'flex-start',
-            gap: '1rem',
-            width: 'max-content',
-            minWidth: '100%',
-            flexWrap: 'nowrap',
-            maxWidth: '100%'
-          }}>
+          <div className="flex justify-center items-start gap-4 w-max min-w-full flex-nowrap max-w-full">
         {actualUseLinear ? (
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+          <div className="flex gap-3 items-start">
             {orderedRounds.map(round => {
               const roundMatches = matchesByRound.get(round) || [];
               const sortedMatches = [...roundMatches].sort((a, b) => a.match_no - b.match_no);
@@ -732,25 +598,12 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
               return (
                 <div
                   key={`round-${round}`}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-around',
-                    minWidth: '180px',
-                    maxWidth: '200px',
-                    flex: '0 0 auto'
-                  }}
+                  className="flex flex-col justify-around min-w-[180px] max-w-[200px] flex-none"
                 >
-                  <div style={{
-                    textAlign: 'center',
-                    marginBottom: '0.5rem',
-                    padding: '0.5rem',
-                    background: isFinal ? theme.colors.accent.error : theme.colors.accent.primary,
-                    color: isFinal ? theme.colors.text.primary : theme.colors.background.primary,
-                    borderRadius: theme.borderRadius.card,
-                    fontWeight: 'bold',
-                    fontSize: '0.875rem'
-                  }}>
+                  <div className={cn(
+                    "text-center mb-2 py-2 rounded-lg font-bold text-sm",
+                    isFinal ? "bg-[#00CD00] text-[#000000]" : "bg-primary text-primary-foreground"
+                  )}>
                     {getRoundLabel(round)}
                   </div>
 
@@ -759,47 +612,18 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
                   </div>
 
                   {isFinal && top4Placements && (
-                    <div style={{
-                      marginTop: '0.75rem',
-                      background: theme.colors.background.secondary,
-                      border: `1px solid ${theme.colors.border.standard}`,
-                      borderRadius: theme.borderRadius.card,
-                      padding: '0.75rem'
-                    }}>
-                      <div style={{
-                        textAlign: 'center',
-                        fontWeight: 'bold',
-                        color: theme.colors.text.primary,
-                        fontSize: '0.8rem',
-                        marginBottom: '0.5rem'
-                      }}>
+                    <div className="mt-3 bg-muted border border-border rounded-lg p-3">
+                      <div className="text-center font-bold text-foreground text-sm mb-2">
                         {'Pl\u00E4tze 1-4'}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      <div className="flex flex-col gap-1.5">
                         {top4Placements.map(entry => (
                           <div
                             key={entry.rank}
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              padding: '0.35rem 0.5rem',
-                              background: theme.colors.background.card,
-                              borderRadius: theme.borderRadius.card,
-                              border: `1px solid ${theme.colors.border.standard}`,
-                              fontSize: '0.75rem',
-                              color: theme.colors.text.primary
-                            }}
+                            className="flex justify-between items-center py-1.5 px-2 bg-card rounded-lg border border-border text-xs text-foreground"
                           >
-                            <span style={{ fontWeight: 'bold' }}>{entry.label}</span>
-                            <span style={{
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              marginLeft: '0.5rem',
-                              flex: '1',
-                              textAlign: 'right'
-                            }}>
+                            <span className="font-bold">{entry.label}</span>
+                            <span className="overflow-hidden text-ellipsis whitespace-nowrap ml-2 flex-1 text-right">
                               {getParticipantName(entry.participantId)}
                             </span>
                           </div>
@@ -815,37 +639,14 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
           <>
             {/* Left Half */}
             {(shouldShowLeft || shouldShowFinal) && (
-              <div style={{
-                display: 'flex',
-                gap: '0.75rem',
-                alignItems: 'flex-start',
-                flex: '0 0 auto',
-                minWidth: '0',
-                justifyContent: 'flex-end'
-              }}>
+              <div className="flex gap-3 items-start flex-none min-w-0 justify-end">
                 {splitRounds?.leftRounds.map(({ round, matches }) => (
                 <div
                   key={`left-${round}`}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-around',
-                    minWidth: '180px',
-                    maxWidth: '200px',
-                    flex: '0 0 auto'
-                  }}
+                  className="flex flex-col justify-around min-w-[180px] max-w-[200px] flex-none"
                 >
                   {/* Round Header */}
-                  <div style={{
-                    textAlign: 'center',
-                    marginBottom: '0.5rem',
-                    padding: '0.5rem',
-                    background: theme.colors.accent.primary,
-                    color: theme.colors.background.primary,
-                    borderRadius: theme.borderRadius.card,
-                    fontWeight: 'bold',
-                    fontSize: '0.875rem'
-                  }}>
+                  <div className="text-center mb-2 py-2 bg-primary text-primary-foreground rounded-lg font-bold text-sm">
                     {getRoundLabel(round)}
                   </div>
 
@@ -862,26 +663,10 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
             {shouldShowFinal && splitRounds?.finalRound.map(({ round, matches }) => (
               <div
                 key={`final-${round}`}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'center',
-                  minWidth: '180px',
-                  maxWidth: '200px',
-                  flex: '0 0 auto'
-                }}
+                className="flex flex-col justify-center min-w-[180px] max-w-[200px] flex-none"
               >
                 {/* Round Header */}
-                <div style={{
-                  textAlign: 'center',
-                  marginBottom: '0.5rem',
-                  padding: '0.5rem',
-                  background: theme.colors.accent.error,
-                  color: theme.colors.text.primary,
-                  borderRadius: theme.borderRadius.card,
-                  fontWeight: 'bold',
-                  fontSize: '0.875rem'
-                }}>
+                <div className="text-center mb-2 py-2 bg-[#00CD00] text-[#000000] rounded-lg font-bold text-sm">
                   {getRoundLabel(round)}
                 </div>
 
@@ -891,47 +676,18 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
                 </div>
 
                 {top4Placements && (
-                  <div style={{
-                    marginTop: '0.75rem',
-                    background: theme.colors.background.secondary,
-                    border: `1px solid ${theme.colors.border.standard}`,
-                    borderRadius: theme.borderRadius.card,
-                    padding: '0.75rem'
-                  }}>
-                    <div style={{
-                      textAlign: 'center',
-                      fontWeight: 'bold',
-                      color: theme.colors.text.primary,
-                      fontSize: '0.8rem',
-                      marginBottom: '0.5rem'
-                    }}>
+                  <div className="mt-3 bg-muted border border-border rounded-lg p-3">
+                    <div className="text-center font-bold text-foreground text-sm mb-2">
                       Plätze 1–4
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <div className="flex flex-col gap-1.5">
                       {top4Placements.map(entry => (
                         <div
                           key={entry.rank}
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: '0.35rem 0.5rem',
-                            background: theme.colors.background.card,
-                            borderRadius: theme.borderRadius.card,
-                            border: `1px solid ${theme.colors.border.standard}`,
-                            fontSize: '0.75rem',
-                            color: theme.colors.text.primary
-                          }}
+                          className="flex justify-between items-center py-1.5 px-2 bg-card rounded-lg border border-border text-xs text-foreground"
                         >
-                          <span style={{ fontWeight: 'bold' }}>{entry.label}</span>
-                          <span style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            marginLeft: '0.5rem',
-                            flex: '1',
-                            textAlign: 'right'
-                          }}>
+                          <span className="font-bold">{entry.label}</span>
+                          <span className="overflow-hidden text-ellipsis whitespace-nowrap ml-2 flex-1 text-right">
                             {getParticipantName(entry.participantId)}
                           </span>
                         </div>
@@ -944,37 +700,14 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
 
             {/* Right Half */}
             {(shouldShowRight || shouldShowFinal) && (
-              <div style={{
-                display: 'flex',
-                gap: '0.75rem',
-                alignItems: 'flex-start',
-                flex: '0 0 auto',
-                minWidth: '0',
-                justifyContent: 'flex-start'
-              }}>
+              <div className="flex gap-3 items-start flex-none min-w-0 justify-start">
                 {splitRounds?.rightRounds.map(({ round, matches }) => (
                 <div
                   key={`right-${round}`}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-around',
-                    minWidth: '180px',
-                    maxWidth: '200px',
-                    flex: '0 0 auto'
-                  }}
+                  className="flex flex-col justify-around min-w-[180px] max-w-[200px] flex-none"
                 >
                   {/* Round Header */}
-                  <div style={{
-                    textAlign: 'center',
-                    marginBottom: '0.5rem',
-                    padding: '0.5rem',
-                    background: theme.colors.accent.primary,
-                    color: theme.colors.background.primary,
-                    borderRadius: theme.borderRadius.card,
-                    fontWeight: 'bold',
-                    fontSize: '0.875rem'
-                  }}>
+                  <div className="text-center mb-2 py-2 bg-primary text-primary-foreground rounded-lg font-bold text-sm">
                     {getRoundLabel(round)}
                   </div>
 
@@ -994,33 +727,14 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
 
         {/* Consolation Bracket */}
         {shouldShowConsolation && (
-          <div style={{ 
-            flex: shouldShowMain ? '1 1 50%' : '1 1 100%',
-            overflowX: 'auto', 
-            padding: '1rem 0',
-            minWidth: shouldShowMain ? '400px' : '0'
-          }}>
-            <div style={{
-              textAlign: 'center',
-              marginBottom: '1rem',
-              padding: '0.5rem',
-              background: theme.colors.accent.warning,
-              color: theme.colors.background.primary,
-              borderRadius: theme.borderRadius.card,
-              fontWeight: 'bold',
-              fontSize: '1rem'
-            }}>
+          <div className={cn(
+            "overflow-x-auto py-4",
+            shouldShowMain ? "flex-[1_1_50%] min-w-[400px]" : "flex-[1_1_100%] min-w-0"
+          )}>
+            <div className="text-center mb-4 py-2 bg-warning text-warning-foreground rounded-lg font-bold text-base">
               Trostturnier
             </div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'flex-start',
-              gap: '0.75rem',
-              width: 'max-content',
-              minWidth: '100%',
-              flexWrap: 'nowrap'
-            }}>
+            <div className="flex justify-center items-start gap-3 w-max min-w-full flex-nowrap">
               {consolationRounds.map(round => {
                 const roundMatches = consolationByRound.get(round) || [];
                 const sortedMatches = [...roundMatches].sort((a, b) => a.match_no - b.match_no);
@@ -1029,25 +743,12 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
                 return (
                   <div
                     key={`consolation-round-${round}`}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-around',
-                      minWidth: '180px',
-                      maxWidth: '200px',
-                      flex: '0 0 auto'
-                    }}
+                    className="flex flex-col justify-around min-w-[180px] max-w-[200px] flex-none"
                   >
-                    <div style={{
-                      textAlign: 'center',
-                      marginBottom: '0.5rem',
-                      padding: '0.5rem',
-                      background: isFinal ? theme.colors.accent.warning : theme.colors.accent.info,
-                      color: theme.colors.background.primary,
-                      borderRadius: theme.borderRadius.card,
-                      fontWeight: 'bold',
-                      fontSize: '0.875rem'
-                    }}>
+                    <div className={cn(
+                      "text-center mb-2 py-2 rounded-lg font-bold text-sm",
+                      isFinal ? "bg-warning text-warning-foreground" : "bg-info text-info-foreground"
+                    )}>
                       {getRoundLabel(round)}
                     </div>
                     <div>
@@ -1056,53 +757,24 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
                     
                     {/* Endrangliste Hauptturnier nach dem Finale */}
                     {isFinal && mainStandings && mainStandings.length > 0 && (
-                      <div style={{
-                        marginTop: '0.75rem',
-                        background: theme.colors.background.secondary,
-                        border: `1px solid ${theme.colors.border.standard}`,
-                        borderRadius: theme.borderRadius.card,
-                        padding: '0.75rem'
-                      }}>
-                        <div style={{
-                          textAlign: 'center',
-                          fontWeight: 'bold',
-                          color: theme.colors.text.primary,
-                          fontSize: '0.8rem',
-                          marginBottom: '0.5rem'
-                        }}>
+                      <div className="mt-3 bg-muted border border-border rounded-lg p-3">
+                        <div className="text-center font-bold text-foreground text-sm mb-2">
                           Endrangliste
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        <div className="flex flex-col gap-1.5">
                           {mainStandings.map((standing: {rank: number, participant_id: number, name: string}) => (
                             <div
                               key={standing.participant_id}
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                padding: '0.35rem 0.5rem',
-                                background: theme.colors.background.card,
-                                borderRadius: theme.borderRadius.card,
-                                border: `1px solid ${theme.colors.border.standard}`,
-                                fontSize: '0.75rem',
-                                color: theme.colors.text.primary
-                              }}
+                              className="flex justify-between items-center py-1.5 px-2 bg-card rounded-lg border border-border text-xs text-foreground"
                             >
-                              <span style={{ fontWeight: 'bold' }}>
+                              <span className="font-bold">
                                 {standing.rank === 1 && '🥇'}
                                 {standing.rank === 2 && '🥈'}
                                 {standing.rank === 3 && '🥉'}
                                 {' '}
                                 {standing.rank}.
                               </span>
-                              <span style={{
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                marginLeft: '0.5rem',
-                                flex: '1',
-                                textAlign: 'right'
-                              }}>
+                              <span className="overflow-hidden text-ellipsis whitespace-nowrap ml-2 flex-1 text-right">
                                 {standing.name}
                               </span>
                             </div>
@@ -1113,53 +785,24 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
                     
                     {/* Show consolation standings after final */}
                     {isFinal && consolationStandings && consolationStandings.length > 0 && (
-                      <div style={{
-                        marginTop: '0.75rem',
-                        background: theme.colors.background.secondary,
-                        border: `1px solid ${theme.colors.border.standard}`,
-                        borderRadius: theme.borderRadius.card,
-                        padding: '0.75rem'
-                      }}>
-                        <div style={{
-                          textAlign: 'center',
-                          fontWeight: 'bold',
-                          color: theme.colors.text.primary,
-                          fontSize: '0.8rem',
-                          marginBottom: '0.5rem'
-                        }}>
+                      <div className="mt-3 bg-muted border border-border rounded-lg p-3">
+                        <div className="text-center font-bold text-foreground text-sm mb-2">
                           Trostturnier Rangliste
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        <div className="flex flex-col gap-1.5">
                           {consolationStandings.slice(0, 8).map((standing: {rank: number, participant_id: number, name: string}) => (
                             <div
                               key={standing.participant_id}
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                padding: '0.35rem 0.5rem',
-                                background: theme.colors.background.card,
-                                borderRadius: theme.borderRadius.card,
-                                border: `1px solid ${theme.colors.border.standard}`,
-                                fontSize: '0.75rem',
-                                color: theme.colors.text.primary
-                              }}
+                              className="flex justify-between items-center py-1.5 px-2 bg-card rounded-lg border border-border text-xs text-foreground"
                             >
-                              <span style={{ fontWeight: 'bold' }}>
+                              <span className="font-bold">
                                 {standing.rank === 1 && '🥇'}
                                 {standing.rank === 2 && '🥈'}
                                 {standing.rank === 3 && '🥉'}
                                 {' '}
                                 {standing.rank}.
                               </span>
-                              <span style={{
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                marginLeft: '0.5rem',
-                                flex: '1',
-                                textAlign: 'right'
-                              }}>
+                              <span className="overflow-hidden text-ellipsis whitespace-nowrap ml-2 flex-1 text-right">
                                 {standing.name}
                               </span>
                             </div>
@@ -1177,27 +820,11 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
 
       {/* Bronze Match (if exists) */}
       {bronzeMatch && (
-        <div style={{
-          marginTop: '1.5rem',
-          paddingTop: '1rem',
-          borderTop: `2px solid ${theme.colors.accent.warning}`,
-          textAlign: 'center',
-          width: '100%'
-        }}>
-          <div style={{
-            marginBottom: '0.75rem',
-            padding: '0.5rem',
-            background: theme.colors.accent.warning,
-            color: theme.colors.background.primary,
-            borderRadius: theme.borderRadius.card,
-            fontWeight: 'bold',
-            fontSize: '0.875rem',
-            display: 'inline-block',
-            maxWidth: '200px'
-          }}>
+        <div className="mt-6 pt-4 border-t-2 border-warning text-center w-full">
+          <div className="mb-3 py-2 bg-warning text-warning-foreground rounded-lg font-bold text-sm inline-block max-w-[200px]">
             Spiel um Platz 3
           </div>
-          <div style={{ display: 'flex', justifyContent: 'center', maxWidth: '200px', margin: '0 auto' }}>
+          <div className="flex justify-center max-w-[200px] mx-auto">
             {renderMatchBox(bronzeMatch, 99)}
           </div>
         </div>
@@ -1205,4 +832,3 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
     </div>
   );
 }
-

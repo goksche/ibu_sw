@@ -8,8 +8,9 @@ import { qualificationService } from '../services/qualificationService';
 import { locationService } from '../services/locationService';
 import { Tournament, Participant, LeagueVariant, KOStartRound, QualificationPlan, Location, KOStructure } from '../types';
 import { Button, Card, Input, Textarea } from '../components/ui';
-import { theme } from '../theme/theme';
+import { cn } from '@/lib/utils';
 import { ArrowLeft } from 'phosphor-react';
+import TournamentModeVisualization from '../components/tournament/TournamentModeVisualization';
 
 export default function CreateTournament() {
   type KODrawModeValue = 'random_first_round' | 'random_each_round' | 'predefined_slots' | 'cross' | 'draw';
@@ -25,7 +26,7 @@ export default function CreateTournament() {
   const [loadingParticipants, setLoadingParticipants] = useState(false);
   const [qualificationPlan, setQualificationPlan] = useState<QualificationPlan | null>(null);
   const [loadingQualificationPlan, setLoadingQualificationPlan] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -150,7 +151,7 @@ export default function CreateTournament() {
   useEffect(() => {
     const hasDecisionMatch = formData.tie_breaking_rules.includes('decision_match');
     const hasOtherRules = formData.tie_breaking_rules.some(r => r !== 'decision_match');
-    
+
     if (hasDecisionMatch && hasOtherRules) {
       // If decision_match is selected, remove all other rules
       setFormData(prev => ({
@@ -205,7 +206,7 @@ export default function CreateTournament() {
     try {
       setLoadingTemplates(true);
       const template = await tournamentService.getById(templateId);
-      
+
       // Populate form with template data
       setFormData({
         name: template.name,
@@ -368,24 +369,38 @@ export default function CreateTournament() {
   const tieBreakingRuleLabels: Record<string, string> = {
     'wins': 'Siege',
     'diff': 'Differenz',
+    'goals_for': 'LF',
     'direct_encounter': 'Direktbegegnung',
     'decision_match': 'Entscheidungsspiel'
   };
 
+  const koStartRoundLabels: Record<string, string> = {
+    round_of_32: 'Runde der 32',
+    round_of_16: 'Runde der 16',
+    quarterfinal: 'Viertelfinale',
+    semifinal: 'Halbfinale',
+    final: 'Finale'
+  };
+
+  const groupDistributionLabels: Record<string, string> = {
+    random: 'Zufällig',
+    seeded: 'Gesetzt'
+  };
+
   // Verfügbare Gleichstandsregeln (abhängig von Wertungssystem)
   const getAvailableTieBreakingRules = () => {
-    return ['wins', 'diff', 'direct_encounter', 'decision_match'];
+    return ['wins', 'diff', 'goals_for', 'direct_encounter', 'decision_match'];
   };
 
   // Hilfsfunktionen für Reihenfolge der Gleichstandsregeln
   const moveTieBreakingRule = (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === formData.tie_breaking_rules.length - 1) return;
-    
+
     const newRules = [...formData.tie_breaking_rules];
     const newIndex = direction === 'up' ? index - 1 : index + 1;
     [newRules[index], newRules[newIndex]] = [newRules[newIndex], newRules[index]];
-    
+
     setFormData(prev => ({
       ...prev,
       tie_breaking_rules: newRules
@@ -401,118 +416,118 @@ export default function CreateTournament() {
 
   // KO-Struktur-Optionen mit Beschreibungen
   const koStructureOptions = [
-    { 
-      value: 'single_elimination', 
-      label: 'Einfach-KO (Single Elimination)', 
-      description: 'Prinzip: 1 Niederlage = ausgeschieden. Schnell und einfach. Verlierer jeder Partie scheidet sofort aus. Unterstützt Byes/Freilose wenn Teilnehmerzahl nicht Potenz von 2 ist. Spiel um Platz 3 optional konfigurierbar.' 
+    {
+      value: 'single_elimination',
+      label: 'Einfach-KO (Single Elimination)',
+      description: 'Prinzip: 1 Niederlage = ausgeschieden. Schnell und einfach. Verlierer jeder Partie scheidet sofort aus. Unterstützt Byes/Freilose wenn Teilnehmerzahl nicht Potenz von 2 ist. Spiel um Platz 3 optional konfigurierbar.'
     },
-    { 
-      value: 'single_elimination_with_third', 
-      label: 'Einfach-KO mit Spiel um Platz 3 (Bronze-Spiel)', 
-      description: 'Wie Einfach-KO, aber die Halbfinal-Verlierer spielen um Rang 3. Ideal wenn der 3. Platz wichtig ist (Preise, Punkte). Bronze-Spiel separat konfigurierbar (z.B. kürzeres Best-of als Finale).' 
+    {
+      value: 'single_elimination_with_third',
+      label: 'Einfach-KO mit Spiel um Platz 3 (Bronze-Spiel)',
+      description: 'Wie Einfach-KO, aber die Halbfinal-Verlierer spielen um Rang 3. Ideal wenn der 3. Platz wichtig ist (Preise, Punkte). Bronze-Spiel separat konfigurierbar (z.B. kürzeres Best-of als Finale).'
     },
-    { 
-      value: 'consolation_bracket', 
-      label: 'Trostturnier (Consolation Bracket) nach Einfach-KO', 
-      description: 'Wer verliert, fällt in ein zweites KO-Tableau (Trost), um dort weiterzuspielen. Es gibt dann Hauptsieger und Trostsieger. Mehr Spielzeit für alle, besser für Teilnehmerzufriedenheit. Konfigurierbar ab welcher Runde das Trostturnier startet.' 
+    {
+      value: 'consolation_bracket',
+      label: 'Trostturnier (Consolation Bracket) nach Einfach-KO',
+      description: 'Wer verliert, fällt in ein zweites KO-Tableau (Trost), um dort weiterzuspielen. Es gibt dann Hauptsieger und Trostsieger. Mehr Spielzeit für alle, besser für Teilnehmerzufriedenheit. Konfigurierbar ab welcher Runde das Trostturnier startet.'
     },
-    { 
-      value: 'double_elimination', 
-      label: 'Doppel-KO (Double Elimination)', 
-      description: 'Prinzip: 2 Niederlagen = ausgeschieden. Es gibt zwei Schienen: Winner Bracket (ungeschlagen) und Loser Bracket (nach erster Niederlage). Sehr fair, weil ein Ausrutscher nicht sofort rauswirft. Komplexer Plan, mehr Spiele. Finale mit optionalem Bracket Reset konfigurierbar.' 
+    {
+      value: 'double_elimination',
+      label: 'Doppel-KO (Double Elimination)',
+      description: 'Prinzip: 2 Niederlagen = ausgeschieden. Es gibt zwei Schienen: Winner Bracket (ungeschlagen) und Loser Bracket (nach erster Niederlage). Sehr fair, weil ein Ausrutscher nicht sofort rauswirft. Komplexer Plan, mehr Spiele. Finale mit optionalem Bracket Reset konfigurierbar.'
     },
-    { 
-      value: 'triple_elimination', 
-      label: 'Triple-KO (Three-Life / Triple Elimination)', 
-      description: 'Prinzip: 3 Niederlagen = ausgeschieden (drei Leben). In der Praxis selten, maximale Fairness. Nur sinnvoll wenn sehr viel Zeit vorhanden ist. Finale-Logik wie beim Doppel-KO, nur mit mehr Stufen.' 
+    {
+      value: 'triple_elimination',
+      label: 'Triple-KO (Three-Life / Triple Elimination)',
+      description: 'Prinzip: 3 Niederlagen = ausgeschieden (drei Leben). In der Praxis selten, maximale Fairness. Nur sinnvoll wenn sehr viel Zeit vorhanden ist. Finale-Logik wie beim Doppel-KO, nur mit mehr Stufen.'
     },
-    { 
-      value: 'aggregate_ko', 
-      label: 'KO mit Hin- und Rückpiel (Aggregate KO)', 
-      description: 'Jede Runde besteht aus 2 Legs/2 Matches (Hin und Rück). Sieger wird über Summe/Aggregate Score bestimmt. Tie-Breaker bei Gleichstand: Decider-Leg, Sudden Death, oder drittes Match. Eher Fußball-inspiriert.' 
+    {
+      value: 'aggregate_ko',
+      label: 'KO mit Hin- und Rückpiel (Aggregate KO)',
+      description: 'Jede Runde besteht aus 2 Legs/2 Matches (Hin und Rück). Sieger wird über Summe/Aggregate Score bestimmt. Tie-Breaker bei Gleichstand: Decider-Leg, Sudden Death, oder drittes Match. Eher Fußball-inspiriert.'
     },
-    { 
-      value: 'group_then_single_ko', 
-      label: 'Gruppenphase mit anschließendem Einfach-KO', 
-      description: 'Zuerst spielt jeder mehrere Gruppenspiele. Danach kommen die besten Spieler in eine klassische KO-Runde. Typisch für große Turniere (WM, EM).' 
+    {
+      value: 'group_then_single_ko',
+      label: 'Gruppenphase mit anschließendem Einfach-KO',
+      description: 'Zuerst spielt jeder mehrere Gruppenspiele. Danach kommen die besten Spieler in eine klassische KO-Runde. Typisch für große Turniere (WM, EM).'
     },
-    { 
-      value: 'group_then_double_ko', 
-      label: 'Gruppenphase mit anschließendem Doppel-KO', 
-      description: 'Nach der Gruppenphase darf man sich auch in der KO-Phase eine Niederlage erlauben. Kombiniert Gruppenphase mit doppeltem KO-System.' 
+    {
+      value: 'group_then_double_ko',
+      label: 'Gruppenphase mit anschließendem Doppel-KO',
+      description: 'Nach der Gruppenphase darf man sich auch in der KO-Phase eine Niederlage erlauben. Kombiniert Gruppenphase mit doppeltem KO-System.'
     },
-    { 
-      value: 'ko_with_group_winner_advantage', 
-      label: 'KO mit Vorteil für Gruppensieger', 
-      description: 'Wer seine Gruppe gewinnt, bekommt in der KO-Phase einen Bonus als Belohnung für gute Leistung in der Gruppenphase.' 
+    {
+      value: 'ko_with_group_winner_advantage',
+      label: 'KO mit Vorteil für Gruppensieger',
+      description: 'Wer seine Gruppe gewinnt, bekommt in der KO-Phase einen Bonus als Belohnung für gute Leistung in der Gruppenphase.'
     },
-    { 
-      value: 'page_playoff', 
-      label: 'Page-Playoff-System', 
-      description: 'Die besten Teilnehmer haben einen Vorteil und dürfen sich eine Niederlage erlauben, die anderen nicht. Spezielles System für kleine Teilnehmerfelder.' 
+    {
+      value: 'page_playoff',
+      label: 'Page-Playoff-System',
+      description: 'Die besten Teilnehmer haben einen Vorteil und dürfen sich eine Niederlage erlauben, die anderen nicht. Spezielles System für kleine Teilnehmerfelder.'
     },
   ];
 
   // Auslosungsmethode-Optionen für reinen KO-Modus (ohne Gruppenphase)
   const koOnlyDrawMethods = [
-    { 
-      value: 'full_random', 
-      label: 'Vollzufällige Auslosung', 
-      description: 'Alle Teilnehmer werden zufällig gepaart. Keine Vorsortierung oder Seeding-Regeln. Jeder kann gegen jeden treffen.' 
+    {
+      value: 'full_random',
+      label: 'Vollzufällige Auslosung',
+      description: 'Alle Teilnehmer werden zufällig gepaart. Keine Vorsortierung oder Seeding-Regeln. Jeder kann gegen jeden treffen.'
     },
-    { 
-      value: 'pot_system', 
-      label: 'Topf-System (Stärketöpfe)', 
-      description: 'Teilnehmer werden in Stärketöpfe eingeteilt (z.B. basierend auf Weltrangliste oder vorherigen Leistungen) und dann mit Regeln ausgelost. Stärkere Teilnehmer treffen später aufeinander.' 
+    {
+      value: 'pot_system',
+      label: 'Topf-System (Stärketöpfe)',
+      description: 'Teilnehmer werden in Stärketöpfe eingeteilt (z.B. basierend auf Weltrangliste oder vorherigen Leistungen) und dann mit Regeln ausgelost. Stärkere Teilnehmer treffen später aufeinander.'
     },
-    { 
-      value: 'manual', 
-      label: 'Manuelle Paarungen', 
-      description: 'Die Paarungen der ersten KO-Runde werden manuell festgelegt. Verfügbar im Turnier-Bereich nach dem Hinzufügen der Teilnehmer.' 
+    {
+      value: 'manual',
+      label: 'Manuelle Paarungen',
+      description: 'Die Paarungen der ersten KO-Runde werden manuell festgelegt. Verfügbar im Turnier-Bereich nach dem Hinzufügen der Teilnehmer.'
     }
   ];
 
   // Auslosungsmethode-Optionen für Kombiniert-Modus (mit Gruppenphase)
   const combinedDrawMethods = [
-    { 
-      value: 'fixed_cross', 
-      label: 'Feste Kreuzpaarung', 
-      description: 'Gruppenplätze bestimmen die Paarungen fest: A1 vs B2, B1 vs A2 (bei 2 Gruppen). Keine Auslosung nötig. Klassisches System bei Turnieren mit Gruppenphase.' 
+    {
+      value: 'fixed_cross',
+      label: 'Feste Kreuzpaarung',
+      description: 'Gruppenplätze bestimmen die Paarungen fest: A1 vs B2, B1 vs A2 (bei 2 Gruppen). Keine Auslosung nötig. Klassisches System bei Turnieren mit Gruppenphase.'
     },
-    { 
-      value: 'same_position_cross', 
-      label: 'Platzgleiches Kreuzen', 
-      description: 'Alle Gruppenersten spielen gegeneinander, alle Gruppenzweiten ebenfalls. Beispiel: A1, B1, C1, D1 in einem Halbfinal, A2, B2, C2, D2 im anderen.' 
+    {
+      value: 'same_position_cross',
+      label: 'Platzgleiches Kreuzen',
+      description: 'Alle Gruppenersten spielen gegeneinander, alle Gruppenzweiten ebenfalls. Beispiel: A1, B1, C1, D1 in einem Halbfinal, A2, B2, C2, D2 im anderen.'
     },
-    { 
-      value: 'overall_seeding', 
-      label: 'Gesamt-Seeding (Nach Gruppenphase)', 
-      description: 'Nach der Gruppenphase werden Teilnehmer nach Gesamtleistung geseedet und dann gepaart (Bester vs. Schlechtester). Berücksichtigt Gruppenphase-Ergebnisse.' 
+    {
+      value: 'overall_seeding',
+      label: 'Gesamt-Seeding (Nach Gruppenphase)',
+      description: 'Nach der Gruppenphase werden Teilnehmer nach Gesamtleistung geseedet und dann gepaart (Bester vs. Schlechtester). Berücksichtigt Gruppenphase-Ergebnisse.'
     },
-    { 
-      value: 'pot_system', 
-      label: 'Topf-System (Nach Gruppenphase)', 
-      description: 'Teilnehmer werden nach Gruppenphase-Leistung in Töpfe eingeteilt und dann ausgelost. Gruppenphase-Ergebnisse fließen in die Topf-Einteilung ein.' 
+    {
+      value: 'pot_system',
+      label: 'Topf-System (Nach Gruppenphase)',
+      description: 'Teilnehmer werden nach Gruppenphase-Leistung in Töpfe eingeteilt und dann ausgelost. Gruppenphase-Ergebnisse fließen in die Topf-Einteilung ein.'
     },
-    { 
-      value: 'full_random', 
-      label: 'Vollzufällige Auslosung', 
-      description: 'Alle qualifizierten Teilnehmer werden zufällig gepaart, unabhängig von Gruppenplatzierung oder Leistung in der Gruppenphase.' 
+    {
+      value: 'full_random',
+      label: 'Vollzufällige Auslosung',
+      description: 'Alle qualifizierten Teilnehmer werden zufällig gepaart, unabhängig von Gruppenplatzierung oder Leistung in der Gruppenphase.'
     },
-    { 
-      value: 'bonus_draw_for_winners', 
-      label: 'Bonus-Auslosung für Gruppensieger', 
-      description: 'Gruppensieger bekommen in der ersten KO-Runde gezielt einen leichteren Gegner (z.B. Gruppensieger vs. Gruppenzweite/Dritte). Belohnung für Gruppenphase-Erfolg.' 
+    {
+      value: 'bonus_draw_for_winners',
+      label: 'Bonus-Auslosung für Gruppensieger',
+      description: 'Gruppensieger bekommen in der ersten KO-Runde gezielt einen leichteren Gegner (z.B. Gruppensieger vs. Gruppenzweite/Dritte). Belohnung für Gruppenphase-Erfolg.'
     },
-    { 
-      value: 'predefined_bracket', 
-      label: 'Vorgegebener Turnierbaum', 
-      description: 'Der KO-Baum steht bereits fest. Die Gruppenphase bestimmt nur, welche Teilnehmer welche Positionen im Bracket einnehmen. Struktur ist vorab definiert.' 
+    {
+      value: 'predefined_bracket',
+      label: 'Vorgegebener Turnierbaum',
+      description: 'Der KO-Baum steht bereits fest. Die Gruppenphase bestimmt nur, welche Teilnehmer welche Positionen im Bracket einnehmen. Struktur ist vorab definiert.'
     },
-    { 
-      value: 'manual', 
-      label: 'Manuelle Paarungen', 
-      description: 'Paarungen werden nach Abschluss der Gruppenphase mit den qualifizierten Teilnehmern festgelegt. Runde für Runde befüllbar (Runde 1 speichern, dann Runde 2, …).' 
+    {
+      value: 'manual',
+      label: 'Manuelle Paarungen',
+      description: 'Paarungen werden nach Abschluss der Gruppenphase mit den qualifizierten Teilnehmern festgelegt. Runde für Runde befüllbar (Runde 1 speichern, dann Runde 2, …).'
     }
   ];
 
@@ -538,12 +553,12 @@ export default function CreateTournament() {
   const getAllowedKOStructures = (mode: string) => {
     if (mode === 'combined') {
       // Bei Kombi-Modus nur einfache KO-Strukturen (ohne Gruppenphase-integrierte)
-      return koStructureOptions.filter(option => 
+      return koStructureOptions.filter(option =>
         ['single_elimination', 'single_elimination_with_third', 'consolation_bracket', 'double_elimination', 'triple_elimination', 'aggregate_ko'].includes(option.value)
       );
     } else if (mode === 'knockout') {
       // Bei reinem KO-Modus nur reine KO-Strukturen (ohne Gruppenphase-bezogene)
-      return koStructureOptions.filter(option => 
+      return koStructureOptions.filter(option =>
         !['group_then_single_ko', 'group_then_double_ko', 'ko_with_group_winner_advantage'].includes(option.value)
       );
     }
@@ -581,36 +596,83 @@ export default function CreateTournament() {
     return false;
   };
 
+  const getKoStructureLabel = (value: string | null) => {
+    if (!value) return null;
+    const found = koStructureOptions.find(o => o.value === value);
+    return found ? found.label : value;
+  };
+
+  const getKoDrawMethodLabel = (value: string | null) => {
+    if (!value) return null;
+    const list = formData.mode === 'combined' ? combinedDrawMethods : koOnlyDrawMethods;
+    const found = list.find(o => o.value === value);
+    return found ? found.label : value;
+  };
+
+  const tieRulesLabel = (formData.tie_breaking_rules || [])
+    .map((rule) => tieBreakingRuleLabels[rule] || rule)
+    .join(' > ');
+
+  const groupSettingsSummary: string[] = [];
+  if (formData.has_group_phase) {
+    if (formData.groups_count) {
+      groupSettingsSummary.push(`Gruppen: ${formData.groups_count}`);
+    }
+    if (formData.participants_per_group) {
+      groupSettingsSummary.push(`Teilnehmer pro Gruppe: ${formData.participants_per_group}`);
+    }
+    if (formData.group_distribution) {
+      const label = groupDistributionLabels[formData.group_distribution] || formData.group_distribution;
+      groupSettingsSummary.push(`Verteilung: ${label}`);
+    }
+    if (formData.league_scoring_system) {
+      groupSettingsSummary.push(`Wertung: ${formData.league_scoring_system === 'points' ? 'Punkte' : 'Differenz'}`);
+    }
+    if (tieRulesLabel) {
+      groupSettingsSummary.push(`Gleichstandsregeln: ${tieRulesLabel}`);
+    }
+  }
+
+  const koSettingsSummary: string[] = [];
+  if (formData.has_ko_phase) {
+    if (formData.ko_start_round) {
+      const label = koStartRoundLabels[formData.ko_start_round] || formData.ko_start_round;
+      koSettingsSummary.push(`KO-Start: ${label}`);
+    } else if (formData.ko_first_round_size) {
+      koSettingsSummary.push(`KO-Startgroesse: ${formData.ko_first_round_size}`);
+    }
+    const structureLabel = getKoStructureLabel(formData.ko_structure);
+    if (structureLabel) {
+      koSettingsSummary.push(`Struktur: ${structureLabel}`);
+    }
+    const drawLabel = getKoDrawMethodLabel(formData.ko_draw_method);
+    if (drawLabel) {
+      koSettingsSummary.push(`Auslosung: ${drawLabel}`);
+    }
+  }
 
   return (
-    <div style={{ padding: '2rem', display: 'flex', gap: '2rem', maxWidth: '1400px', margin: '0 auto', background: theme.colors.background.primary, minHeight: '100vh' }}>
+    <div className="flex gap-8 max-w-[1400px] mx-auto bg-background min-h-screen p-8">
       {/* Linke Seite - Formular */}
-      <div style={{ flex: 1 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem', alignItems: 'center' }}>
-          <h1 style={{ margin: 0, color: theme.colors.text.primary }}>Neues Turnier erstellen</h1>
+      <div className="flex-1">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="m-0 text-foreground text-2xl font-semibold">Neues Turnier erstellen</h1>
           <Button variant="secondary" onClick={() => navigate('/dashboard')}>
-            <ArrowLeft size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+            <ArrowLeft size={20} className="mr-2 align-middle" />
             Zurück
           </Button>
         </div>
 
         {error && (
-          <div style={{ 
-            padding: '1rem', 
-            background: `${theme.colors.accent.error}20`, 
-            color: theme.colors.accent.error, 
-            border: `1px solid ${theme.colors.accent.error}`,
-            borderRadius: theme.borderRadius.card, 
-            marginBottom: '1rem' 
-          }}>
+          <div className="p-4 bg-destructive/20 text-destructive border border-destructive rounded-lg mb-4">
             {error}
           </div>
         )}
 
         {/* Vorlagen-Auswahl */}
         {templates.length > 0 && (
-          <Card style={{ marginBottom: '2rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+          <Card className="mb-8">
+            <label className="block mb-2 font-bold text-foreground">
               Aus Vorlage erstellen (optional)
             </label>
             <select
@@ -622,30 +684,22 @@ export default function CreateTournament() {
                   handleTemplateSelect(templateId);
                 }
               }}
-              style={{ 
-                width: '100%', 
-                padding: '0.75rem', 
-                fontSize: '1rem', 
-                background: theme.colors.background.secondary,
-                color: theme.colors.text.primary,
-                border: `1px solid ${theme.colors.border.standard}`, 
-                borderRadius: theme.borderRadius.input 
-              }}
+              className="w-full px-3 py-3 text-base bg-card text-foreground border border-border rounded-md transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             >
-              <option value="" style={{ background: theme.colors.background.secondary, color: theme.colors.text.primary }}>-- Keine Vorlage --</option>
+              <option value="" className="bg-card text-foreground">-- Keine Vorlage --</option>
               {templates.map(template => (
-                <option key={template.id} value={template.id} style={{ background: theme.colors.background.secondary, color: theme.colors.text.primary }}>
+                <option key={template.id} value={template.id} className="bg-card text-foreground">
                   {template.name}
                 </option>
               ))}
             </select>
-            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+            <p className="mt-2 text-sm text-muted-foreground">
               Wählen Sie eine Vorlage aus, um die Einstellungen automatisch zu übernehmen. Sie können diese anschließend noch anpassen.
             </p>
           </Card>
         )}
 
-        <Card style={{ padding: '2rem' }}>
+        <Card className="p-8">
           <form onSubmit={handleSubmit}>
             <Input
               label="Turnier-Name *"
@@ -664,7 +718,7 @@ export default function CreateTournament() {
               rows={3}
             />
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div className="grid grid-cols-2 gap-4 mb-6">
               <Input
                 label="Startdatum *"
                 type="date"
@@ -682,23 +736,15 @@ export default function CreateTournament() {
               />
             </div>
 
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: theme.spacing.sm, fontWeight: 'bold', color: theme.colors.text.primary }}>
+            <div className="mb-6">
+              <label className="block mb-2 font-bold text-foreground">
                 Spielort (optional)
               </label>
               <select
                 name="location_id"
                 value={formData.location_id ?? ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, location_id: e.target.value === '' ? null : Number(e.target.value) }))}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  fontSize: '1rem',
-                  background: theme.colors.background.secondary,
-                  color: theme.colors.text.primary,
-                  border: `1px solid ${theme.colors.border.standard}`,
-                  borderRadius: theme.borderRadius.input,
-                }}
+                className="w-full px-3 py-3 text-base bg-card text-foreground border border-border rounded-md transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
                 <option value="">— Kein Spielort —</option>
                 {locations.map(loc => (
@@ -706,23 +752,15 @@ export default function CreateTournament() {
                 ))}
               </select>
               {formData.location_id != null && (formData.mode === 'round_robin' || formData.mode === 'combined') && (
-                <div style={{ marginTop: '1rem' }}>
-                  <label style={{ display: 'block', marginBottom: theme.spacing.sm, fontWeight: 'bold', color: theme.colors.text.primary }}>
+                <div className="mt-4">
+                  <label className="block mb-2 font-bold text-foreground">
                     Spielfeld-Zuweisung (Gruppenphase)
                   </label>
                   <select
                     name="spielfeld_assignment_mode"
                     value={formData.spielfeld_assignment_mode}
                     onChange={(e) => setFormData(prev => ({ ...prev, spielfeld_assignment_mode: e.target.value as 'random' | 'group_fixed' | 'group_random' }))}
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      fontSize: '1rem',
-                      background: theme.colors.background.secondary,
-                      color: theme.colors.text.primary,
-                      border: `1px solid ${theme.colors.border.standard}`,
-                      borderRadius: theme.borderRadius.input,
-                    }}
+                    className="w-full px-3 py-3 text-base bg-card text-foreground border border-border rounded-md transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   >
                     <option value="random">Gesamtspielplan (fair) – rundenbasiert über alle Gruppen</option>
                     <option value="group_fixed">Gruppen Zuweisung Fix – pro Gruppe ein Spielfeld (im Gruppen-Tab festlegen)</option>
@@ -732,8 +770,8 @@ export default function CreateTournament() {
               )}
             </div>
 
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: theme.spacing.sm, fontWeight: 'bold', color: theme.colors.text.primary }}>
+            <div className="mb-6">
+              <label className="block mb-2 font-bold text-foreground">
                 Turnier-Modus *
               </label>
               <select
@@ -741,33 +779,17 @@ export default function CreateTournament() {
                 value={formData.mode}
                 onChange={handleChange}
                 required
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  fontSize: '1rem',
-                  background: theme.colors.background.secondary,
-                  color: theme.colors.text.primary,
-                  border: `1px solid ${theme.colors.border.standard}`,
-                  borderRadius: theme.borderRadius.input,
-                  outline: 'none',
-                  transition: theme.transitions.default,
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = theme.colors.border.focus;
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = theme.colors.border.standard;
-                }}
+                className="w-full px-3 py-3 text-base bg-card text-foreground border border-border rounded-md transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
-                <option value="round_robin" style={{ background: theme.colors.background.secondary, color: theme.colors.text.primary }}>Liga</option>
-                <option value="knockout" style={{ background: theme.colors.background.secondary, color: theme.colors.text.primary }}>KO-Phase</option>
-                <option value="combined" style={{ background: theme.colors.background.secondary, color: theme.colors.text.primary }}>Kombiniert</option>
+                <option value="round_robin" className="bg-card text-foreground">Liga</option>
+                <option value="knockout" className="bg-card text-foreground">KO-Phase</option>
+                <option value="combined" className="bg-card text-foreground">Kombiniert</option>
               </select>
             </div>
 
         {(formData.mode === 'round_robin' || formData.mode === 'combined') && (
-          <Card style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
-            <h3 style={{ marginBottom: '1rem', fontWeight: 'bold', color: theme.colors.text.primary, marginTop: 0 }}>Gruppenphase</h3>
+          <Card className="mt-6 mb-6">
+            <h3 className="mb-4 font-bold text-foreground text-lg mt-0">Gruppenphase</h3>
             <Input
               label="Anzahl Gruppen"
               type="number"
@@ -776,54 +798,48 @@ export default function CreateTournament() {
               onChange={handleChange}
               min={1}
             />
-            
+
             {formData.groups_count > 1 && (
               <>
-                <label style={{ display: 'block', marginTop: '1rem', marginBottom: '0.5rem', color: theme.colors.text.primary }}>
+                <label className="block mt-4 mb-2 text-foreground">
                   Auslosungsart
                 </label>
                 <select
                   name="group_distribution"
                   value={formData.group_distribution}
                   onChange={handleChange}
-                  style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: '4px' }}
+                  className="w-full px-2 py-2 text-base border border-border rounded"
                 >
                   <option value="random">Zufällig (Random)</option>
                   <option value="seeded">Gesetzt (Seeded)</option>
                 </select>
 
                 {formData.group_distribution === 'seeded' && (
-                  <div style={{ marginTop: '1rem', padding: '1rem', background: theme.colors.background.accent, borderRadius: '4px', border: `1px solid ${theme.colors.border.standard}` }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+                  <div className="mt-4 p-4 bg-muted rounded border border-border">
+                    <label className="block mb-2 font-bold text-foreground">
                       Gesetzte Spieler auswählen *
                     </label>
-                    <p style={{ marginBottom: '0.75rem', fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+                    <p className="mb-3 text-sm text-muted-foreground">
                       Wählen Sie die Spieler aus, die vor der Auslosung in Gruppen eingeteilt werden sollen. Die anderen Spieler werden dann zufällig zugeteilt.
                     </p>
                     {loadingParticipants ? (
-                      <div style={{ padding: '1rem', textAlign: 'center', color: theme.colors.text.secondary }}>Lade Teilnehmer...</div>
+                      <div className="p-4 text-center text-muted-foreground">Lade Teilnehmer...</div>
                     ) : allParticipants.length === 0 ? (
-                      <div style={{ padding: '1rem', textAlign: 'center', color: theme.colors.text.secondary }}>
+                      <div className="p-4 text-center text-muted-foreground">
                         Keine Teilnehmer verfügbar. Bitte erstellen Sie zuerst Teilnehmer in der Teilnehmer-Verwaltung.
                       </div>
                     ) : (
                       <>
-                        <div style={{ maxHeight: '300px', overflowY: 'auto', border: `1px solid ${theme.colors.border.standard}`, borderRadius: '4px', padding: '0.5rem' }}>
+                        <div className="max-h-[300px] overflow-y-auto border border-border rounded p-2">
                           {allParticipants.map(participant => {
                             const isSelected = formData.seeded_participant_ids.includes(participant.id);
                             return (
                               <label
                                 key={participant.id}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '0.5rem',
-                                  padding: '0.5rem',
-                                  cursor: 'pointer',
-                                  borderRadius: '4px',
-                                  background: isSelected ? '#e7f3ff' : 'transparent',
-                                  marginBottom: '0.25rem'
-                                }}
+                                className={cn(
+                                  "flex items-center gap-2 p-2 cursor-pointer rounded mb-1",
+                                  isSelected ? "bg-muted" : "bg-transparent"
+                                )}
                               >
                                 <input
                                   type="checkbox"
@@ -851,8 +867,11 @@ export default function CreateTournament() {
                             );
                           })}
                         </div>
-                        <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: formData.seeded_participant_ids.length === 0 ? '#dc3545' : '#666' }}>
-                          {formData.seeded_participant_ids.length === 0 
+                        <p className={cn(
+                          "mt-2 text-sm",
+                          formData.seeded_participant_ids.length === 0 ? "text-destructive" : "text-muted-foreground"
+                        )}>
+                          {formData.seeded_participant_ids.length === 0
                             ? 'Bitte wählen Sie mindestens einen gesetzten Spieler aus.'
                             : `${formData.seeded_participant_ids.length} Spieler ausgewählt.`
                           }
@@ -864,8 +883,8 @@ export default function CreateTournament() {
               </>
             )}
 
-            <div style={{ marginTop: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+            <div className="mt-6">
+              <label className="block mb-2 font-bold text-foreground">
                 Ligatabelle Wertung *
               </label>
               <select
@@ -873,35 +892,35 @@ export default function CreateTournament() {
                 value={formData.league_scoring_system || ''}
                 onChange={handleChange}
                 required
-                style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: '4px' }}
+                className="w-full px-2 py-2 text-base border border-border rounded"
               >
                 <option value="">-- Bitte wählen --</option>
                 <option value="points">Punkte</option>
                 <option value="difference">Differenz</option>
               </select>
               {formData.league_scoring_system === 'points' && (
-                <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                <p className="mt-2 text-sm text-muted-foreground italic">
                   Standard-Punkteverteilung: Sieg 3, Remis 1, Niederlage 0.
                 </p>
               )}
             </div>
 
             {formData.mode === 'round_robin' && (
-              <div style={{ marginTop: '1.5rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              <div className="mt-6">
+                <label className="block mb-2 font-bold text-foreground">
                   Liga-Variante
                 </label>
                 <select
                   name="league_variant"
                   value={formData.league_variant}
                   onChange={handleChange}
-                  style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: '4px' }}
+                  className="w-full px-2 py-2 text-base border border-border rounded"
                 >
                   <option value="classic">Klassische Liga (Round Robin)</option>
                   <option value="double">Doppelte Liga</option>
                   <option value="multiple">Mehrfache Liga</option>
                 </select>
-                <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                <p className="mt-2 text-sm text-muted-foreground italic">
                   {formData.league_variant === 'classic' && 'Jeder gegen jeden einmal (Standard Round Robin)'}
                   {formData.league_variant === 'double' && 'Jeder gegen jeden zweimal (2x Round Robin)'}
                   {formData.league_variant === 'multiple' && 'Jeder gegen jeden mehrfach (konfigurierbarer Multiplikator)'}
@@ -910,8 +929,8 @@ export default function CreateTournament() {
             )}
 
             {formData.mode === 'round_robin' && formData.league_variant === 'multiple' && (
-              <div style={{ marginTop: '1rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+              <div className="mt-4">
+                <label className="block mb-2 font-bold text-foreground">
                   Anzahl Runden (Multiplikator) *
                 </label>
                 <input
@@ -922,40 +941,37 @@ export default function CreateTournament() {
                   min={2}
                   max={10}
                   required
-                  style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: '4px' }}
+                  className="w-full px-2 py-2 text-base border border-border rounded"
                 />
-                <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                <p className="mt-2 text-sm text-muted-foreground italic">
                   Wie oft die komplette Round-Robin-Runde wiederholt wird (min: 2, max: 10)
                 </p>
               </div>
             )}
 
-            <div style={{ marginTop: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+            <div className="mt-4">
+              <label className="block mb-2 font-bold text-foreground">
                 Gleichstandsregeln *
               </label>
-              
+
               {/* Verfügbare Regeln (Checkboxen mit exklusiver Logik für Entscheidungsspiel) */}
-              <div style={{ marginBottom: '1rem', padding: '0.75rem', background: theme.colors.background.accent, borderRadius: '4px', border: `1px solid ${theme.colors.border.standard}` }}>
-                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: 'bold' }}>Verfügbare Regeln:</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div className="mb-4 p-3 bg-muted rounded border border-border">
+                <p className="m-0 mb-2 text-sm font-bold text-foreground">Verfügbare Regeln:</p>
+                <div className="flex flex-col gap-2">
                   {getAvailableTieBreakingRules().map(rule => {
                     const isDecisionMatch = rule === 'decision_match';
                     const hasDecisionMatch = formData.tie_breaking_rules.includes('decision_match');
                     const hasOtherRules = formData.tie_breaking_rules.some(r => r !== 'decision_match');
                     const isChecked = formData.tie_breaking_rules.includes(rule);
                     const isDisabled = (isDecisionMatch && hasOtherRules) || (!isDecisionMatch && hasDecisionMatch);
-                    
+
                     return (
-                      <label 
-                        key={rule} 
-                        style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '0.5rem', 
-                          cursor: isDisabled ? 'not-allowed' : 'pointer',
-                          opacity: isDisabled ? 0.5 : 1
-                        }}
+                      <label
+                        key={rule}
+                        className={cn(
+                          "flex items-center gap-2",
+                          isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                        )}
                       >
                         <input
                           type="checkbox"
@@ -990,7 +1006,7 @@ export default function CreateTournament() {
                   })}
                 </div>
                 {formData.tie_breaking_rules.includes('decision_match') && (
-                  <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                  <p className="mt-2 text-xs text-muted-foreground italic">
                     Bei Gleichstand wird ein Entscheidungsspiel generiert.
                   </p>
                 )}
@@ -998,29 +1014,24 @@ export default function CreateTournament() {
 
               {/* Ausgewählte Regeln mit Reihenfolge (nur wenn kein Entscheidungsspiel) */}
               {formData.tie_breaking_rules.length > 0 && !formData.tie_breaking_rules.includes('decision_match') && (
-                <div style={{ padding: '0.75rem', background: `${theme.colors.accent.info}20`, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.accent.info}` }}>
-                  <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: 'bold', color: theme.colors.text.primary }}>Reihenfolge (1. = höchste Priorität):</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div className="p-3 bg-info/20 rounded-lg border border-info">
+                  <p className="m-0 mb-2 text-sm font-bold text-foreground">Reihenfolge (1. = höchste Priorität):</p>
+                  <div className="flex flex-col gap-2">
                     {formData.tie_breaking_rules.map((rule, index) => (
-                      <div key={`${rule}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-                        <span style={{ minWidth: '2rem', fontWeight: 'bold', color: theme.colors.text.secondary }}>{index + 1}.</span>
-                        <span style={{ flex: 1 }}>{tieBreakingRuleLabels[rule]}</span>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <div key={`${rule}-${index}`} className="flex items-center gap-2 p-2 bg-card rounded-lg border border-border">
+                        <span className="min-w-[2rem] font-bold text-muted-foreground">{index + 1}.</span>
+                        <span className="flex-1">{tieBreakingRuleLabels[rule]}</span>
+                        <div className="flex flex-col gap-1">
                           <button
                             type="button"
                             onClick={() => moveTieBreakingRule(index, 'up')}
                             disabled={index === 0}
-                            style={{
-                              width: '24px',
-                              height: '20px',
-                              padding: 0,
-                              fontSize: '0.75rem',
-                              background: index === 0 ? '#ccc' : '#28a745',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '2px',
-                              cursor: index === 0 ? 'not-allowed' : 'pointer'
-                            }}
+                            className={cn(
+                              "w-6 h-5 p-0 text-xs border-none rounded-sm",
+                              index === 0
+                                ? "bg-muted-foreground/60 text-white cursor-not-allowed"
+                                : "bg-success text-white cursor-pointer"
+                            )}
                             title="Nach oben"
                           >
                             ▲
@@ -1029,17 +1040,12 @@ export default function CreateTournament() {
                             type="button"
                             onClick={() => moveTieBreakingRule(index, 'down')}
                             disabled={index === formData.tie_breaking_rules.length - 1}
-                            style={{
-                              width: '24px',
-                              height: '20px',
-                              padding: 0,
-                              fontSize: '0.75rem',
-                              background: index === formData.tie_breaking_rules.length - 1 ? '#ccc' : '#28a745',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '2px',
-                              cursor: index === formData.tie_breaking_rules.length - 1 ? 'not-allowed' : 'pointer'
-                            }}
+                            className={cn(
+                              "w-6 h-5 p-0 text-xs border-none rounded-sm",
+                              index === formData.tie_breaking_rules.length - 1
+                                ? "bg-muted-foreground/60 text-white cursor-not-allowed"
+                                : "bg-success text-white cursor-pointer"
+                            )}
                             title="Nach unten"
                           >
                             ▼
@@ -1055,19 +1061,19 @@ export default function CreateTournament() {
         )}
 
         {(formData.mode === 'knockout' || formData.mode === 'combined') && (
-          <div style={{ marginBottom: '1rem', marginLeft: '0', padding: '1rem', background: theme.colors.background.accent, borderRadius: '8px', border: `1px solid ${theme.colors.border.standard}` }}>
-            <h3 style={{ marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+          <div className="mb-4 ml-0 p-4 bg-muted rounded-lg border border-border">
+            <h3 className="mb-2 font-bold text-foreground">
               {formData.mode === 'knockout' ? 'KO-Phase (Reine Ausscheidungsrunde)' : 'KO-Phase (Nach Gruppenphase)'}
             </h3>
             {formData.mode === 'combined' && (
-              <p style={{ marginBottom: '1rem', fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+              <p className="mb-4 text-sm text-muted-foreground italic">
                 Hinweis: Ligatabelle Wertung und Gleichstandsregeln werden in der Gruppenphase konfiguriert.
               </p>
             )}
-            <div style={{ marginLeft: '1rem' }}>
+            <div className="ml-4">
               {formData.mode === 'combined' && (
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+                <div className="mb-4">
+                  <label className="block mb-2 font-bold text-foreground">
                     KO-Start-Runde *
                   </label>
                   <select
@@ -1075,7 +1081,7 @@ export default function CreateTournament() {
                     value={formData.ko_start_round || ''}
                     onChange={handleChange}
                     required
-                    style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: '4px' }}
+                    className="w-full px-2 py-2 text-base border border-border rounded"
                   >
                     <option value="">-- Bitte wählen --</option>
                     <option value="round_of_32">Sechzehntelfinale (32 Teilnehmer)</option>
@@ -1084,31 +1090,31 @@ export default function CreateTournament() {
                     <option value="semifinal">Halbfinale (4 Teilnehmer)</option>
                     <option value="final">Finale (2 Teilnehmer)</option>
                   </select>
-                  
+
                   {/* Qualification Plan Display */}
                   {loadingQualificationPlan && (
-                    <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+                    <p className="mt-2 text-sm text-muted-foreground">
                       Berechne Qualifikationsplan...
                     </p>
                   )}
                   {qualificationPlan && !loadingQualificationPlan && (
-                    <div style={{ marginTop: '1rem', padding: '1rem', background: `${theme.colors.accent.info}20`, borderRadius: '4px', border: `1px solid ${theme.colors.border.standard}` }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 'bold', color: theme.colors.text.primary, marginBottom: '0.5rem' }}>
+                    <div className="mt-4 p-4 bg-info/20 rounded border border-border">
+                      <div className="text-sm font-bold text-foreground mb-2">
                         Qualifikationsplan
                       </div>
-                      <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>
+                      <div className="text-sm text-muted-foreground mb-2">
                         {qualificationPlan.required_participants} Teilnehmer gesamt
                       </div>
-                      <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>
+                      <div className="text-sm text-muted-foreground mb-2">
                         Basis: {qualificationPlan.basis_per_group} Teilnehmer pro Gruppe
                       </div>
                       {qualificationPlan.fallback_rules.length > 0 && (
-                        <div style={{ marginTop: '0.5rem' }}>
-                          <div style={{ fontSize: '0.875rem', fontWeight: 'bold', color: theme.colors.text.primary, marginBottom: '0.25rem' }}>
+                        <div className="mt-2">
+                          <div className="text-sm font-bold text-foreground mb-1">
                             Zusätzliche Qualifikanten:
                           </div>
                           {qualificationPlan.fallback_rules.map((rule, idx) => (
-                            <div key={idx} style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+                            <div key={idx} className="text-sm text-muted-foreground">
                               • {rule.count}x bester {rule.position}. Platzierter
                             </div>
                           ))}
@@ -1119,17 +1125,17 @@ export default function CreateTournament() {
                 </div>
               )}
               {formData.mode === 'knockout' && (
-                <div style={{ marginBottom: '1rem', padding: '0.75rem', background: `${theme.colors.accent.info}20`, borderRadius: '4px', border: `1px solid ${theme.colors.border.standard}` }}>
-                  <p style={{ margin: 0, fontSize: '0.875rem', color: theme.colors.accent.info }}>
-                    Die Teilnehmeranzahl wird automatisch basierend auf den hinzugefügten Teilnehmern ermittelt. 
+                <div className="mb-4 p-3 bg-info/20 rounded border border-border">
+                  <p className="m-0 text-sm text-info">
+                    Die Teilnehmeranzahl wird automatisch basierend auf den hinzugefügten Teilnehmern ermittelt.
                     Der Turnierbaum wird erstellt, sobald Teilnehmer zum Turnier hinzugefügt wurden.
                   </p>
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  <label className="block mb-2 font-bold text-foreground">
                     Turnierstruktur *
                   </label>
                   <select
@@ -1137,7 +1143,7 @@ export default function CreateTournament() {
                     value={formData.ko_structure || ''}
                     onChange={handleChange}
                     required
-                    style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: '4px' }}
+                    className="w-full px-2 py-2 text-base border border-border rounded"
                   >
                     <option value="">-- Bitte wählen --</option>
                     {getAllowedKOStructures(formData.mode).map(option => (
@@ -1147,9 +1153,9 @@ export default function CreateTournament() {
                     ))}
                   </select>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '1.75rem' }}>
+                <div className="flex items-start pt-7">
                   {formData.ko_structure && (
-                    <p style={{ margin: 0, fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                    <p className="m-0 text-sm text-muted-foreground italic">
                       {getAllowedKOStructures(formData.mode).find(o => o.value === formData.ko_structure)?.description}
                     </p>
                   )}
@@ -1157,9 +1163,9 @@ export default function CreateTournament() {
               </div>
 
               {needsDrawMethod(formData.ko_structure, formData.ko_draw_method) && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                    <label className="block mb-2 font-bold text-foreground">
                       Auslosung {formData.ko_draw_method !== 'manual' ? '*' : ''}
                     </label>
                     <select
@@ -1167,7 +1173,7 @@ export default function CreateTournament() {
                       value={formData.ko_draw_method || ''}
                       onChange={handleChange}
                       required={formData.ko_draw_method !== 'manual'}
-                      style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: '4px' }}
+                      className="w-full px-2 py-2 text-base border border-border rounded"
                     >
                       <option value="">-- Bitte wählen --</option>
                       {getAllowedKODrawMethods(formData.mode, formData.has_group_phase).map(option => (
@@ -1177,9 +1183,9 @@ export default function CreateTournament() {
                       ))}
                     </select>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '1.75rem' }}>
+                  <div className="flex items-start pt-7">
                     {formData.ko_draw_method && (
-                      <p style={{ margin: 0, fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                      <p className="m-0 text-sm text-muted-foreground italic">
                         {getAllowedKODrawMethods(formData.mode, formData.has_group_phase).find(o => o.value === formData.ko_draw_method)?.description}
                       </p>
                     )}
@@ -1189,9 +1195,9 @@ export default function CreateTournament() {
 
               {/* KO-Auslosungsmodus nur anzeigen, wenn nicht manuelle Paarungen */}
               {formData.ko_draw_method !== 'manual' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                    <label className="block mb-2 font-bold text-foreground">
                       KO-Auslosungsmodus *
                     </label>
                     <select
@@ -1199,7 +1205,7 @@ export default function CreateTournament() {
                       value={formData.ko_distribution || 'random_first_round'}
                       onChange={handleChange}
                       required
-                      style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: '4px' }}
+                      className="w-full px-2 py-2 text-base border border-border rounded"
                     >
                       {koDrawModeOptions.map(option => (
                         <option key={option.value} value={option.value}>
@@ -1208,8 +1214,8 @@ export default function CreateTournament() {
                       ))}
                     </select>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '1.75rem' }}>
-                    <p style={{ margin: 0, fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                  <div className="flex items-start pt-7">
+                    <p className="m-0 text-sm text-muted-foreground italic">
                       {koDrawModeOptions.find(o => o.value === formData.ko_distribution)?.description}
                     </p>
                   </div>
@@ -1217,11 +1223,11 @@ export default function CreateTournament() {
               )}
 
               {formData.has_group_phase && formData.ko_draw_method && (
-                <div style={{ marginBottom: '1rem', padding: '0.75rem', background: theme.colors.background.accent, borderRadius: '4px', border: `1px solid ${theme.colors.border.standard}` }}>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+                <div className="mb-4 p-3 bg-muted rounded border border-border">
+                  <label className="block mb-2 font-bold text-foreground">
                     Auslosungs-Restriktionen
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
+                  <label className="flex items-center gap-2 cursor-pointer mb-2">
                     <input
                       type="checkbox"
                       name="ko_block_same_group"
@@ -1230,7 +1236,7 @@ export default function CreateTournament() {
                     />
                     <span>Keine Paarung aus der gleichen Gruppe</span>
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       name="ko_block_same_position"
@@ -1244,23 +1250,23 @@ export default function CreateTournament() {
 
 
               {needsGroupWinnerAdvantage(formData.ko_structure, formData.mode) && (
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <div className="mb-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       name="ko_group_winner_advantage"
                       checked={formData.ko_group_winner_advantage}
                       onChange={handleChange}
                     />
-                    <span style={{ fontWeight: 'bold', color: theme.colors.text.primary }}>Vorteil für Gruppensieger</span>
+                    <span className="font-bold text-foreground">Vorteil für Gruppensieger</span>
                   </label>
                 </div>
               )}
 
 
               {(formData.ko_draw_method === 'pot_system' || formData.ko_draw_method === 'full_random') && (
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                <div className="mb-4">
+                  <label className="block mb-2 font-bold text-foreground">
                     Zufalls-Seed (optional)
                   </label>
                   <input
@@ -1270,17 +1276,17 @@ export default function CreateTournament() {
                     onChange={handleChange}
                     min={0}
                     placeholder="Leer = zufällig"
-                    style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: '4px' }}
+                    className="w-full px-2 py-2 text-base border border-border rounded"
                   />
-                  <p style={{ marginTop: '0.25rem', fontSize: '0.75rem', color: theme.colors.text.secondary }}>
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Optional: Fester Seed für reproduzierbare Zufallsauslosungen
                   </p>
                 </div>
               )}
 
               {formData.ko_draw_method === 'manual' && (
-                <div style={{ marginBottom: '1rem', padding: '1rem', background: `${theme.colors.accent.warning}20`, borderRadius: '4px', border: '1px solid #ffc107' }}>
-                  <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: theme.colors.accent.warning }}>
+                <div className="mb-4 p-4 bg-warning/20 rounded-md border border-warning">
+                  <p className="m-0 mb-4 text-sm text-warning">
                     {formData.mode === 'combined'
                       ? 'Paarungen werden nach Abschluss der Gruppenphase mit den qualifizierten Teilnehmern festgelegt (Spiele → KO-Phase). Runde 1 speichern, dann Runde 2, …'
                       : 'Die Paarungen der ersten KO-Runde werden im Turnier-Bereich "Spiele" / "KO-Phase" manuell festgelegt (Runde 1 speichern, dann Runde 2, …).'}
@@ -1291,22 +1297,22 @@ export default function CreateTournament() {
           </div>
         )}
 
-        <div style={{ marginTop: '2rem', marginBottom: '1rem' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+        <div className="mt-8 mb-4">
+          <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               name="is_template"
               checked={formData.is_template}
               onChange={handleChange}
             />
-            <span style={{ fontWeight: 'bold', color: theme.colors.text.primary }}>Als Vorlage speichern</span>
+            <span className="font-bold text-foreground">Als Vorlage speichern</span>
           </label>
-          <p style={{ marginTop: '0.25rem', fontSize: '0.875rem', color: theme.colors.text.secondary, marginLeft: '1.5rem' }}>
+          <p className="mt-1 text-sm text-muted-foreground ml-6">
             Dieses Turnier als Vorlage speichern, um es später beim Erstellen neuer Turniere zu verwenden.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+        <div className="flex gap-4 mt-8">
           <Button
             type="submit"
             variant="success"
@@ -1327,28 +1333,68 @@ export default function CreateTournament() {
       </div>
 
       {/* Rechte Seite - Erklärungen */}
-      <div style={{ flex: 1, maxWidth: '400px' }}>
-        <div style={{ position: 'sticky', top: '2rem' }}>
-          <Card style={{ marginBottom: '1rem', border: `1px solid ${theme.colors.accent.info}` }}>
-            <h2 style={{ marginTop: 0, color: theme.colors.accent.info }}>Turnier erstellen</h2>
-            <p style={{ color: theme.colors.text.secondary, marginBottom: '1rem' }}>
+      <div className="flex-1 max-w-[400px]">
+        <div className="sticky top-8">
+          <Card className="mb-4 border border-info">
+            <h2 className="mt-0 text-info text-xl font-semibold">Turnier erstellen</h2>
+            <p className="text-muted-foreground mb-4">
               Hier können Sie ein neues Turnier konfigurieren. Wählen Sie den gewünschten Modus und passen Sie die Einstellungen entsprechend an.
             </p>
-            <ul style={{ margin: 0, paddingLeft: '1.5rem', color: theme.colors.text.secondary }}>
-              <li style={{ marginBottom: '0.5rem' }}>Alle mit * markierten Felder sind Pflichtfelder.</li>
-              <li style={{ marginBottom: '0.5rem' }}>Nach der Erstellung können Sie Teilnehmer hinzufügen.</li>
-              <li style={{ marginBottom: '0.5rem' }}>Gruppen und Spiele werden separat generiert.</li>
-              <li style={{ marginBottom: '0.5rem' }}>Sie können das Turnier später als Vorlage speichern.</li>
+            <ul className="m-0 pl-6 text-muted-foreground list-disc">
+              <li className="mb-2">Alle mit * markierten Felder sind Pflichtfelder.</li>
+              <li className="mb-2">Nach der Erstellung können Sie Teilnehmer hinzufügen.</li>
+              <li className="mb-2">Gruppen und Spiele werden separat generiert.</li>
+              <li className="mb-2">Sie können das Turnier später als Vorlage speichern.</li>
             </ul>
           </Card>
-          <Card style={{ border: `1px solid ${theme.colors.accent.success}` }}>
-            <h3 style={{ marginTop: 0, color: theme.colors.accent.success }}>Ausgewählter Modus: {currentMode.title}</h3>
-            <p style={{ color: theme.colors.text.secondary, marginBottom: '0.75rem', fontSize: '0.9rem' }}>{currentMode.description}</p>
-            <ul style={{ margin: 0, paddingLeft: '1.5rem', color: theme.colors.text.secondary, fontSize: '0.9rem' }}>
+          <Card className="border border-success">
+            <h3 className="mt-0 text-success text-lg font-semibold">Ausgewählter Modus: {currentMode.title}</h3>
+            <p className="text-muted-foreground mb-3 text-sm">{currentMode.description}</p>
+            <ul className="m-0 pl-6 text-muted-foreground text-sm list-disc">
               {currentMode.features.map((feature, idx) => (
-                <li key={idx} style={{ marginBottom: '0.4rem' }}>{feature}</li>
+                <li key={idx} className="mb-1.5">{feature}</li>
               ))}
             </ul>
+          </Card>
+          <Card className="mt-4 border border-warning">
+            <h3 className="mt-0 text-warning text-lg font-semibold">Aktuelle Einstellungen</h3>
+            {groupSettingsSummary.length > 0 ? (
+              <>
+                <div className="font-bold text-foreground mb-2">Gruppenphase</div>
+                <ul className="m-0 pl-6 text-muted-foreground text-sm list-disc">
+                  {groupSettingsSummary.map((item) => (
+                    <li key={item} className="mb-1.5">{item}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <div className="text-muted-foreground mb-3">Keine Gruppenphase aktiv.</div>
+            )}
+            {koSettingsSummary.length > 0 ? (
+              <>
+                <div className="font-bold text-foreground mt-4 mb-2">KO-Phase</div>
+                <ul className="m-0 pl-6 text-muted-foreground text-sm list-disc">
+                  {koSettingsSummary.map((item) => (
+                    <li key={item} className="mb-1.5">{item}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <div className="text-muted-foreground mt-3">Keine KO-Phase aktiv.</div>
+            )}
+            <div className="mt-4">
+              <TournamentModeVisualization
+                mode={formData.mode}
+                hasGroupPhase={formData.has_group_phase}
+                hasKoPhase={formData.has_ko_phase}
+                groupsCount={formData.groups_count}
+                participantsPerGroup={formData.participants_per_group}
+                groupDistribution={formData.group_distribution}
+                koStartRound={formData.ko_start_round}
+                koStructure={formData.ko_structure}
+                koDrawMethod={formData.ko_draw_method}
+              />
+            </div>
           </Card>
         </div>
       </div>

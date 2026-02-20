@@ -193,6 +193,8 @@ def _create_mini_table_for_tie_group(
                 rule_key.append(stats['wins'])
             elif rule == 'diff':
                 rule_key.append(stats['diff'])
+            elif rule == 'goals_for':
+                rule_key.append(stats['goals_for'])
 
         entry = {
             'participant_id': pid,
@@ -359,6 +361,8 @@ async def get_group_table(
                 parts.append(stats.get('wins', 0))
             elif r == 'diff':
                 parts.append(stats.get('diff', 0))
+            elif r == 'goals_for':
+                parts.append(stats.get('goals_for', 0))
         return tuple(parts)
 
     def _build_tie_group_key_for_mini_table(stats: Dict) -> Tuple:

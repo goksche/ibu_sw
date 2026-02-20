@@ -51,6 +51,9 @@ class ManualKOPair(BaseModel):
 class ManualKOBracketRequest(BaseModel):
     pairs: List[ManualKOPair]
 
+class DeleteTournamentRequest(BaseModel):
+    password: Optional[str] = None
+
 
 @router.get("", response_model=List[TournamentResponse])
 async def get_tournaments(
@@ -186,7 +189,17 @@ async def delete_tournament(
     db: Session = Depends(get_db)
 ):
     """Delete a tournament (CASCADE deletes all related data) - DEPRECATED: Use POST /{tournament_id}/delete instead"""
-    tournament = ensure_tournament_editable(db, tournament_id)
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tournament with ID {tournament_id} not found"
+        )
+    if tournament.status == TournamentStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Turnier ist abgeschlossen; Löschen nur via POST /{tournament_id}/delete mit Passwort"
+        )
     
     db.delete(tournament)
     db.commit()
@@ -196,11 +209,23 @@ async def delete_tournament(
 @router.post("/{tournament_id}/delete", status_code=status.HTTP_200_OK)
 async def delete_tournament(
     tournament_id: int,
+    payload: Optional[DeleteTournamentRequest] = None,
     current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db)
 ):
     """Delete a tournament (CASCADE deletes all related data)"""
-    tournament = ensure_tournament_editable(db, tournament_id)
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tournament with ID {tournament_id} not found"
+        )
+    if tournament.status == TournamentStatus.COMPLETED:
+        if not payload or payload.password != "414141":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Passwort erforderlich, um ein abgeschlossenes Turnier zu löschen"
+            )
     
     # Delete all related data manually (CASCADE in SQLAlchemy doesn't always work as expected)
     # Delete KO matches

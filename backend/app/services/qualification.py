@@ -158,6 +158,8 @@ def _build_candidate_sort_key(stats: Dict, tie_breaking_rules: Optional[List[str
             key_parts.append(stats.get("wins", 0))
         elif rule == "diff":
             key_parts.append(stats.get("diff", 0))
+        elif rule == "goals_for":
+            key_parts.append(stats.get("goals_for", 0))
 
     if scoring_system == "points":
         key_parts.append(stats.get("diff", 0))

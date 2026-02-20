@@ -2,10 +2,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Card, Input, Button, Select } from '../../components/ui';
+import { Card, Input, Button, Select, Badge } from '../../components/ui';
 import { User } from '../../types';
 import { authService } from '../../services/authService';
 import { Plus, Pencil, Trash, Users, ArrowLeft } from 'phosphor-react';
+import { cn } from '@/lib/utils';
 
 // UserRole enum for the component
 enum UserRole {
@@ -142,64 +143,50 @@ export default function UserManagement() {
     setShowForm(true);
   };
 
+  const getRoleBadgeVariant = (role: string): 'info' | 'success' | 'secondary' => {
+    if (role === UserRole.ADMIN) return 'info';
+    if (role === UserRole.USER) return 'success';
+    return 'secondary';
+  };
+
   if (!isAdmin) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h2>Zugriff verweigert</h2>
-        <p>Sie haben keine Berechtigung für diese Seite.</p>
+      <div className="p-8 text-center">
+        <h2 className="text-foreground">Zugriff verweigert</h2>
+        <p className="text-muted-foreground">Sie haben keine Berechtigung für diese Seite.</p>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '2rem'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+    <div className="p-8 bg-background min-h-screen text-foreground">
+      <div className="flex justify-between items-center mb-8">
+        <div className="flex items-center gap-4">
           <Button
             variant="secondary"
-            onClick={() => navigate('/dashboard')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.5rem 1rem'
-            }}
+            onClick={() => navigate('/settings')}
+            className="flex items-center gap-2 py-2 px-4"
           >
             <ArrowLeft size={16} />
             Zurück
           </Button>
 
           <div>
-            <h1 style={{
-              margin: 0,
-              color: '#1a1a1a',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '1rem'
-            }}>
+            <h1 className="m-0 text-foreground flex items-center gap-4">
               <Users size={32} />
               Benutzer-Verwaltung
             </h1>
-            <p style={{ color: '#666', margin: '0.5rem 0 0 0' }}>
+            <p className="text-muted-foreground mt-2 mb-0">
               Verwalten Sie Benutzer und deren Rollen
               <br />
-              <small style={{ color: '#888' }}>Änderungen werden in der Datenbank gespeichert</small>
+              <small className="text-muted-foreground">Änderungen werden in der Datenbank gespeichert</small>
             </p>
           </div>
         </div>
 
         <Button
           onClick={startCreate}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}
+          className="flex items-center gap-2"
         >
           <Plus size={16} />
           Neuer Benutzer
@@ -207,28 +194,17 @@ export default function UserManagement() {
       </div>
 
       {error && (
-        <div style={{
-          padding: '1rem',
-          backgroundColor: '#ffebee',
-          color: '#d32f2f',
-          borderRadius: '4px',
-          marginBottom: '1rem'
-        }}>
+        <div className="p-4 bg-destructive/10 text-destructive rounded-lg border border-destructive mb-4">
           {error}
         </div>
       )}
 
       {showForm && (
-        <Card style={{ marginBottom: '2rem' }}>
-          <h3>{editingUser ? 'Benutzer bearbeiten' : 'Neuer Benutzer'}</h3>
+        <Card className="mb-8">
+          <h3 className="text-foreground">{editingUser ? 'Benutzer bearbeiten' : 'Neuer Benutzer'}</h3>
 
           <form onSubmit={handleSubmit}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-              gap: '1rem',
-              marginBottom: '1rem'
-            }}>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4 mb-4">
               <div>
                 <Input
                   label="E-Mail"
@@ -253,8 +229,8 @@ export default function UserManagement() {
                 />
               </div>
 
-              <div style={{ gridColumn: '1 / -1' }}>
-                <div style={{ fontSize: '0.85rem', color: '#888' }}>
+              <div className="col-span-full">
+                <div className="text-sm text-muted-foreground">
                   Benutzername wird automatisch aus der E-Mail erzeugt.
                   <br />
                   Login erfolgt per OTP (E-Mail).
@@ -262,7 +238,7 @@ export default function UserManagement() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '1rem' }}>
+            <div className="flex gap-4">
               <Button type="submit" disabled={saving}>
                 {saving ? 'Speichern...' : (editingUser ? 'Aktualisieren' : 'Erstellen')}
               </Button>
@@ -282,80 +258,57 @@ export default function UserManagement() {
       )}
 
       <Card>
-        <h3>Benutzer-Liste</h3>
+        <h3 className="text-foreground">Benutzer-Liste</h3>
 
         {loading ? (
-          <p>Lade Benutzer...</p>
+          <p className="text-muted-foreground">Lade Benutzer...</p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              marginTop: '1rem'
-            }}>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse mt-4">
               <thead>
-                <tr style={{
-                  borderBottom: `1px solid #e0e0e0`,
-                  textAlign: 'left'
-                }}>
-                  <th style={{ padding: '1rem' }}>Benutzername</th>
-                  <th style={{ padding: '1rem' }}>E-Mail</th>
-                  <th style={{ padding: '1rem' }}>Rolle</th>
-                  <th style={{ padding: '1rem' }}>Status</th>
-                  <th style={{ padding: '1rem' }}>Erstellt</th>
-                  <th style={{ padding: '1rem' }}>Aktionen</th>
+                <tr className="border-b border-border text-left">
+                  <th className="p-4">Benutzername</th>
+                  <th className="p-4">E-Mail</th>
+                  <th className="p-4">Rolle</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4">Erstellt</th>
+                  <th className="p-4">Aktionen</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((user) => (
-                  <tr key={user.id} style={{
-                    borderBottom: `1px solid #f0f0f0`
-                  }}>
-                    <td style={{ padding: '1rem' }}>{user.username}</td>
-                    <td style={{ padding: '1rem' }}>{user.email}</td>
-                    <td style={{ padding: '1rem' }}>
-                      <span style={{
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '4px',
-                        fontSize: '0.875rem',
-                        backgroundColor: user.role === UserRole.ADMIN
-                          ? '#e3f2fd'
-                          : user.role === UserRole.USER
-                          ? '#e8f5e8'
-                          : '#e3f2fd',
-                        color: user.role === UserRole.ADMIN
-                          ? '#1976d2'
-                          : user.role === UserRole.USER
-                          ? '#388e3c'
-                          : '#1976d2'
-                      }}>
+                  <tr key={user.id} className="border-b border-border">
+                    <td className="p-4">{user.username}</td>
+                    <td className="p-4">{user.email}</td>
+                    <td className="p-4">
+                      <Badge variant={getRoleBadgeVariant(user.role)}>
                         {user.role}
-                      </span>
+                      </Badge>
                     </td>
-                    <td style={{ padding: '1rem' }}>
-                      <span style={{
-                        color: user.is_active ? '#388e3c' : '#d32f2f'
-                      }}>
+                    <td className="p-4">
+                      <span className={cn(
+                        user.is_active ? 'text-success' : 'text-destructive'
+                      )}>
                         {user.is_active ? 'Aktiv' : 'Inaktiv'}
                       </span>
                     </td>
-                    <td style={{ padding: '1rem' }}>
+                    <td className="p-4">
                       {new Date(user.created_at).toLocaleDateString('de-DE')}
                     </td>
-                    <td style={{ padding: '1rem' }}>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <td className="p-4">
+                      <div className="flex gap-2">
                         <Button
                           variant="secondary"
                           onClick={() => handleEdit(user)}
-                          style={{ padding: '0.25rem' }}
+                          className="p-1"
                         >
                           <Pencil size={14} />
                         </Button>
                         <Button
                           variant="danger"
                           onClick={() => handleDelete(user)}
-                          style={{ padding: '0.25rem' }}
-                          disabled={user.username === 'goksche' || user.role === 'admin'} // Don't allow deleting admin users
+                          className="p-1"
+                          disabled={user.username === 'goksche' || user.role === 'admin'}
                         >
                           <Trash size={14} />
                         </Button>

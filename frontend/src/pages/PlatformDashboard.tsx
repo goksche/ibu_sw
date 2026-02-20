@@ -4,8 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { platformService } from '../services/platformService';
 import { App, UserWithPermissions } from '../types';
-import { Card, Button } from '../components/ui';
-import { theme } from '../theme/theme';
+import { Card, Button } from '@/components/ui';
 import { SignOut, Gear, SquaresFour } from 'phosphor-react';
 
 export default function PlatformDashboard() {
@@ -48,51 +47,55 @@ export default function PlatformDashboard() {
   };
 
   if (loading) {
-    return <div style={{ padding: '2rem', color: theme.colors.text.secondary }}>Loading...</div>;
+    return <div className="p-8 text-muted-foreground">Loading...</div>;
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', background: theme.colors.background.primary, minHeight: '100vh' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ margin: 0, color: theme.colors.text.primary }}>Dashboard</h1>
-        <div style={{ display: 'flex', gap: '1rem' }}>
+    <div className="p-8 max-w-[1200px] mx-auto bg-background min-h-screen">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="m-0 text-foreground">Dashboard</h1>
+        <div className="flex gap-4">
           {user?.role === 'admin' && (
             <Button variant="secondary" onClick={() => navigate('/admin')}>
-              <Gear size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+              <Gear size={20} className="mr-2 align-middle" />
               Admin
             </Button>
           )}
           <Button variant="secondary" onClick={handleLogout}>
-            <SignOut size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+            <SignOut size={20} className="mr-2 align-middle" />
             Logout
           </Button>
         </div>
       </div>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <p style={{ color: theme.colors.text.secondary }}>Willkommen, {user?.username}!</p>
+      <div className="mb-4">
+        <p className="text-muted-foreground">Willkommen, {user?.username}!</p>
       </div>
 
-      <h2 style={{ marginBottom: '1rem', color: theme.colors.text.primary }}>Verfügbare Apps</h2>
-      
+      <h2 className="mb-4 text-foreground">Verfügbare Apps</h2>
+
       {apps.length === 0 ? (
-        <p style={{ color: theme.colors.text.secondary }}>Keine Apps verfügbar.</p>
+        <p className="text-muted-foreground">Keine Apps verfügbar.</p>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1rem' }}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-4">
           {apps.map((app) => (
-            <Card key={app.id} style={{ cursor: 'pointer', padding: '1.5rem' }} onClick={() => handleAppClick(app)}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+            <Card
+              key={app.id}
+              className="cursor-pointer p-6 hover:bg-accent/50 transition-colors"
+              onClick={() => handleAppClick(app)}
+            >
+              <div className="flex items-center gap-4 mb-4">
                 {app.icon_url ? (
-                  <img src={app.icon_url} alt={app.display_name} style={{ width: '48px', height: '48px' }} />
+                  <img src={app.icon_url} alt={app.display_name} className="w-12 h-12" />
                 ) : (
-                  <SquaresFour size={48} color={theme.colors.text.primary} />
+                  <SquaresFour size={48} className="text-foreground" />
                 )}
                 <div>
-                  <h3 style={{ margin: 0, color: theme.colors.text.primary }}>{app.display_name}</h3>
-                  {app.version && <p style={{ margin: 0, fontSize: '0.875rem', color: theme.colors.text.secondary }}>v{app.version}</p>}
+                  <h3 className="m-0 text-foreground">{app.display_name}</h3>
+                  {app.version && <p className="m-0 text-sm text-muted-foreground">v{app.version}</p>}
                 </div>
               </div>
-              {app.description && <p style={{ color: theme.colors.text.secondary, fontSize: '0.875rem' }}>{app.description}</p>}
+              {app.description && <p className="text-muted-foreground text-sm">{app.description}</p>}
             </Card>
           ))}
         </div>
@@ -100,4 +103,3 @@ export default function PlatformDashboard() {
     </div>
   );
 }
-

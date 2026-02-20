@@ -413,32 +413,46 @@ def _generate_cross_mode(
             matches.append({'round': 1, 'match_no': match_no, 'player1_id': L2[0], 'player2_id': L1[1]})
             match_no += 1
         
-        # Isolated group gets both 1st places (but we need 2 more matches for 16)
-        # Take 3rd places from pairs
-        for g1, g2 in pairs:
-            L1 = group_rankings[g1]
-            L2 = group_rankings[g2]
-            if len(L1) >= 3 and len(L2) >= 3:
-                matches.append({'round': 1, 'match_no': match_no, 'player1_id': L1[2], 'player2_id': L2[2]})
-                match_no += 1
-                if match_no > first_round_size // 2:  # We need first_round_size // 2 matches total
-                    break
-        
-        # Fill remaining spots with isolated group
+        # Remaining 2 matches: isolated group top2 vs best two 3rd places (unique)
         isolated_rankings = group_rankings[isolated_group]
-        while match_no <= first_round_size // 2:
-            if len(isolated_rankings) >= 2:
-                # Use best from isolated group vs next from pairs
-                for g1, g2 in pairs:
-                    L1 = group_rankings[g1]
-                    if len(L1) >= 3:
-                        matches.append({'round': 1, 'match_no': match_no, 'player1_id': isolated_rankings[0], 'player2_id': L1[2]})
-                        match_no += 1
-                        if match_no > first_round_size // 2:
-                            break
-                    if match_no > first_round_size // 2:
-                        break
-            break
+        if len(isolated_rankings) < 2:
+            raise ValueError(
+                f"Not enough ranked participants in isolated group {isolated_group}: need 2, "
+                f"have {len(isolated_rankings)}"
+            )
+
+        # Rank best 3rd places across all groups (position 3)
+        try:
+            from app.services.qualification import rank_candidates_with_keys
+            ranked_thirds = rank_candidates_with_keys(
+                group_rankings=group_rankings,
+                position=3,
+                group_stats=group_stats,
+                tie_breaking_rules=tie_breaking_rules
+            )
+            third_candidates = [c["participant_id"] for c in ranked_thirds]
+        except Exception:
+            third_candidates = []
+
+        if not third_candidates:
+            # Fallback: keep group order
+            third_candidates = [
+                group_rankings[gid][2]
+                for gid in group_list
+                if len(group_rankings.get(gid, [])) >= 3
+            ]
+
+        if len(third_candidates) < 2:
+            raise ValueError(
+                "Nicht genügend Drittplatzierte für 7 Gruppen / 16er-Start. "
+                "Bitte prüfen Sie die Gruppengrößen oder verwenden Sie Draw-Mode."
+            )
+
+        third1, third2 = third_candidates[0], third_candidates[1]
+        matches.append({'round': 1, 'match_no': match_no, 'player1_id': isolated_rankings[0], 'player2_id': third2})
+        match_no += 1
+        matches.append({'round': 1, 'match_no': match_no, 'player1_id': isolated_rankings[1], 'player2_id': third1})
+        match_no += 1
     
     else:
         # Generic fallback: try to use draw mode logic but keep cross pairing structure

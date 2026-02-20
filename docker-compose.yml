@@ -39,7 +39,8 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
       DEBUG: ${DEBUG:-False}
-      OTP_DEV_MODE: ${OTP_DEV_MODE:-false}
+      INIT_DB: ${INIT_DB:-true}
+      OTP_DEV_MODE: ${OTP_DEV_MODE:-true}
       OTP_EXPIRY_MINUTES: ${OTP_EXPIRY_MINUTES:-10}
       OTP_LENGTH: ${OTP_LENGTH:-6}
       SMTP_HOST: ${SMTP_HOST}
@@ -73,12 +74,13 @@ services:
     container_name: ibu_frontend
     environment:
       # Leer oder "/" = gleiche Origin (Nginx /api) – Login/API funktionieren so auf dem Server
-      VITE_API_URL: /
+      VITE_API_URL: http://localhost:8000
     ports:
       - "3000:3000"
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
     command: ["node", "node_modules/vite/bin/vite.js", "--port", "3000", "--host", "0.0.0.0"]
     depends_on:
       - backend

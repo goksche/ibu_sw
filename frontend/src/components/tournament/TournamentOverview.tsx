@@ -1,6 +1,8 @@
 // Tournament Overview Tab
 import { Tournament } from '../../types';
-import { theme } from '../../theme/theme';
+import { cn } from '@/lib/utils';
+import { Card, CardContent } from '../ui/Card';
+import TournamentModeVisualization from './TournamentModeVisualization';
 
 interface TournamentOverviewProps {
   tournament: Tournament;
@@ -13,6 +15,7 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
   const tieBreakingRuleLabels: Record<string, string> = {
     'wins': 'Siege',
     'diff': 'Differenz',
+    'goals_for': 'LF',
     'direct_encounter': 'Direktbegegnung',
     'decision_match': 'Entscheidungsspiel'
   };
@@ -49,130 +52,129 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="max-w-[1200px] mx-auto">
       {/* Basic Information Card */}
-      <div style={{ 
-        background: theme.colors.background.card,
-        padding: '2rem',
-        borderRadius: '12px',
-        marginBottom: '2rem',
-        border: `1px solid ${theme.colors.border.standard}`,
-        boxShadow: theme.shadows.card,
-        color: theme.colors.text.primary
-      }}>
-        <h2 style={{ marginTop: 0, marginBottom: '1.5rem', fontSize: '1.75rem', fontWeight: '600' }}>
-          📋 Turnier-Informationen
-        </h2>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
-          <div style={{ background: theme.colors.background.secondary, padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border.standard}` }}>
-            <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>Name</div>
-            <div style={{ fontSize: '1.125rem', fontWeight: '600', color: theme.colors.text.primary }}>{tournament.name}</div>
-          </div>
+      <Card className="mb-8">
+        <CardContent className="p-8">
+          <h2 className="mt-0 mb-6 text-2xl font-semibold text-foreground">
+            📋 Turnier-Informationen
+          </h2>
           
-          <div style={{ background: theme.colors.background.secondary, padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border.standard}` }}>
-            <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>Status</div>
-            <div style={{ fontSize: '1.125rem', fontWeight: '600', color: theme.colors.text.primary }}>
-              {tournament.status === 'planned' ? '📅 Geplant' :
-               tournament.status === 'running' ? '▶️ Laufend' :
-               '✅ Abgeschlossen'}
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-6">
+            <div className="bg-muted p-4 rounded-lg border border-border">
+              <div className="text-sm text-muted-foreground mb-2">Name</div>
+              <div className="text-lg font-semibold text-foreground">{tournament.name}</div>
+            </div>
+            
+            <div className="bg-muted p-4 rounded-lg border border-border">
+              <div className="text-sm text-muted-foreground mb-2">Status</div>
+              <div className="text-lg font-semibold text-foreground">
+                {tournament.status === 'planned' ? '📅 Geplant' :
+                 tournament.status === 'running' ? '▶️ Laufend' :
+                 '✅ Abgeschlossen'}
+              </div>
+            </div>
+            
+            <div className="bg-muted p-4 rounded-lg border border-border">
+              <div className="text-sm text-muted-foreground mb-2">Modus</div>
+              <div className="text-lg font-semibold text-foreground">
+                {tournament.mode === 'round_robin' ? '🏆 Liga' :
+                 tournament.mode === 'knockout' ? '⚔️ KO-Phase' :
+                 '🔄 Kombiniert'}
+              </div>
+            </div>
+            
+            <div className="bg-muted p-4 rounded-lg border border-border">
+              <div className="text-sm text-muted-foreground mb-2">Startdatum</div>
+              <div className="text-lg font-semibold text-foreground">{tournament.start_date}</div>
+            </div>
+            
+            {tournament.end_date && (
+              <div className="bg-muted p-4 rounded-lg border border-border">
+                <div className="text-sm text-muted-foreground mb-2">Enddatum</div>
+                <div className="text-lg font-semibold text-foreground">{tournament.end_date}</div>
+              </div>
+            )}
+
+            <div className="bg-muted p-4 rounded-lg border border-border">
+              <div className="text-sm text-muted-foreground mb-2">Spielort</div>
+              <div className="text-lg font-semibold text-foreground">
+                {locationName || '—'}
+              </div>
             </div>
           </div>
           
-          <div style={{ background: theme.colors.background.secondary, padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border.standard}` }}>
-            <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>Modus</div>
-            <div style={{ fontSize: '1.125rem', fontWeight: '600', color: theme.colors.text.primary }}>
-              {tournament.mode === 'round_robin' ? '🏆 Liga' :
-               tournament.mode === 'knockout' ? '⚔️ KO-Phase' :
-               '🔄 Kombiniert'}
-            </div>
-          </div>
-          
-          <div style={{ background: theme.colors.background.secondary, padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border.standard}` }}>
-            <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>Startdatum</div>
-            <div style={{ fontSize: '1.125rem', fontWeight: '600', color: theme.colors.text.primary }}>{tournament.start_date}</div>
-          </div>
-          
-          {tournament.end_date && (
-            <div style={{ background: theme.colors.background.secondary, padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border.standard}` }}>
-              <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>Enddatum</div>
-              <div style={{ fontSize: '1.125rem', fontWeight: '600', color: theme.colors.text.primary }}>{tournament.end_date}</div>
+          {tournament.description && (
+            <div className="mt-6 bg-muted p-4 rounded-lg border border-border">
+              <div className="text-sm text-muted-foreground mb-2">Beschreibung</div>
+              <div className="text-base leading-relaxed text-foreground">{tournament.description}</div>
             </div>
           )}
+        </CardContent>
+      </Card>
 
-          <div style={{ background: theme.colors.background.secondary, padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border.standard}` }}>
-            <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>Spielort</div>
-            <div style={{ fontSize: '1.125rem', fontWeight: '600', color: theme.colors.text.primary }}>
-              {locationName || '—'}
-            </div>
-          </div>
-        </div>
-        
-        {tournament.description && (
-          <div style={{ marginTop: '1.5rem', background: theme.colors.background.secondary, padding: '1rem', borderRadius: '8px', border: `1px solid ${theme.colors.border.standard}` }}>
-            <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>Beschreibung</div>
-            <div style={{ fontSize: '1rem', lineHeight: '1.5', color: theme.colors.text.primary }}>{tournament.description}</div>
-          </div>
-        )}
-      </div>
+      <Card className="mb-8">
+        <CardContent className="p-6">
+          <TournamentModeVisualization
+            mode={tournament.mode}
+            hasGroupPhase={tournament.has_group_phase}
+            hasKoPhase={tournament.has_ko_phase}
+            groupsCount={tournament.groups_count}
+            participantsPerGroup={tournament.participants_per_group}
+            groupDistribution={tournament.group_distribution}
+            koStartRound={tournament.ko_start_round ?? null}
+            koStructure={tournament.ko_structure}
+            koDrawMethod={tournament.ko_draw_method}
+          />
+        </CardContent>
+      </Card>
 
       {/* Tournament Settings */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))', gap: '2rem' }}>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(500px,1fr))] gap-8">
         {/* Gruppenphase / Liga Card */}
         {(tournament.has_group_phase || tournament.mode === 'round_robin' || tournament.groups_count > 0 || tournament.league_scoring_system || tournament.tie_breaking_rules) && (
-          <div style={{
-            background: theme.colors.background.card,
-            borderRadius: '12px',
-            border: `1px solid ${theme.colors.border.standard}`,
-            boxShadow: theme.shadows.card,
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              background: `linear-gradient(135deg, ${theme.colors.accent.primary}80 0%, ${theme.colors.accent.primary}60 100%)`,
-              padding: '1.5rem',
-              color: theme.colors.text.primary,
-              borderBottom: `1px solid ${theme.colors.border.standard}`
-            }}>
-              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600' }}>
+          <Card className="overflow-hidden">
+            <div className="bg-gradient-to-br from-primary/50 to-primary/60 p-6 text-foreground border-b border-border">
+              <h3 className="m-0 text-xl font-semibold">
                 👥 Gruppenphase / Liga
               </h3>
-              <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', opacity: 0.9 }}>
+              <div className="mt-2 text-sm opacity-90">
                 {tournament.has_group_phase || tournament.mode === 'round_robin' ? '✓ Aktiviert' : 'Deaktiviert'}
               </div>
             </div>
             
-            <div style={{ padding: '1.5rem', background: theme.colors.background.card }}>
+            <CardContent className="p-6">
               {tournament.groups_count !== undefined && tournament.groups_count !== null && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     Anzahl Gruppen
                   </div>
-                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600' }}>
+                  <div className="text-lg text-foreground font-semibold">
                     {tournament.groups_count}
                   </div>
                 </div>
               )}
               
               {tournament.participants_per_group && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     Teilnehmer pro Gruppe
                   </div>
-                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600' }}>
+                  <div className="text-lg text-foreground font-semibold">
                     {tournament.participants_per_group}
                   </div>
                 </div>
               )}
               
               {tournament.group_distribution && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     Auslosungsart
                   </div>
-                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600', marginBottom: '0.5rem' }}>
+                  <div className="text-lg text-foreground font-semibold mb-2">
                     {tournament.group_distribution === 'random' ? 'Zufällig (Random)' : tournament.group_distribution === 'seeded' ? 'Gesetzt (Seeded)' : tournament.group_distribution}
                   </div>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic', lineHeight: '1.5' }}>
+                  <div className="text-sm text-muted-foreground italic leading-relaxed">
                     {tournament.group_distribution === 'random' 
                       ? 'Teilnehmer werden zufällig auf die Gruppen verteilt'
                       : 'Gesetzte Spieler werden vorab in Gruppen eingeteilt, andere werden zugeordnet'}
@@ -181,34 +183,28 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
               )}
               
               {tournament.group_distribution === 'seeded' && tournament.seeded_participant_ids && tournament.seeded_participant_ids.length > 0 && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     Gesetzte Spieler
                   </div>
-                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600' }}>
+                  <div className="text-lg text-foreground font-semibold">
                     {tournament.seeded_participant_ids.length} ausgewählt
                   </div>
                 </div>
               )}
               
               {tournament.league_scoring_system && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     Ligatabelle Wertung
                   </div>
-                  <div style={{ 
-                    display: 'inline-block',
-                    background: tournament.league_scoring_system === 'points' ? theme.colors.accent.success : theme.colors.accent.info,
-                    color: theme.colors.background.primary,
-                    padding: '0.5rem 1rem',
-                    borderRadius: '6px',
-                    fontSize: '0.875rem',
-                    fontWeight: '600',
-                    marginBottom: '0.5rem'
-                  }}>
+                  <div className={cn(
+                    'inline-block py-2 px-4 rounded-md text-sm font-semibold mb-2',
+                    tournament.league_scoring_system === 'points' ? 'bg-success text-success-foreground' : 'bg-info text-info-foreground'
+                  )}>
                     {tournament.league_scoring_system === 'points' ? 'Punkte' : 'Differenz'}
                   </div>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic', lineHeight: '1.5' }}>
+                  <div className="text-sm text-muted-foreground italic leading-relaxed">
                     {tournament.league_scoring_system === 'points' 
                       ? 'Rangliste basierend auf Punkten (Sieg: 3 Punkte, Unentschieden: 1 Punkt, Niederlage: 0 Punkte)'
                       : 'Rangliste basierend auf Differenz (Tore/Sätze/Legs für minus gegen)'}
@@ -217,22 +213,22 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
               )}
               
               {tournament.mode === 'round_robin' && tournament.league_variant && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     Liga-Variante
                   </div>
-                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600', marginBottom: '0.5rem' }}>
+                  <div className="text-lg text-foreground font-semibold mb-2">
                     {tournament.league_variant === 'classic' && 'Klassische Liga (Round Robin)'}
                     {tournament.league_variant === 'double' && 'Doppelte Liga'}
                     {tournament.league_variant === 'multiple' && 'Mehrfache Liga'}
                   </div>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic', lineHeight: '1.5' }}>
+                  <div className="text-sm text-muted-foreground italic leading-relaxed">
                     {tournament.league_variant === 'classic' && 'Jeder gegen jeden einmal (Standard Round Robin)'}
                     {tournament.league_variant === 'double' && 'Jeder gegen jeden zweimal (2x Round Robin)'}
                     {tournament.league_variant === 'multiple' && `Jeder gegen jeden ${tournament.league_rounds_multiplier || 1}x (Mehrfache Liga)`}
                   </div>
                   {tournament.league_variant === 'multiple' && tournament.league_rounds_multiplier && (
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+                    <div className="mt-2 text-sm text-muted-foreground">
                       Multiplikator: {tournament.league_rounds_multiplier}
                     </div>
                   )}
@@ -241,41 +237,21 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
               
               {tournament.tie_breaking_rules && tournament.tie_breaking_rules.length > 0 && (
                 <div>
-                  <div style={{ fontSize: '0.875rem', color: '#6c757d', marginBottom: '0.75rem', fontWeight: '500' }}>
+                  <div className="text-sm text-muted-foreground mb-3 font-medium">
                     Gleichstandsregeln
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div className="flex flex-col gap-2">
                     {tournament.tie_breaking_rules.map((rule, idx) => (
-                      <div key={idx} style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '0.75rem',
-                        padding: '0.75rem',
-                        background: theme.colors.background.secondary,
-                        borderRadius: '6px',
-                        border: `1px solid ${theme.colors.border.standard}`
-                      }}>
-                        <div style={{
-                          background: theme.colors.accent.primary,
-                          color: theme.colors.background.primary,
-                          width: '24px',
-                          height: '24px',
-                          borderRadius: '50%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '0.75rem',
-                          fontWeight: '600',
-                          flexShrink: 0
-                        }}>
+                      <div key={idx} className="flex items-start gap-3 p-3 bg-muted rounded-md border border-border">
+                        <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold flex-shrink-0">
                           {idx + 1}
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '0.9375rem', color: theme.colors.text.primary, fontWeight: '500', marginBottom: '0.25rem' }}>
+                        <div className="flex-1">
+                          <div className="text-[0.9375rem] text-foreground font-medium mb-1">
                             {tieBreakingRuleLabels[rule] || rule}
                           </div>
                           {(rule === 'decision_match' || rule === 'wins' || rule === 'direct_encounter') && (
-                            <div style={{ fontSize: '0.8125rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                            <div className="text-[0.8125rem] text-muted-foreground italic">
                               {rule === 'decision_match' && '(Bei Gleichstand wird ein Entscheidungsspiel generiert)'}
                               {rule === 'wins' && '(Anzahl Siege)'}
                               {rule === 'direct_encounter' && '(Ergebnis der Direktbegegnung)'}
@@ -287,40 +263,29 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
                   </div>
                 </div>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* KO-Phase Card */}
         {(tournament.has_ko_phase || tournament.mode === 'knockout' || tournament.ko_structure || tournament.ko_draw_method || tournament.ko_participants > 0) && (
-          <div style={{
-            background: theme.colors.background.card,
-            borderRadius: '12px',
-            border: `1px solid ${theme.colors.border.standard}`,
-            boxShadow: theme.shadows.card,
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              background: `linear-gradient(135deg, ${theme.colors.accent.warning}80 0%, ${theme.colors.accent.error}60 100%)`,
-              padding: '1.5rem',
-              color: theme.colors.text.primary,
-              borderBottom: `1px solid ${theme.colors.border.standard}`
-            }}>
-              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600' }}>
+          <Card className="overflow-hidden">
+            <div className="bg-gradient-to-br from-warning/50 to-destructive/60 p-6 text-foreground border-b border-border">
+              <h3 className="m-0 text-xl font-semibold">
                 ⚔️ KO-Phase
               </h3>
-              <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', opacity: 0.9 }}>
+              <div className="mt-2 text-sm opacity-90">
                 {tournament.has_ko_phase || tournament.mode === 'knockout' ? '✓ Aktiviert' : 'Deaktiviert'}
               </div>
             </div>
             
-            <div style={{ padding: '1.5rem', background: theme.colors.background.card }}>
+            <CardContent className="p-6">
               {tournament.ko_start_round && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     KO-Start-Runde
                   </div>
-                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600', marginBottom: '0.5rem' }}>
+                  <div className="text-lg text-foreground font-semibold mb-2">
                     {tournament.ko_start_round === 'round_of_32' && 'Sechzehntelfinale (32 Teilnehmer)'}
                     {tournament.ko_start_round === 'round_of_16' && 'Achtelfinale (16 Teilnehmer)'}
                     {tournament.ko_start_round === 'quarterfinal' && 'Viertelfinale (8 Teilnehmer)'}
@@ -328,12 +293,12 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
                     {tournament.ko_start_round === 'final' && 'Finale (2 Teilnehmer)'}
                   </div>
                   {tournament.ko_fallback_qualifiers && tournament.ko_fallback_qualifiers.length > 0 && (
-                    <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: `${theme.colors.accent.info}20`, borderRadius: '6px', border: `1px solid ${theme.colors.accent.info}` }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 'bold', color: theme.colors.text.primary, marginBottom: '0.25rem' }}>
+                    <div className="mt-3 p-3 bg-info/20 rounded-md border border-info">
+                      <div className="text-sm font-bold text-foreground mb-1">
                         Zusätzliche Qualifikanten:
                       </div>
                       {tournament.ko_fallback_qualifiers.map((rule, idx) => (
-                        <div key={idx} style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+                        <div key={idx} className="text-sm text-muted-foreground">
                           • {rule.count}x bester {rule.position}. Platzierter
                         </div>
                       ))}
@@ -343,25 +308,25 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
               )}
               {/* Legacy: Show ko_participants if ko_start_round not set */}
               {!tournament.ko_start_round && tournament.ko_participants !== undefined && tournament.ko_participants !== null && tournament.ko_participants > 0 && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     {tournament.mode === 'knockout' ? 'Teilnehmer' : 'Teilnehmer aus Gruppenphase'} (Legacy)
                   </div>
-                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600' }}>
+                  <div className="text-lg text-foreground font-semibold">
                     {tournament.ko_participants}
                   </div>
                 </div>
               )}
               
               {tournament.ko_structure && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     Turnierstruktur
                   </div>
-                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600', marginBottom: '0.5rem' }}>
+                  <div className="text-lg text-foreground font-semibold mb-2">
                     {koStructureLabels[tournament.ko_structure] || tournament.ko_structure}
                   </div>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic', lineHeight: '1.5' }}>
+                  <div className="text-sm text-muted-foreground italic leading-relaxed">
                     {tournament.ko_structure === 'single_elimination' && 'Wer ein Spiel verliert, ist sofort aus dem Turnier ausgeschieden. Der Gewinner kommt weiter, bis am Ende ein Sieger feststeht.'}
                     {tournament.ko_structure === 'single_elimination_with_third' && 'Neben dem Finale gibt es ein zusätzliches Spiel, um den dritten Platz zu ermitteln.'}
                     {tournament.ko_structure === 'double_elimination' && 'Jeder darf einmal verlieren. Erst beim zweiten verlorenen Spiel scheidet man endgültig aus.'}
@@ -374,14 +339,14 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
               )}
               
               {tournament.ko_draw_method && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     Auslosung
                   </div>
-                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600', marginBottom: '0.5rem' }}>
+                  <div className="text-lg text-foreground font-semibold mb-2">
                     {koDrawMethodLabels[tournament.ko_draw_method] || tournament.ko_draw_method}
                   </div>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic', lineHeight: '1.5' }}>
+                  <div className="text-sm text-muted-foreground italic leading-relaxed">
                     {tournament.ko_draw_method === 'fixed_cross' && 'Die Gruppenplätze bestimmen eindeutig, wer gegen wen spielt. Es gibt keine Auslosung.'}
                     {tournament.ko_draw_method === 'same_position_cross' && 'Alle Gruppenersten spielen gegeneinander, alle Gruppenzweiten ebenfalls.'}
                     {tournament.ko_draw_method === 'overall_seeding' && 'Die besten Spieler treten zuerst gegen die schwächeren an, damit starke Spieler später aufeinandertreffen.'}
@@ -389,89 +354,63 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
                     {tournament.ko_draw_method === 'full_random' && 'Alle kommen in einen Topf und werden zufällig gezogen, gewisse Begegnungen sind verboten.'}
                     {tournament.ko_draw_method === 'bonus_draw_for_winners' && 'Wer seine Gruppe gewinnt, bekommt in der ersten KO-Runde bewusst einen leichteren Gegner.'}
                     {tournament.ko_draw_method === 'predefined_bracket' && 'Der Turnierbaum steht schon vorher fest, die Gruppenphase entscheidet nur über die Position darin.'}
-                    {tournament.ko_draw_method === 'manual' && 'Paarungen werden im Turnier-Bereich „Spiele“ / „KO-Phase“ manuell festgelegt (Runde 1 speichern, dann Runde 2, …).'}
+                    {tournament.ko_draw_method === 'manual' && 'Paarungen werden im Turnier-Bereich „Spiele" / „KO-Phase" manuell festgelegt (Runde 1 speichern, dann Runde 2, …).'}
                   </div>
                 </div>
               )}
 
               {tournament.ko_distribution && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     KO-Auslosungsmodus
                   </div>
-                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600', marginBottom: '0.5rem' }}>
+                  <div className="text-lg text-foreground font-semibold mb-2">
                     {koDrawModeLabels[tournament.ko_distribution] || tournament.ko_distribution}
                   </div>
                 </div>
               )}
               
-              {/* Erste KO-Runde nur anzeigen, wenn keine KO-Start-Runde gesetzt ist (sonst kommt die Info von „KO-Start-Runde“) */}
+              {/* Erste KO-Runde nur anzeigen, wenn keine KO-Start-Runde gesetzt ist (sonst kommt die Info von „KO-Start-Runde") */}
               {!tournament.ko_start_round && tournament.ko_first_round_size && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     Erste KO-Runde
                   </div>
-                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600' }}>
+                  <div className="text-lg text-foreground font-semibold">
                     Top {tournament.ko_first_round_size}
                   </div>
                 </div>
               )}
               
               {tournament.ko_third_place_match && (
-                <div style={{ 
-                  marginBottom: '1.25rem', 
-                  padding: '0.75rem',
-                  background: `${theme.colors.accent.success}20`,
-                  borderRadius: '6px',
-                  border: `1px solid ${theme.colors.accent.success}`
-                }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.accent.success, fontWeight: '500' }}>
+                <div className="mb-5 p-3 bg-success/20 rounded-md border border-success">
+                  <div className="text-sm text-success font-medium">
                     ✓ Spiel um Platz 3 aktiviert
                   </div>
                 </div>
               )}
               
               {tournament.ko_group_winner_advantage && (
-                <div style={{ 
-                  marginBottom: '1.25rem', 
-                  padding: '0.75rem',
-                  background: `${theme.colors.accent.success}20`,
-                  borderRadius: '6px',
-                  border: `1px solid ${theme.colors.accent.success}`
-                }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.accent.success, fontWeight: '500' }}>
+                <div className="mb-5 p-3 bg-success/20 rounded-md border border-success">
+                  <div className="text-sm text-success font-medium">
                     ✓ Vorteil für Gruppensieger aktiviert
                   </div>
                 </div>
               )}
               
               {(tournament.ko_block_same_group || tournament.ko_block_same_position) && (
-                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.75rem', fontWeight: '500' }}>
+                <div className="mb-5 pb-5 border-b border-border">
+                  <div className="text-sm text-muted-foreground mb-3 font-medium">
                     Sperrregeln
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div className="flex flex-col gap-2">
                     {tournament.ko_block_same_group && (
-                      <div style={{
-                        padding: '0.75rem',
-                        background: `${theme.colors.accent.warning}20`,
-                        borderRadius: '6px',
-                        border: `1px solid ${theme.colors.accent.warning}`,
-                        fontSize: '0.875rem',
-                        color: theme.colors.accent.warning
-                      }}>
+                      <div className="p-3 bg-warning/20 rounded-md border border-warning text-sm text-warning">
                         • Keine Paarungen aus derselben Gruppe
                       </div>
                     )}
                     {tournament.ko_block_same_position && (
-                      <div style={{
-                        padding: '0.75rem',
-                        background: `${theme.colors.accent.warning}20`,
-                        borderRadius: '6px',
-                        border: `1px solid ${theme.colors.accent.warning}`,
-                        fontSize: '0.875rem',
-                        color: theme.colors.accent.warning
-                      }}>
+                      <div className="p-3 bg-warning/20 rounded-md border border-warning text-sm text-warning">
                         • Keine Paarungen mit gleicher {tournament.mode === 'knockout' ? 'Setzung/Platzierung' : 'Gruppenplatzierung'}
                       </div>
                     )}
@@ -481,16 +420,16 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
               
               {tournament.ko_random_seed !== undefined && tournament.ko_random_seed !== null && (
                 <div>
-                  <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem', fontWeight: '500' }}>
+                  <div className="text-sm text-muted-foreground mb-2 font-medium">
                     Zufalls-Seed
                   </div>
-                  <div style={{ fontSize: '1.125rem', color: theme.colors.text.primary, fontWeight: '600' }}>
+                  <div className="text-lg text-foreground font-semibold">
                     {tournament.ko_random_seed}
                   </div>
                 </div>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

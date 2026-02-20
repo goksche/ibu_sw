@@ -1,7 +1,7 @@
 # Authentication Endpoints
 # v1.2.0-alpha.2
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -19,8 +19,41 @@ from email.mime.multipart import MIMEMultipart
  
 from app.schemas.user import UserCreate, UserUpdate, UserLogin, UserResponse, Token
 from app.models.user import User, UserRole, OTPCode
+from app.models.logs import LoginEventLog
+from app.services.logs_service import extract_client_ip, extract_user_agent, maybe_cleanup_old_logs
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+def _safe_log_login_event(
+    db: Session,
+    request: Request,
+    event_type: str,
+    success: bool,
+    username: Optional[str] = None,
+    email: Optional[str] = None,
+    user_id: Optional[int] = None,
+    reason: Optional[str] = None
+) -> None:
+    try:
+        log = LoginEventLog(
+            user_id=user_id,
+            username=username,
+            email=email,
+            event_type=event_type,
+            success=success,
+            reason=reason,
+            ip=extract_client_ip(request),
+            user_agent=extract_user_agent(request)
+        )
+        db.add(log)
+        db.commit()
+        try:
+            maybe_cleanup_old_logs(db)
+        except Exception:
+            pass
+    except Exception:
+        db.rollback()
 
 
 class TokenRefresh(BaseModel):
@@ -42,12 +75,20 @@ class UserResponseWithPermissions(UserResponse):
 
 
 @router.post("/login", response_model=Token)
-async def login(credentials: UserLogin, db: Session = Depends(get_db)):
+async def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
     """Login and get access token"""
     
     # Find user
     user = db.query(User).filter(User.username == credentials.username).first()
     if not user:
+        _safe_log_login_event(
+            db=db,
+            request=request,
+            event_type="password_login",
+            success=False,
+            username=credentials.username,
+            reason="user_not_found"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"
@@ -55,6 +96,15 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     
     # Verify password
     if not verify_password(credentials.password, user.hashed_password):
+        _safe_log_login_event(
+            db=db,
+            request=request,
+            event_type="password_login",
+            success=False,
+            username=credentials.username,
+            user_id=user.id,
+            reason="invalid_password"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"
@@ -62,6 +112,15 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     
     # Check if user is active
     if not user.is_active:
+        _safe_log_login_event(
+            db=db,
+            request=request,
+            event_type="password_login",
+            success=False,
+            username=credentials.username,
+            user_id=user.id,
+            reason="inactive_user"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive"
@@ -71,7 +130,16 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     access_token = create_access_token(
         data={"sub": user.username, "user_id": user.id, "role": user.role.value}
     )
-    
+
+    _safe_log_login_event(
+        db=db,
+        request=request,
+        event_type="password_login",
+        success=True,
+        username=user.username,
+        user_id=user.id
+    )
+
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -216,12 +284,21 @@ Ihr IBU Turniere Team
 
 
 @router.post("/send-otp", response_model=dict)
-async def send_otp(request: SendOTPRequest, db: Session = Depends(get_db)):
+async def send_otp(request: SendOTPRequest, db: Session = Depends(get_db), http_request: Request = None):
     """Send OTP code to email for login"""
 
     # Whitelist: email must exist and be active
     user = db.query(User).filter(User.email == request.email).first()
     if not user or not user.is_active:
+        if http_request:
+            _safe_log_login_event(
+                db=db,
+                request=http_request,
+                event_type="otp_send",
+                success=False,
+                email=request.email,
+                reason="user_not_active_or_missing"
+            )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="E-Mail ist nicht freigegeben oder Account ist inaktiv"
@@ -253,12 +330,40 @@ async def send_otp(request: SendOTPRequest, db: Session = Depends(get_db)):
 
     # Send email (or dev fallback)
     if send_email_otp(request.email, otp_code):
+        if http_request:
+            _safe_log_login_event(
+                db=db,
+                request=http_request,
+                event_type="otp_send",
+                success=True,
+                email=request.email,
+                user_id=user.id
+            )
         return {"message": "OTP-Code wurde per E-Mail versendet."}
 
     if settings.OTP_DEV_MODE:
+        if http_request:
+            _safe_log_login_event(
+                db=db,
+                request=http_request,
+                event_type="otp_send",
+                success=True,
+                email=request.email,
+                user_id=user.id
+            )
         print(f"DEV OTP Code for {request.email}: {otp_code}")
         return {"message": "OTP-Code wurde erzeugt (DEV).", "dev_otp_code": otp_code}
 
+    if http_request:
+        _safe_log_login_event(
+            db=db,
+            request=http_request,
+            event_type="otp_send",
+            success=False,
+            email=request.email,
+            user_id=user.id,
+            reason="smtp_not_configured_or_failed"
+        )
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="OTP konnte nicht versendet werden. SMTP ist nicht konfiguriert."
@@ -266,7 +371,7 @@ async def send_otp(request: SendOTPRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/verify-otp", response_model=Token)
-async def verify_otp(request: VerifyOTPRequest, db: Session = Depends(get_db)):
+async def verify_otp(request: VerifyOTPRequest, db: Session = Depends(get_db), http_request: Request = None):
     """Verify OTP code and return access token"""
 
     # Find OTP record
@@ -278,6 +383,15 @@ async def verify_otp(request: VerifyOTPRequest, db: Session = Depends(get_db)):
     ).first()
 
     if not otp_record or not otp_record.is_valid():
+        if http_request:
+            _safe_log_login_event(
+                db=db,
+                request=http_request,
+                event_type="otp_verify",
+                success=False,
+                email=request.email,
+                reason="invalid_or_expired"
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Ungültiger oder abgelaufener OTP-Code"
@@ -290,6 +404,16 @@ async def verify_otp(request: VerifyOTPRequest, db: Session = Depends(get_db)):
     # Get user
     user = db.query(User).filter(User.id == otp_record.user_id).first()
     if not user or not user.is_active:
+        if http_request:
+            _safe_log_login_event(
+                db=db,
+                request=http_request,
+                event_type="otp_verify",
+                success=False,
+                email=request.email,
+                user_id=otp_record.user_id,
+                reason="inactive_user"
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Account ist nicht aktiv"
@@ -299,6 +423,17 @@ async def verify_otp(request: VerifyOTPRequest, db: Session = Depends(get_db)):
     access_token = create_access_token(
         data={"sub": user.username, "user_id": user.id, "role": user.role.value}
     )
+
+    if http_request:
+        _safe_log_login_event(
+            db=db,
+            request=http_request,
+            event_type="otp_verify",
+            success=True,
+            email=request.email,
+            user_id=user.id,
+            username=user.username
+        )
 
     return Token(access_token=access_token, token_type="bearer")
 

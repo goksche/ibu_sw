@@ -9,6 +9,18 @@ class LeagueBase(BaseModel):
     description: Optional[str] = None
     scoring_schema: Optional[Dict[str, int]] = None
     mode_presets: Optional[Dict[str, Any]] = None
+    status: Optional[str] = "geplant"
+    league_mode: Optional[str] = "liga"
+    tournament_mode: Optional[str] = "combined"
+    placement_points: Optional[Dict[str, Any]] = None
+    masters_ko_count: Optional[int] = 8
+    auto_tournament_count: Optional[int] = 0
+    auto_tournament_mode: Optional[str] = None
+    auto_tournament_settings: Optional[Dict[str, Any]] = None
+    season_type: Optional[str] = "year"
+    season_year: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
 
 
 class LeagueCreate(LeagueBase):
@@ -23,6 +35,18 @@ class LeagueUpdate(BaseModel):
     description: Optional[str] = None
     scoring_schema: Optional[Dict[str, int]] = None
     mode_presets: Optional[Dict[str, Any]] = None
+    status: Optional[str] = None
+    league_mode: Optional[str] = None
+    tournament_mode: Optional[str] = None
+    placement_points: Optional[Dict[str, Any]] = None
+    masters_ko_count: Optional[int] = None
+    auto_tournament_count: Optional[int] = None
+    auto_tournament_mode: Optional[str] = None
+    auto_tournament_settings: Optional[Dict[str, Any]] = None
+    season_type: Optional[str] = None
+    season_year: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
     participant_ids: Optional[List[int]] = None
     tournament_ids: Optional[List[int]] = None
 
@@ -36,8 +60,9 @@ class LeagueParticipantSummary(BaseModel):
 class LeagueTournamentSummary(BaseModel):
     id: int
     name: str
-    start_date: Optional[date]
-    end_date: Optional[date]
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    status: Optional[str] = None
 
 
 class LeagueResponse(LeagueBase):
@@ -52,3 +77,21 @@ class LeagueResponse(LeagueBase):
 
     class Config:
         from_attributes = True
+
+
+class LeagueStandingEntry(BaseModel):
+    """Single entry in the league standings table"""
+    rank: int
+    participant_id: int
+    first_name: str
+    last_name: str
+    tournaments_played: int
+    total_points: int
+    placements: List[Dict[str, Any]] = []
+
+
+class LeagueStandingsResponse(BaseModel):
+    """Full standings response"""
+    league_id: int
+    league_name: str
+    entries: List[LeagueStandingEntry] = []

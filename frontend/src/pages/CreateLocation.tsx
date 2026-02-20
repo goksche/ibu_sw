@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, Input } from '../components/ui';
+import { Button, Card, CardContent, Input } from '@/components/ui';
 import { locationService } from '../services/locationService';
 import { ArrowLeft } from 'phosphor-react';
 
@@ -29,31 +29,33 @@ export default function CreateLocation() {
   };
 
   return (
-    <div style={{ padding: '2rem', background: '#000000', minHeight: '100vh', color: '#ffffff' }}>
-      <div style={{ marginBottom: '1.5rem' }}>
+    <div className="p-8 bg-background min-h-screen text-foreground">
+      <div className="mb-6">
         <Button variant="secondary" onClick={() => navigate('/locations')}>
-          <ArrowLeft size={18} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+          <ArrowLeft size={18} className="mr-2 align-middle" />
           Zurück
         </Button>
       </div>
-      <Card style={{ padding: '1.5rem', maxWidth: '400px' }}>
-        <h2 style={{ marginTop: 0, color: '#ffd700' }}>Neuer Spielort</h2>
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', color: '#cccccc' }}>Name</label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="z.B. Halle A"
-              required
-              style={{ width: '100%' }}
-            />
-          </div>
-          {error && <p style={{ color: '#ee4444', marginBottom: '1rem' }}>{error}</p>}
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Wird erstellt...' : 'Erstellen'}
-          </Button>
-        </form>
+      <Card className="max-w-[400px]">
+        <CardContent className="p-6">
+          <h2 className="mt-0 text-foreground">Neuer Spielort</h2>
+          <form onSubmit={handleSubmit}>
+            <div className="mb-4">
+              <label className="block mb-2 text-muted-foreground">Name</label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="z.B. Halle A"
+                required
+                className="w-full"
+              />
+            </div>
+            {error && <p className="text-destructive mb-4">{error}</p>}
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Wird erstellt...' : 'Erstellen'}
+            </Button>
+          </form>
+        </CardContent>
       </Card>
     </div>
   );

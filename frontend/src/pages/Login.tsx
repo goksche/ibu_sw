@@ -3,8 +3,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
-import { Card, Input, Button } from '../components/ui';
-import { theme } from '../theme/theme';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, Input, Button } from '../components/ui';
 import { Envelope, Key } from 'phosphor-react';
 import Footer from '../components/Footer';
 
@@ -28,6 +27,15 @@ export default function Login() {
       const response = await authService.sendOTP(email);
       if (response.dev_otp_code) {
         setInfo(`DEV-OTP: ${response.dev_otp_code}`);
+        try {
+          await authService.verifyOTP(email, response.dev_otp_code);
+          await refreshUser();
+          navigate('/dashboard');
+          return;
+        } catch (err: any) {
+          setError(err.response?.data?.detail || 'Login fehlgeschlagen');
+          return;
+        }
       } else {
         setInfo('OTP wurde per E-Mail versendet.');
       }
@@ -63,140 +71,79 @@ export default function Login() {
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-        background: theme.colors.background.primary,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          flex: '1',
-        }}
-      >
-        <Card style={{ width: '400px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <h1
-            style={{
-              margin: 0,
-              color: theme.colors.text.primary,
-              fontSize: '1.5rem',
-              fontWeight: 'bold',
-              letterSpacing: '2px',
-              fontFamily: 'Arial, sans-serif',
-            }}
-          >
-            IBU Turniere
-          </h1>
-          <p
-            style={{
-              margin: '0.25rem 0 0',
-              color: theme.colors.text.secondary,
-              fontSize: '0.75rem',
-              letterSpacing: '1px',
-            }}
-          >
-            Turnier-Verwaltung
-          </p>
-        </div>
+    <div className="flex flex-col min-h-screen bg-background">
+      <div className="flex justify-center items-center flex-1">
+        <Card className="w-[400px]">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">FinalStage.ch</CardTitle>
+            <CardDescription>Turnier-Verwaltung</CardDescription>
+          </CardHeader>
 
-        <h2 style={{ marginBottom: '1.5rem', textAlign: 'center', color: theme.colors.text.secondary }}>
-          Login
-        </h2>
+          <CardContent>
+            <h2 className="text-xl font-semibold text-center text-foreground mb-6">Login</h2>
 
-        {step === 'email' ? (
-          <form onSubmit={handleEmailSubmit}>
-            <Input
-              label="E-Mail"
-              type="email"
-              value={email}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-              required
-            />
+            {step === 'email' ? (
+              <form onSubmit={handleEmailSubmit} className="space-y-4">
+                <Input
+                  label="E-Mail"
+                  type="email"
+                  value={email}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                  required
+                />
 
-            {info && (
-              <div
-                style={{
-                  color: theme.colors.accent.primary,
-                  marginBottom: '1rem',
-                  padding: '0.75rem',
-                  background: `${theme.colors.accent.primary}15`,
-                  border: `1px solid ${theme.colors.accent.primary}`,
-                  borderRadius: theme.borderRadius.card,
-                }}
-              >
-                {info}
-              </div>
-            )}
-
-            {error && (
-              <div
-                style={{
-                  color: theme.colors.accent.error,
-                  marginBottom: '1rem',
-                  padding: '0.75rem',
-                  background: `${theme.colors.accent.error}20`,
-                  border: `1px solid ${theme.colors.accent.error}`,
-                  borderRadius: theme.borderRadius.card,
-                }}
-              >
-                {error}
-              </div>
-            )}
-
-            <Button type="submit" variant="primary" disabled={loading} fullWidth>
-              {loading ? 'Code wird gesendet...' : (
-                <>
-                  <Envelope size={18} /> Code anfordern
-                </>
-              )}
-            </Button>
-          </form>
-        ) : (
-          <form onSubmit={handleOTPSubmit}>
-            <Input
-              label="Einmal-Code"
-              type="text"
-              value={otpCode}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtpCode(e.target.value)}
-              required
-            />
-
-            {error && (
-              <div
-                style={{
-                  color: theme.colors.accent.error,
-                  marginBottom: '1rem',
-                  padding: '0.75rem',
-                  background: `${theme.colors.accent.error}20`,
-                  border: `1px solid ${theme.colors.accent.error}`,
-                  borderRadius: theme.borderRadius.card,
-                }}
-              >
-                {error}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <Button type="button" variant="secondary" onClick={handleBack} fullWidth>
-                Zurück
-              </Button>
-              <Button type="submit" variant="primary" disabled={loading} fullWidth>
-                {loading ? 'Wird geprüft...' : (
-                  <>
-                    <Key size={18} /> Anmelden
-                  </>
+                {info && (
+                  <div className="p-3 rounded-lg border border-primary bg-primary/10 text-primary text-sm">
+                    {info}
+                  </div>
                 )}
-              </Button>
-            </div>
-          </form>
-        )}
-      </Card>
+
+                {error && (
+                  <div className="p-3 rounded-lg border border-destructive bg-destructive/10 text-destructive text-sm">
+                    {error}
+                  </div>
+                )}
+
+                <Button type="submit" disabled={loading} className="w-full gap-2">
+                  {loading ? 'Code wird gesendet...' : (
+                    <>
+                      <Envelope size={18} /> Code anfordern
+                    </>
+                  )}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleOTPSubmit} className="space-y-4">
+                <Input
+                  label="Einmal-Code"
+                  type="text"
+                  value={otpCode}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtpCode(e.target.value)}
+                  required
+                />
+
+                {error && (
+                  <div className="p-3 rounded-lg border border-destructive bg-destructive/10 text-destructive text-sm">
+                    {error}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button type="button" variant="secondary" onClick={handleBack} className="flex-1">
+                    Zurück
+                  </Button>
+                  <Button type="submit" disabled={loading} className="flex-1 gap-2">
+                    {loading ? 'Wird geprüft...' : (
+                      <>
+                        <Key size={18} /> Anmelden
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </CardContent>
+        </Card>
       </div>
       <Footer />
     </div>

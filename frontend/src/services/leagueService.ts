@@ -1,5 +1,5 @@
 import api from './api';
-import { League } from '../types';
+import { League, LeagueStandingsResponse } from '../types';
 
 export const leagueService = {
   async getAll(): Promise<League[]> {
@@ -24,5 +24,20 @@ export const leagueService = {
 
   async delete(id: number): Promise<void> {
     await api.delete(`/leagues/${id}`);
+  },
+
+  async getStandings(id: number): Promise<LeagueStandingsResponse> {
+    const response = await api.get<LeagueStandingsResponse>(`/leagues/${id}/standings`);
+    return response.data;
+  },
+
+  async generateTournaments(id: number): Promise<League> {
+    const response = await api.post<League>(`/leagues/${id}/generate-tournaments`);
+    return response.data;
+  },
+
+  async generateMastersKO(id: number): Promise<League> {
+    const response = await api.post<League>(`/leagues/${id}/generate-masters-ko`);
+    return response.data;
   },
 };

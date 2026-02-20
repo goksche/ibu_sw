@@ -4,7 +4,7 @@ import { Tournament } from '../../types';
 import { tableService, GroupTable, TournamentStandings } from '../../services/tableService';
 import { groupService, GroupWithParticipants } from '../../services/groupService';
 import { qualificationService, QualificationTable } from '../../services/qualificationService';
-import { theme } from '../../theme/theme';
+import { cn } from '@/lib/utils';
 import { Button } from '../ui';
 
 // Qualification Table View Component
@@ -73,29 +73,17 @@ function QualificationTableView({ qualificationTable, tournament, onRefresh }: Q
 
   return (
     <div>
-      <div style={{ 
-        background: theme.colors.background.card, 
-        border: `1px solid ${theme.colors.border.standard}`, 
-        borderRadius: theme.borderRadius.card, 
-        padding: '1.5rem',
-        marginBottom: '2rem'
-      }}>
-        <h3 style={{ 
-          marginTop: 0, 
-          marginBottom: '1rem', 
-          color: theme.colors.text.primary,
-          borderBottom: `2px solid ${theme.colors.accent.warning}`,
-          paddingBottom: '0.5rem'
-        }}>
+      <div className="bg-card border border-border rounded-lg p-6 mb-8">
+        <h3 className="mt-0 mb-4 text-foreground border-b-2 border-warning pb-2">
           Qualifikationsübersicht
         </h3>
         
-        <div style={{ marginBottom: '1.5rem', color: theme.colors.text.secondary, fontSize: '0.875rem' }}>
+        <div className="mb-6 text-muted-foreground text-sm">
           <div><strong>Qualifikationsplan:</strong></div>
           <div>Basis pro Gruppe: {qualificationTable.basis_per_group}</div>
           <div>Gesamt qualifiziert: {qualificationTable.qualified_count}</div>
           {qualificationTable.qualification_plan.remainder > 0 && (
-            <div style={{ color: theme.colors.accent.warning, marginTop: '0.5rem' }}>
+            <div className="text-warning mt-2">
               ⚠️ Es qualifizieren sich zusätzlich die besten {qualificationTable.qualification_plan.remainder} Teilnehmer 
               aus Position {qualificationTable.basis_per_group + 1}
             </div>
@@ -103,61 +91,40 @@ function QualificationTableView({ qualificationTable, tournament, onRefresh }: Q
         </div>
 
         {/* Group Qualifiers */}
-        <div style={{ marginBottom: '2rem' }}>
-          <h4 style={{ color: theme.colors.text.primary, marginBottom: '1rem' }}>Qualifizierte Teilnehmer (Basis)</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+        <div className="mb-8">
+          <h4 className="text-foreground mb-4">Qualifizierte Teilnehmer (Basis)</h4>
+          <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(300px,1fr))]">
             {qualificationTable.group_qualifiers.map((groupQual) => (
               <div 
                 key={groupQual.group_id}
-                style={{
-                  background: theme.colors.background.secondary,
-                  border: `1px solid ${theme.colors.border.standard}`,
-                  borderRadius: theme.borderRadius.card,
-                  padding: '1rem'
-                }}
+                className="bg-muted border border-border rounded-lg p-4"
               >
-                <h5 style={{ 
-                  marginTop: 0, 
-                  marginBottom: '0.75rem',
-                  color: theme.colors.accent.primary,
-                  fontSize: '1rem'
-                }}>
+                <h5 className="mt-0 mb-3 text-primary text-base">
                   {groupQual.group_name}
                 </h5>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div className="flex flex-col gap-2">
                   {groupQual.basis_qualifiers.map((qualifier) => (
                     <div 
                       key={qualifier.participant_id}
-                      style={{
-                        padding: '0.5rem',
-                        background: theme.colors.background.card,
-                        borderRadius: theme.borderRadius.input,
-                        border: `1px solid ${qualifier.qualified ? theme.colors.accent.success : theme.colors.border.standard}`,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}
+                      className={cn(
+                        "p-2 rounded-md flex justify-between items-center",
+                        qualifier.qualified 
+                          ? "bg-card border-2 border-success" 
+                          : "bg-card border border-border"
+                      )}
                     >
                       <div>
-                        <span style={{ 
-                          fontWeight: 'bold', 
-                          color: theme.colors.text.primary,
-                          marginRight: '0.5rem'
-                        }}>
+                        <span className="font-bold text-foreground mr-2">
                           {qualifier.position}.
                         </span>
-                        <span style={{ color: theme.colors.text.primary }}>{qualifier.name}</span>
+                        <span className="text-foreground">{qualifier.name}</span>
                         {qualifier.qualified && (
-                          <span style={{ 
-                            color: theme.colors.accent.success, 
-                            fontWeight: 'bold',
-                            marginLeft: '0.5rem'
-                          }}>
+                          <span className="text-success font-bold ml-2">
                             ✓
                           </span>
                         )}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: theme.colors.text.secondary }}>
+                      <div className="text-xs text-muted-foreground">
                         Diff: {qualifier.stats.diff > 0 ? '+' : ''}{qualifier.stats.diff}
                       </div>
                     </div>
@@ -171,7 +138,7 @@ function QualificationTableView({ qualificationTable, tournament, onRefresh }: Q
         {/* Fallback Candidates */}
         {qualificationTable.fallback_candidates.length > 0 && (
           <div>
-            <h4 style={{ color: theme.colors.text.primary, marginBottom: '1rem' }}>
+            <h4 className="text-foreground mb-4">
               Zusätzliche Qualifikanten (Fallback-Regeln)
             </h4>
             {qualificationTable.fallback_candidates.map((rule, ruleIdx) => {
@@ -183,34 +150,23 @@ function QualificationTableView({ qualificationTable, tournament, onRefresh }: Q
               return (
               <div 
                 key={ruleIdx}
-                style={{
-                  background: `${theme.colors.accent.warning}15`,
-                  border: `1px solid ${theme.colors.accent.warning}40`,
-                  borderRadius: theme.borderRadius.card,
-                  padding: '1rem',
-                  marginBottom: '1rem'
-                }}
+                className="bg-warning/10 border border-warning/40 rounded-lg p-4 mb-4"
               >
-                <div style={{ 
-                  fontWeight: 'bold', 
-                  color: theme.colors.text.primary,
-                  marginBottom: '0.75rem',
-                  fontSize: '0.875rem'
-                }}>
+                <div className="font-bold text-foreground mb-3 text-sm">
                   Komplette Rangliste aller {rule.position}. Platzierten (Besten {rule.count} qualifizieren sich)
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr style={{ background: theme.colors.background.secondary }}>
-                      <th style={{ padding: '0.5rem', textAlign: 'left', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Rang</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'left', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Status</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'left', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Spieler</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'left', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Gruppe</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Diff</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>LF</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>LA</th>
+                    <tr className="bg-muted">
+                      <th className="p-2 text-left border-b border-border text-foreground">Rang</th>
+                      <th className="p-2 text-left border-b border-border text-foreground">Status</th>
+                      <th className="p-2 text-left border-b border-border text-foreground">Spieler</th>
+                      <th className="p-2 text-left border-b border-border text-foreground">Gruppe</th>
+                      <th className="p-2 text-center border-b border-border text-foreground">Diff</th>
+                      <th className="p-2 text-center border-b border-border text-foreground">LF</th>
+                      <th className="p-2 text-center border-b border-border text-foreground">LA</th>
                       {tournament.league_scoring_system === 'points' && (
-                        <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Pkt</th>
+                        <th className="p-2 text-center border-b border-border font-bold text-foreground">Pkt</th>
                       )}
                     </tr>
                   </thead>
@@ -221,66 +177,56 @@ function QualificationTableView({ qualificationTable, tournament, onRefresh }: Q
                       return (
                         <tr 
                           key={candidate.participant_id}
-                          style={{
-                            borderBottom: `1px solid ${theme.colors.border.standard}`,
-                            background: isQualified 
-                              ? `${theme.colors.accent.success}20` 
+                          className={cn(
+                            "border-b border-border",
+                            isQualified 
+                              ? "bg-success/20 border-l-4 border-l-success" 
                               : idx % 2 === 0 
-                                ? theme.colors.background.card 
-                                : theme.colors.background.secondary,
-                            borderLeft: isQualified ? `4px solid ${theme.colors.accent.success}` : 'none'
-                          }}
+                                ? "bg-card" 
+                                : "bg-muted"
+                          )}
                         >
-                          <td style={{ 
-                            padding: '0.5rem', 
-                            color: theme.colors.text.primary, 
-                            fontWeight: isQualified ? 'bold' : 'normal',
-                            textAlign: 'center'
-                          }}>
+                          <td className={cn(
+                            "p-2 text-foreground text-center",
+                            isQualified ? "font-bold" : ""
+                          )}>
                             {idx + 1}.
                           </td>
-                          <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                          <td className="p-2 text-center">
                             {isQualified ? (
-                              <span style={{ 
-                                color: theme.colors.accent.success, 
-                                fontWeight: 'bold',
-                                fontSize: '0.875rem'
-                              }}>
+                              <span className="text-success font-bold text-sm">
                                 ✓ Qualifiziert
                               </span>
                             ) : isInQualificationRange ? (
-                              <span style={{ 
-                                color: theme.colors.accent.warning, 
-                                fontSize: '0.75rem'
-                              }}>
+                              <span className="text-warning text-xs">
                                 Würde qualifizieren
                               </span>
                             ) : (
-                              <span style={{ 
-                                color: theme.colors.text.secondary, 
-                                fontSize: '0.75rem'
-                              }}>
+                              <span className="text-muted-foreground text-xs">
                                 Nicht qualifiziert
                               </span>
                             )}
                           </td>
-                          <td style={{ padding: '0.5rem', color: theme.colors.text.primary, fontWeight: isQualified ? 'bold' : 'normal' }}>
+                          <td className={cn("p-2 text-foreground", isQualified && "font-bold")}>
                             {candidate.name}
                           </td>
-                          <td style={{ padding: '0.5rem', color: theme.colors.text.secondary }}>
+                          <td className="p-2 text-muted-foreground">
                             {candidate.group_name || `Gruppe ${candidate.group_id}`}
                           </td>
-                          <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 'bold', color: candidate.stats.diff > 0 ? theme.colors.accent.success : candidate.stats.diff < 0 ? theme.colors.accent.error : theme.colors.text.primary }}>
+                          <td className={cn(
+                            "p-2 text-center font-bold",
+                            candidate.stats.diff > 0 ? "text-success" : candidate.stats.diff < 0 ? "text-destructive" : "text-foreground"
+                          )}>
                             {candidate.stats.diff > 0 ? '+' : ''}{candidate.stats.diff}
                           </td>
-                          <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>
+                          <td className="p-2 text-center text-foreground">
                             {candidate.stats.goals_for}
                           </td>
-                          <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>
+                          <td className="p-2 text-center text-foreground">
                             {candidate.stats.goals_against}
                           </td>
                           {tournament.league_scoring_system === 'points' && (
-                            <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 'bold', color: theme.colors.accent.info }}>
+                            <td className="p-2 text-center font-bold text-info">
                               {candidate.stats.points ?? 0}
                             </td>
                           )}
@@ -291,14 +237,14 @@ function QualificationTableView({ qualificationTable, tournament, onRefresh }: Q
                 </table>
 
                 {cutoffGroup.length > 0 && (
-                  <div style={{ marginTop: '1rem', padding: '0.75rem', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-                    <div style={{ fontSize: '0.875rem', fontWeight: 'bold', color: theme.colors.text.primary, marginBottom: '0.5rem' }}>
+                  <div className="mt-4 p-3 bg-card rounded-lg border border-border">
+                    <div className="text-sm font-bold text-foreground mb-2">
                       Gleichstand um die letzten {rule.count} Plätze
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: theme.colors.text.secondary, marginBottom: '0.75rem' }}>
+                    <div className="text-xs text-muted-foreground mb-3">
                       Bitte auswählen, wer sich qualifiziert (max. {rule.count}).
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div className="flex flex-col gap-2">
                       {cutoffGroup.map(pid => {
                         const candidate = candidateMap.get(pid);
                         if (!candidate) return null;
@@ -306,35 +252,29 @@ function QualificationTableView({ qualificationTable, tournament, onRefresh }: Q
                         return (
                           <label
                             key={pid}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.5rem',
-                              padding: '0.5rem',
-                              borderRadius: theme.borderRadius.input,
-                              background: isSelected ? `${theme.colors.accent.success}20` : theme.colors.background.secondary,
-                              border: `1px solid ${theme.colors.border.standard}`,
-                              cursor: 'pointer'
-                            }}
+                            className={cn(
+                              "flex items-center gap-2 p-2 rounded-md border border-border cursor-pointer",
+                              isSelected ? "bg-success/20" : "bg-muted"
+                            )}
                           >
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => toggleManualSelection(rule.position, pid, rule.count)}
                             />
-                            <span style={{ color: theme.colors.text.primary }}>
+                            <span className="text-foreground">
                               {candidate.name}
                             </span>
                           </label>
                         );
                       })}
                     </div>
-                    <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                    <div className="mt-3 flex gap-2">
                       <Button
                         onClick={() => handleSaveManualSelection(rule.position, rule.count)}
                         variant="success"
                         disabled={savingPosition === rule.position}
-                        style={{ fontSize: '0.875rem' }}
+                        className="text-sm"
                       >
                         Auswahl speichern
                       </Button>
@@ -342,13 +282,13 @@ function QualificationTableView({ qualificationTable, tournament, onRefresh }: Q
                         onClick={() => handleClearManualSelection(rule.position)}
                         variant="secondary"
                         disabled={savingPosition === rule.position || !hasManualSelection}
-                        style={{ fontSize: '0.875rem' }}
+                        className="text-sm"
                       >
                         Zurücksetzen
                       </Button>
                     </div>
                     {hasManualSelection && (
-                      <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: theme.colors.text.secondary }}>
+                      <div className="mt-2 text-xs text-muted-foreground">
                         Manuelle Auswahl aktiv.
                       </div>
                     )}
@@ -361,13 +301,7 @@ function QualificationTableView({ qualificationTable, tournament, onRefresh }: Q
         )}
         
         {qualificationTable.fallback_candidates.length === 0 && (
-          <div style={{ 
-            padding: '1rem', 
-            background: theme.colors.background.secondary, 
-            borderRadius: theme.borderRadius.card,
-            color: theme.colors.text.secondary,
-            fontSize: '0.875rem'
-          }}>
+          <div className="p-4 bg-muted rounded-lg text-muted-foreground text-sm">
             Keine zusätzlichen Qualifikanten erforderlich.
           </div>
         )}
@@ -414,41 +348,24 @@ function MiniTableSection({ tieMiniTables, tournament, selectedGroupId, onResolv
         return (
           <div 
             key={tableIndex}
-            style={{ 
-              marginTop: '1rem',
-              background: theme.colors.background.card, 
-              border: `1px solid ${theme.colors.border.standard}`, 
-              borderRadius: theme.borderRadius.card, 
-              overflow: 'hidden' 
-            }}
+            className="mt-4 bg-card border border-border rounded-lg overflow-hidden"
           >
             {/* Collapsible header */}
             <div
               onClick={() => toggleTable(tableIndex)}
-              style={{
-                padding: '0.75rem 1rem',
-                background: theme.colors.background.secondary,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                userSelect: 'none',
-                borderBottom: isExpanded ? `1px solid ${theme.colors.border.standard}` : 'none'
-              }}
+              className={cn(
+                "px-4 py-3 bg-muted cursor-pointer flex items-center gap-2 select-none",
+                isExpanded && "border-b border-border"
+              )}
             >
-              <span style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+              <span className="text-sm text-muted-foreground">
                 {isExpanded ? '▾' : '▸'}
               </span>
-              <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+              <span className="text-sm font-bold text-foreground">
                 Direktbegegnungen (Minitabelle) - Gleichstand mit {_tieMiniTable.participant_ids.length} Teilnehmern
               </span>
               {_tieMiniTable.is_completely_tied && (
-                <span style={{ 
-                  fontSize: '0.75rem', 
-                  color: theme.colors.accent.error, 
-                  fontWeight: 'normal',
-                  marginLeft: '0.5rem'
-                }}>
+                <span className="text-xs text-destructive font-normal ml-2">
                   ⚠️ Komplett identisch!
                 </span>
               )}
@@ -456,43 +373,46 @@ function MiniTableSection({ tieMiniTables, tournament, selectedGroupId, onResolv
             
             {/* Collapsible content */}
             {isExpanded && (
-              <div style={{ padding: '1rem' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+              <div className="p-4">
+                <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr style={{ background: theme.colors.background.secondary }}>
-                      <th style={{ padding: '0.5rem', textAlign: 'left', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Spieler</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Sp</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>S</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>U</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>N</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>LF</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>LA</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Diff</th>
+                    <tr className="bg-muted">
+                      <th className="p-2 text-left border-b border-border text-foreground">Spieler</th>
+                      <th className="p-2 text-center border-b border-border text-foreground">Sp</th>
+                      <th className="p-2 text-center border-b border-border text-foreground">S</th>
+                      <th className="p-2 text-center border-b border-border text-foreground">U</th>
+                      <th className="p-2 text-center border-b border-border text-foreground">N</th>
+                      <th className="p-2 text-center border-b border-border text-foreground">LF</th>
+                      <th className="p-2 text-center border-b border-border text-foreground">LA</th>
+                      <th className="p-2 text-center border-b border-border font-bold text-foreground">Diff</th>
                       {tournament.league_scoring_system === 'points' && (
-                        <th style={{ padding: '0.5rem', textAlign: 'center', borderBottom: `1px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Pkt</th>
+                        <th className="p-2 text-center border-b border-border font-bold text-foreground">Pkt</th>
                       )}
                     </tr>
                   </thead>
                   <tbody>
                     {_tieMiniTable.mini_table.map((miniRow, miniIdx) => (
-                      <tr key={miniRow.participant_id} style={{ 
-                        borderBottom: `1px solid ${theme.colors.border.standard}`, 
-                        background: miniIdx % 2 === 0 ? theme.colors.background.card : theme.colors.background.secondary 
-                      }}>
-                        <td style={{ padding: '0.5rem', textAlign: 'left', color: theme.colors.text.primary, fontWeight: '500' }}>
+                      <tr key={miniRow.participant_id} className={cn(
+                        "border-b border-border",
+                        miniIdx % 2 === 0 ? "bg-card" : "bg-muted"
+                      )}>
+                        <td className="p-2 text-left text-foreground font-medium">
                           {miniRow.name}
                         </td>
-                        <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>{miniRow.games}</td>
-                        <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>{miniRow.wins}</td>
-                        <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>{miniRow.draws}</td>
-                        <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>{miniRow.losses}</td>
-                        <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>{miniRow.goals_for}</td>
-                        <td style={{ padding: '0.5rem', textAlign: 'center', color: theme.colors.text.primary }}>{miniRow.goals_against}</td>
-                        <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 'bold', color: miniRow.diff > 0 ? theme.colors.accent.success : miniRow.diff < 0 ? theme.colors.accent.error : theme.colors.text.primary }}>
+                        <td className="p-2 text-center text-foreground">{miniRow.games}</td>
+                        <td className="p-2 text-center text-foreground">{miniRow.wins}</td>
+                        <td className="p-2 text-center text-foreground">{miniRow.draws}</td>
+                        <td className="p-2 text-center text-foreground">{miniRow.losses}</td>
+                        <td className="p-2 text-center text-foreground">{miniRow.goals_for}</td>
+                        <td className="p-2 text-center text-foreground">{miniRow.goals_against}</td>
+                        <td className={cn(
+                          "p-2 text-center font-bold",
+                          miniRow.diff > 0 ? "text-success" : miniRow.diff < 0 ? "text-destructive" : "text-foreground"
+                        )}>
                           {miniRow.diff > 0 ? '+' : ''}{miniRow.diff}
                         </td>
                         {tournament.league_scoring_system === 'points' && (
-                          <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 'bold', color: theme.colors.accent.info }}>
+                          <td className="p-2 text-center font-bold text-info">
                             {miniRow.points ?? 0}
                           </td>
                         )}
@@ -502,10 +422,10 @@ function MiniTableSection({ tieMiniTables, tournament, selectedGroupId, onResolv
                 </table>
                 {/* Show tie-break resolution options if completely tied */}
                 {selectedGroupId && unresolvedGroups.length > 0 && (
-                  <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div className="mt-4 flex flex-col gap-4">
                     {unresolvedGroups.map((groupIds, idx) => (
                       <div key={`${tableIndex}-tie-${idx}`}>
-                        <div style={{ fontSize: '0.8rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>
+                        <div className="text-sm text-muted-foreground mb-2">
                           Offener Gleichstand ({groupIds.length} Teilnehmer)
                         </div>
                         <TieBreakResolutionComponent
@@ -592,40 +512,29 @@ function TieBreakResolutionComponent({ groupId, participantIds, miniTable, onRes
   };
 
   return (
-    <div style={{
-      marginTop: '1rem',
-      padding: '1rem',
-      background: `${theme.colors.accent.error}10`,
-      border: `1px solid ${theme.colors.accent.error}40`,
-      borderRadius: theme.borderRadius.card
-    }}>
-      <div style={{
-        fontSize: '0.875rem',
-        fontWeight: 'bold',
-        color: theme.colors.text.primary,
-        marginBottom: '0.75rem'
-      }}>
+    <div className="mt-4 p-4 bg-destructive/10 border border-destructive/40 rounded-lg">
+      <div className="text-sm font-bold text-foreground mb-3">
         Gleichstand-Auflösung:
       </div>
       {true && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div className="flex flex-col gap-3">
           <Button
             onClick={handleGeneratePlayoff}
             disabled={loading}
             variant="info"
-            style={{ width: '100%' }}
+            className="w-full"
           >
             📅 Spielplan erstellen (jeder gegen jeden)
           </Button>
           
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <div className="flex gap-2 items-center">
             {!showManualSelection ? (
               <>
                 <Button
                   onClick={() => setShowManualSelection(true)}
                   disabled={loading}
                   variant="secondary"
-                  style={{ flex: 1 }}
+                  className="flex-1"
                 >
                   👤 Manuell wählen
                 </Button>
@@ -633,7 +542,7 @@ function TieBreakResolutionComponent({ groupId, participantIds, miniTable, onRes
                   onClick={handleRandomSelection}
                   disabled={loading}
                   variant="warning"
-                  style={{ flex: 1 }}
+                  className="flex-1"
                 >
                   🎲 Zufällig wählen
                 </Button>
@@ -643,15 +552,7 @@ function TieBreakResolutionComponent({ groupId, participantIds, miniTable, onRes
               <select
                 value={selectedWinner || ''}
                 onChange={(e) => setSelectedWinner(parseInt(e.target.value))}
-                style={{
-                  flex: 1,
-                  padding: '0.5rem',
-                  fontSize: '0.875rem',
-                  border: `1px solid ${theme.colors.border.standard}`,
-                  borderRadius: theme.borderRadius.input,
-                  background: theme.colors.background.secondary,
-                  color: theme.colors.text.primary
-                }}
+                className="flex-1 py-2 text-sm border border-border rounded-md bg-muted text-foreground"
               >
                 <option value="">Gewinner auswählen...</option>
                 {participantIds.map((pid) => (
@@ -664,7 +565,7 @@ function TieBreakResolutionComponent({ groupId, participantIds, miniTable, onRes
                 onClick={handleManualSelection}
                 disabled={loading || !selectedWinner}
                 variant="success"
-                style={{ flex: '0 0 auto' }}
+                className="flex-none"
               >
                 ✓ Bestätigen
               </Button>
@@ -675,7 +576,7 @@ function TieBreakResolutionComponent({ groupId, participantIds, miniTable, onRes
                 }}
                 disabled={loading}
                 variant="secondary"
-                style={{ flex: '0 0 auto' }}
+                className="flex-none"
               >
                 ✕ Abbrechen
               </Button>
@@ -685,7 +586,7 @@ function TieBreakResolutionComponent({ groupId, participantIds, miniTable, onRes
       </div>
       )}
       {loading && (
-        <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: theme.colors.text.secondary }}>
+        <div className="mt-2 text-xs text-muted-foreground">
           Wird verarbeitet...
         </div>
       )}
@@ -705,7 +606,7 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
   const [tournamentStandings, setTournamentStandings] = useState<TournamentStandings | null>(null);
   const [qualificationTable, setQualificationTable] = useState<QualificationTable | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'groups' | 'overall' | 'qualification'>('groups');
+  const [viewMode, setViewMode] = useState<'groups' | 'qualification'>('groups');
 
   useEffect(() => {
     loadData();
@@ -772,39 +673,38 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
     }
   };
 
-  if (loading) return <div style={{ color: theme.colors.text.secondary }}>Wird geladen...</div>;
+  const showQualificationTab = tournament.has_ko_phase && tournament.has_group_phase && tournament.ko_start_round;
+
+  useEffect(() => {
+    if (!showQualificationTab && viewMode === 'qualification') {
+      setViewMode('groups');
+    }
+  }, [showQualificationTab, viewMode]);
+
+  if (loading) return <div className="text-muted-foreground">Wird geladen...</div>;
 
   return (
     <div>
       {/* View Mode Selection */}
-      {tournament.has_group_phase && tournament.has_ko_phase && (
-        <div style={{ marginBottom: '2rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+      {showQualificationTab && (
+        <div className="mb-8">
+          <label className="block mb-2 font-bold text-foreground">
             Ansicht:
           </label>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className="flex gap-2">
             <Button
               onClick={() => setViewMode('groups')}
               variant={viewMode === 'groups' ? 'info' : 'secondary'}
-              style={{ fontWeight: viewMode === 'groups' ? 'bold' : 'normal' }}
+              className={cn(viewMode === 'groups' && 'font-bold')}
             >
               Gruppen
             </Button>
-            {tournament.ko_start_round && (
-              <Button
-                onClick={() => setViewMode('qualification')}
-                variant={viewMode === 'qualification' ? 'warning' : 'secondary'}
-                style={{ fontWeight: viewMode === 'qualification' ? 'bold' : 'normal' }}
-              >
-                Qualifikation
-              </Button>
-            )}
             <Button
-              onClick={() => setViewMode('overall')}
-              variant={viewMode === 'overall' ? 'danger' : 'secondary'}
-              style={{ fontWeight: viewMode === 'overall' ? 'bold' : 'normal' }}
+              onClick={() => setViewMode('qualification')}
+              variant={viewMode === 'qualification' ? 'warning' : 'secondary'}
+              className={cn(viewMode === 'qualification' && 'font-bold')}
             >
-              Gesamt
+              Qualifikation
             </Button>
           </div>
         </div>
@@ -814,32 +714,22 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
       {viewMode === 'groups' && tournament.has_group_phase && (
         <>
           {groups.length === 0 ? (
-            <div style={{ padding: '2rem', textAlign: 'center', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-              <p style={{ color: theme.colors.text.primary }}>Noch keine Gruppen vorhanden.</p>
+            <div className="p-8 text-center bg-card rounded-lg border border-border">
+              <p className="text-foreground">Noch keine Gruppen vorhanden.</p>
             </div>
           ) : (
             <>
               {/* Group Tabs */}
-              <div style={{ 
-                marginBottom: '2rem',
-                display: 'flex',
-                gap: '0.5rem',
-                flexWrap: 'wrap',
-                borderBottom: `2px solid ${theme.colors.border.standard}`,
-                paddingBottom: '0.5rem'
-              }}>
+              <div className="mb-8 flex gap-2 flex-wrap border-b-2 border-border pb-2">
                 {groups.map(group => (
                   <Button
                     key={group.id}
                     onClick={() => setSelectedGroupId(group.id)}
                     variant={selectedGroupId === group.id ? 'primary' : 'secondary'}
-                    style={{ 
-                      fontWeight: selectedGroupId === group.id ? 'bold' : 'normal',
-                      whiteSpace: 'nowrap',
-                      borderRadius: `${theme.borderRadius.card} ${theme.borderRadius.card} 0 0`,
-                      borderBottom: selectedGroupId === group.id ? `3px solid ${theme.colors.accent.primary}` : 'none',
-                      marginBottom: selectedGroupId === group.id ? '-2px' : '0'
-                    }}
+                    className={cn(
+                      'whitespace-nowrap rounded-t-lg',
+                      selectedGroupId === group.id && 'font-bold border-b-2 border-b-primary -mb-0.5'
+                    )}
                   >
                     {group.name}
                   </Button>
@@ -848,24 +738,24 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
 
               {groupTable && (
                 <>
-                  <div style={{ background: theme.colors.background.card, border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.card, overflow: 'hidden' }}>
-                    <h3 style={{ padding: '1rem', background: theme.colors.accent.primary, color: theme.colors.background.primary, margin: 0 }}>
+                  <div className="bg-card border border-border rounded-lg overflow-hidden">
+                    <h3 className="p-4 bg-primary text-primary-foreground m-0">
                       {groupTable.group_name}
                     </h3>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table className="w-full border-collapse">
                       <thead>
-                        <tr style={{ background: theme.colors.background.secondary }}>
-                          <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Rang</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Spieler</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Sp</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>S</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>U</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>N</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>LF</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>LA</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Diff</th>
+                        <tr className="bg-muted">
+                          <th className="p-3 text-center border-b-2 border-border text-foreground">Rang</th>
+                          <th className="p-3 text-left border-b-2 border-border text-foreground">Spieler</th>
+                          <th className="p-3 text-center border-b-2 border-border text-foreground">Sp</th>
+                          <th className="p-3 text-center border-b-2 border-border text-foreground">S</th>
+                          <th className="p-3 text-center border-b-2 border-border text-foreground">U</th>
+                          <th className="p-3 text-center border-b-2 border-border text-foreground">N</th>
+                          <th className="p-3 text-center border-b-2 border-border text-foreground">LF</th>
+                          <th className="p-3 text-center border-b-2 border-border text-foreground">LA</th>
+                          <th className="p-3 text-center border-b-2 border-border font-bold text-foreground">Diff</th>
                           {tournament.league_scoring_system === 'points' && (
-                            <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, fontWeight: 'bold', color: theme.colors.text.primary }}>Pkt</th>
+                            <th className="p-3 text-center border-b-2 border-border font-bold text-foreground">Pkt</th>
                           )}
                         </tr>
                       </thead>
@@ -895,32 +785,41 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
                         }
                         
                         return (
-                          <tr key={row.participant_id} style={{ borderBottom: `1px solid ${theme.colors.border.standard}`, background: idx % 2 === 0 ? theme.colors.background.card : theme.colors.background.secondary }}>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', fontWeight: idx < 2 ? 'bold' : 'normal', color: idx < 2 ? theme.colors.accent.info : theme.colors.text.primary }}>
+                          <tr key={row.participant_id} className={cn(
+                            "border-b border-border",
+                            idx % 2 === 0 ? "bg-card" : "bg-muted"
+                          )}>
+                            <td className={cn(
+                              "p-3 text-center",
+                              idx < 2 ? "font-bold text-info" : "text-foreground"
+                            )}>
                               {row.rank}
                             </td>
-                            <td style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>
+                            <td className="p-3 text-left text-foreground">
                               {row.name}
                               {row.won_decision_match === true && (
-                                <span style={{ color: theme.colors.accent.success, fontWeight: 'bold', marginLeft: '0.25rem' }} title="Gewinner des Entscheidungsspiels">*</span>
+                                <span className="text-success font-bold ml-1" title="Gewinner des Entscheidungsspiels">*</span>
                               )}
                               {row.is_in_tie_group && (
-                                <span style={{ fontSize: '0.75rem', color: theme.colors.text.secondary, marginLeft: '0.25rem' }} title={`Gleichstand mit ${row.tie_group_size} Teilnehmern`}>
+                                <span className="text-xs text-muted-foreground ml-1" title={`Gleichstand mit ${row.tie_group_size} Teilnehmern`}>
                                   ({row.tie_group_size})
                                 </span>
                               )}
                             </td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', color: theme.colors.text.primary }}>{row.games}</td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', color: theme.colors.text.primary }}>{row.wins}</td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', color: theme.colors.text.primary }}>{(row as any).draws ?? 0}</td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', color: theme.colors.text.primary }}>{row.losses}</td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', color: theme.colors.text.primary }}>{row.goals_for}</td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', color: theme.colors.text.primary }}>{row.goals_against}</td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold', color: row.diff > 0 ? theme.colors.accent.success : row.diff < 0 ? theme.colors.accent.error : theme.colors.text.primary }}>
+                            <td className="p-3 text-center text-foreground">{row.games}</td>
+                            <td className="p-3 text-center text-foreground">{row.wins}</td>
+                            <td className="p-3 text-center text-foreground">{(row as any).draws ?? 0}</td>
+                            <td className="p-3 text-center text-foreground">{row.losses}</td>
+                            <td className="p-3 text-center text-foreground">{row.goals_for}</td>
+                            <td className="p-3 text-center text-foreground">{row.goals_against}</td>
+                            <td className={cn(
+                              "p-3 text-center font-bold",
+                              row.diff > 0 ? "text-success" : row.diff < 0 ? "text-destructive" : "text-foreground"
+                            )}>
                               {row.diff > 0 ? '+' : ''}{row.diff}
                             </td>
                             {tournament.league_scoring_system === 'points' && (
-                              <td style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold', color: theme.colors.accent.info }}>
+                              <td className="p-3 text-center font-bold text-info">
                                 {row.points ?? 0}
                               </td>
                             )}
@@ -943,6 +842,51 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
                     }}
                   />
                 )}
+                {tournament.has_ko_phase && (
+                  <div className="mt-8">
+                    {tournamentStandings && tournamentStandings.standings.length > 0 ? (
+                      <div className="bg-card border border-border rounded-lg overflow-hidden">
+                        <h3 className="p-4 bg-destructive text-foreground m-0">
+                          Gesamtrangliste
+                        </h3>
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-muted">
+                              <th className="p-3 text-center border-b-2 border-border w-20 text-foreground">Rang</th>
+                              <th className="p-3 text-left border-b-2 border-border text-foreground">Spieler</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tournamentStandings.standings.map((standing, idx) => (
+                              <tr key={standing.participant_id} className={cn(
+                                "border-b border-border",
+                                idx % 2 === 0 ? "bg-card" : "bg-muted"
+                              )}>
+                                <td className="p-3 text-center font-bold text-foreground">
+                                  {standing.rank === 1 && '🥇'}
+                                  {standing.rank === 2 && '🥈'}
+                                  {standing.rank === 3 && '🥉'}
+                                  {' '}
+                                  {standing.rank}
+                                </td>
+                                <td className="p-3 text-left text-foreground">{standing.name}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center bg-card rounded-lg border border-border">
+                        <p className="text-foreground">Noch keine Gesamtrangliste verfügbar.</p>
+                        {tournamentStandings?.status === 'final_not_played' && (
+                          <p className="text-sm text-muted-foreground mt-2">
+                            Das Finale muss zuerst gespielt werden.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
               )}
             </>
@@ -954,8 +898,8 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
       {viewMode === 'qualification' && (
         <>
           {loading ? (
-            <div style={{ padding: '2rem', textAlign: 'center', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-              <p style={{ color: theme.colors.text.primary }}>Wird geladen...</p>
+            <div className="p-8 text-center bg-card rounded-lg border border-border">
+              <p className="text-foreground">Wird geladen...</p>
             </div>
           ) : qualificationTable ? (
             <QualificationTableView 
@@ -971,12 +915,12 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
               }}
             />
           ) : (
-            <div style={{ padding: '2rem', textAlign: 'center', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-              <p style={{ color: theme.colors.text.primary }}>Keine Qualifikationsdaten verfügbar.</p>
-              <p style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginTop: '0.5rem' }}>
+            <div className="p-8 text-center bg-card rounded-lg border border-border">
+              <p className="text-foreground">Keine Qualifikationsdaten verfügbar.</p>
+              <p className="text-sm text-muted-foreground mt-2">
                 Stellen Sie sicher, dass:
               </p>
-              <ul style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, textAlign: 'left', display: 'inline-block', marginTop: '0.5rem' }}>
+              <ul className="text-sm text-muted-foreground text-left inline-block mt-2 list-disc">
                 <li>Das Turnier eine KO-Phase hat</li>
                 <li>Das Turnier eine Gruppenphase hat</li>
                 <li>Eine KO-Start-Runde konfiguriert ist</li>
@@ -987,50 +931,6 @@ export default function TournamentTables({ tournamentId, tournament }: Tournamen
         </>
       )}
 
-      {/* Tournament Standings */}
-      {viewMode === 'overall' && tournament.has_ko_phase && (
-        <>
-          {tournamentStandings && tournamentStandings.standings.length > 0 ? (
-            <div style={{ background: theme.colors.background.card, border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.card, overflow: 'hidden' }}>
-              <h3 style={{ padding: '1rem', background: theme.colors.accent.error, color: theme.colors.text.primary, margin: 0 }}>
-                Gesamtrangliste
-              </h3>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: theme.colors.background.secondary }}>
-                    <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: `2px solid ${theme.colors.border.standard}`, width: '80px', color: theme.colors.text.primary }}>Rang</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: `2px solid ${theme.colors.border.standard}`, color: theme.colors.text.primary }}>Spieler</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tournamentStandings.standings.map((standing, idx) => (
-                    <tr key={standing.participant_id} style={{ borderBottom: `1px solid ${theme.colors.border.standard}`, background: idx % 2 === 0 ? theme.colors.background.card : theme.colors.background.secondary }}>
-                      <td style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold', color: theme.colors.text.primary }}>
-                        {standing.rank === 1 && '🥇'}
-                        {standing.rank === 2 && '🥈'}
-                        {standing.rank === 3 && '🥉'}
-                        {' '}
-                        {standing.rank}
-                      </td>
-                      <td style={{ padding: '0.75rem', textAlign: 'left', color: theme.colors.text.primary }}>{standing.name}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div style={{ padding: '2rem', textAlign: 'center', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-              <p style={{ color: theme.colors.text.primary }}>Noch keine Gesamtrangliste verfügbar.</p>
-              {tournamentStandings?.status === 'final_not_played' && (
-                <p style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginTop: '0.5rem' }}>
-                  Das Finale muss zuerst gespielt werden.
-                </p>
-              )}
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 }
-

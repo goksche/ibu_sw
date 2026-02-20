@@ -3,39 +3,39 @@ import { Theme } from './types';
 export const theme: Theme = {
   colors: {
     background: {
-      primary: '#000000', // Dunkel für gute Kontraste
-      secondary: '#0a0a0a',
-      card: '#1a1a1a',
-      accent: '#2a2a2a',
+      primary: 'var(--bg-primary)',
+      secondary: 'var(--bg-secondary)',
+      card: 'var(--bg-card)',
+      accent: 'var(--bg-accent)',
     },
     text: {
-      primary: '#ffffff',
-      secondary: '#cccccc',
-      disabled: '#666666',
+      primary: 'var(--text-primary)',
+      secondary: 'var(--text-secondary)',
+      disabled: 'var(--text-disabled)',
     },
     accent: {
-      primary: '#FFD700', // Akzentfarbe Gold
-      success: '#22c55e',
-      warning: '#f59e0b',
-      error: '#ef4444',
-      info: '#FFD700', // Gold statt Blau
+      primary: 'var(--accent-primary)',
+      success: 'var(--accent-success)',
+      warning: 'var(--accent-warning)',
+      error: 'var(--accent-error)',
+      info: 'var(--accent-info)',
     },
     border: {
-      standard: '#333333',
-      hover: '#FFD700', // Gold beim Hover
-      focus: '#FFD700', // Gold beim Focus
+      standard: 'var(--border-standard)',
+      hover: 'var(--border-hover)',
+      focus: 'var(--border-focus)',
     },
   },
   borderRadius: {
-    button: '0px',
-    input: '0px',
-    card: '4px',
-    badge: '0px',
-    modal: '4px',
+    button: '6px',
+    input: '6px',
+    card: '8px',
+    badge: '6px',
+    modal: '10px',
   },
   shadows: {
-    card: '0 2px 8px rgba(0, 0, 0, 0.3)',
-    buttonHover: '0 4px 12px rgba(76, 139, 245, 0.3)',
+    card: '0 2px 8px rgba(15, 42, 68, 0.08)',
+    buttonHover: '0 4px 12px rgba(15, 42, 68, 0.12)',
   },
   transitions: {
     default: 'all 0.2s ease',

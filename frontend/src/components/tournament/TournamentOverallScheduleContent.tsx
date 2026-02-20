@@ -6,8 +6,7 @@ import { groupService, Group } from '../../services/groupService';
 import { participantService } from '../../services/participantService';
 import { locationService } from '../../services/locationService';
 import { Tournament, Participant } from '../../types';
-import { theme } from '../../theme/theme';
-import { Button } from '../ui';
+import { Button } from '../ui/Button';
 
 interface TournamentOverallScheduleContentProps {
   tournamentId: number;
@@ -130,12 +129,12 @@ export default function TournamentOverallScheduleContent({ tournamentId, tournam
     }
   };
 
-  if (loading) return <div style={{ color: theme.colors.text.secondary }}>Wird geladen...</div>;
+  if (loading) return <div className="text-muted-foreground">Wird geladen...</div>;
 
   return (
     <div>
       {matches.length === 0 ? (
-        <p style={{ color: theme.colors.text.secondary }}>Noch keine Spiele vorhanden.</p>
+        <p className="text-muted-foreground">Noch keine Spiele vorhanden.</p>
       ) : (
         rounds.map((round) => {
           const roundMatches = matches
@@ -149,50 +148,50 @@ export default function TournamentOverallScheduleContent({ tournamentId, tournam
             });
 
           return (
-            <div key={round} style={{ marginBottom: '2rem' }}>
-              <h3 style={{ color: theme.colors.text.primary, marginBottom: '0.75rem' }}>
+            <div key={round} className="mb-8">
+              <h3 className="text-foreground mb-3">
                 Gesamtrunde {round}
               </h3>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
                   <thead>
-                    <tr style={{ background: theme.colors.background.secondary }}>
-                      <th style={{ padding: '0.75rem', textAlign: 'left' }}>Gruppe</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spiel</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spielfeld</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 1</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left' }}>Spieler 2</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left' }}>Ergebnis</th>
-                      {canEdit && <th style={{ padding: '0.75rem', textAlign: 'left' }}></th>}
+                    <tr className="bg-muted">
+                      <th className="p-3 text-left">Gruppe</th>
+                      <th className="p-3 text-left">Spiel</th>
+                      <th className="p-3 text-left">Spielfeld</th>
+                      <th className="p-3 text-left">Spieler 1</th>
+                      <th className="p-3 text-left">Spieler 2</th>
+                      <th className="p-3 text-left">Ergebnis</th>
+                      {canEdit && <th className="p-3 text-left"></th>}
                     </tr>
                   </thead>
                   <tbody>
                     {roundMatches.map((match, idx) => {
                       const isEditing = editingMatchId === match.id;
                       return (
-                        <tr key={match.id} style={{ borderBottom: `1px solid ${theme.colors.border.standard}` }}>
-                          <td style={{ padding: '0.75rem' }}>{groupNameById[match.group_id] || `#${match.group_id}`}</td>
-                          <td style={{ padding: '0.75rem' }}>#{idx + 1}</td>
-                          <td style={{ padding: '0.75rem' }}>
+                        <tr key={match.id} className="border-b border-border">
+                          <td className="p-3">{groupNameById[match.group_id] || `#${match.group_id}`}</td>
+                          <td className="p-3">#{idx + 1}</td>
+                          <td className="p-3">
                             {match.spielfeld_id ? (spielfeldIdToName[match.spielfeld_id] ?? `#${match.spielfeld_id}`) : '–'}
                           </td>
-                          <td style={{ padding: '0.75rem' }}>{formatParticipant(match.player1_id)}</td>
-                          <td style={{ padding: '0.75rem' }}>{formatParticipant(match.player2_id)}</td>
-                          <td style={{ padding: '0.75rem' }}>
+                          <td className="p-3">{formatParticipant(match.player1_id)}</td>
+                          <td className="p-3">{formatParticipant(match.player2_id)}</td>
+                          <td className="p-3">
                             {isEditing ? (
-                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              <div className="flex gap-2 items-center">
                                 <input
                                   type="number"
                                   value={scoreForm.score1}
                                   onChange={(e) => setScoreForm(prev => ({ ...prev, score1: e.target.value }))}
-                                  style={{ width: '60px', padding: '0.25rem' }}
+                                  className="w-[60px] p-1 h-8 rounded-md border border-input bg-background text-foreground text-sm"
                                 />
                                 :
                                 <input
                                   type="number"
                                   value={scoreForm.score2}
                                   onChange={(e) => setScoreForm(prev => ({ ...prev, score2: e.target.value }))}
-                                  style={{ width: '60px', padding: '0.25rem' }}
+                                  className="w-[60px] p-1 h-8 rounded-md border border-input bg-background text-foreground text-sm"
                                 />
                               </div>
                             ) : (
@@ -200,18 +199,18 @@ export default function TournamentOverallScheduleContent({ tournamentId, tournam
                             )}
                           </td>
                           {canEdit && (
-                            <td style={{ padding: '0.75rem' }}>
+                            <td className="p-3">
                               {isEditing ? (
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                  <Button onClick={() => saveEdit(match.id)} variant="success" style={{ padding: '0.35rem 0.5rem' }}>
+                                <div className="flex gap-2">
+                                  <Button onClick={() => saveEdit(match.id)} variant="success" size="sm" className="px-2 py-1.5">
                                     Speichern
                                   </Button>
-                                  <Button onClick={cancelEdit} variant="secondary" style={{ padding: '0.35rem 0.5rem' }}>
+                                  <Button onClick={cancelEdit} variant="secondary" size="sm" className="px-2 py-1.5">
                                     Abbrechen
                                   </Button>
                                 </div>
                               ) : (
-                                <Button onClick={() => startEdit(match)} variant="info" style={{ padding: '0.35rem 0.5rem' }}>
+                                <Button onClick={() => startEdit(match)} variant="info" size="sm" className="px-2 py-1.5">
                                   Bearbeiten
                                 </Button>
                               )}

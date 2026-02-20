@@ -10,6 +10,8 @@ from app.models.group import Group, GroupParticipant
 from app.models.match import GroupMatch, KnockoutMatch
 from app.models.location import Location, Spielfeld
 from app.models.access_request import AccessRequest
+from app.models.app_settings import AppSettings
+from app.models.logs import PageViewLog, LoginEventLog, ApiRequestLog, AdminActionLog
 from app.models.platform import (
     App, AppStatus,
     UserAppPermission,
@@ -27,6 +29,8 @@ __all__ = [
     "GroupMatch", "KnockoutMatch",
     "Location", "Spielfeld",
     "AccessRequest",
+    "AppSettings",
+    "PageViewLog", "LoginEventLog", "ApiRequestLog", "AdminActionLog",
     # Platform Models
     "App", "AppStatus",
     "UserAppPermission",

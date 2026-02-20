@@ -1,72 +1,37 @@
-import React from 'react';
-import { theme } from '../../theme/theme';
+import * as React from 'react'
+import { cva, type VariantProps } from 'class-variance-authority'
+import { cn } from '@/lib/utils'
 
-export type BadgeVariant = 'success' | 'warning' | 'error' | 'info' | 'default';
+const badgeVariants = cva(
+  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  {
+    variants: {
+      variant: {
+        default: 'border-transparent bg-primary text-primary-foreground hover:bg-primary/80',
+        secondary: 'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        destructive: 'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80',
+        outline: 'text-foreground',
+        // Custom variants
+        success: 'border-success/30 bg-success/20 text-success',
+        warning: 'border-warning/30 bg-warning/20 text-warning',
+        error: 'border-destructive/30 bg-destructive/20 text-destructive',
+        info: 'border-info/30 bg-info/20 text-info',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
+  }
+)
 
-export interface BadgeProps {
-  variant?: BadgeVariant;
-  children: React.ReactNode;
-  style?: React.CSSProperties;
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof badgeVariants> {}
+
+function Badge({ className, variant, ...props }: BadgeProps) {
+  return (
+    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+  )
 }
 
-export const Badge: React.FC<BadgeProps> = ({
-  variant = 'default',
-  children,
-  style,
-}) => {
-  const getVariantStyles = (): React.CSSProperties => {
-    const baseStyle: React.CSSProperties = {
-      display: 'inline-block',
-      padding: '0.25rem 0.75rem',
-      borderRadius: theme.borderRadius.badge,
-      fontSize: '0.875rem',
-      fontWeight: '600',
-    };
-
-    switch (variant) {
-      case 'success':
-        return {
-          ...baseStyle,
-          background: `${theme.colors.accent.success}20`,
-          color: theme.colors.accent.success,
-          border: `1px solid ${theme.colors.accent.success}`,
-        };
-      case 'warning':
-        return {
-          ...baseStyle,
-          background: `${theme.colors.accent.warning}20`,
-          color: theme.colors.accent.warning,
-          border: `1px solid ${theme.colors.accent.warning}`,
-        };
-      case 'error':
-        return {
-          ...baseStyle,
-          background: `${theme.colors.accent.error}20`,
-          color: theme.colors.accent.error,
-          border: `1px solid ${theme.colors.accent.error}`,
-        };
-      case 'info':
-        return {
-          ...baseStyle,
-          background: `${theme.colors.accent.info}20`,
-          color: theme.colors.accent.info,
-          border: `1px solid ${theme.colors.accent.info}`,
-        };
-      default:
-        return {
-          ...baseStyle,
-          background: theme.colors.background.accent,
-          color: theme.colors.text.secondary,
-          border: `1px solid ${theme.colors.border.standard}`,
-        };
-    }
-  };
-
-  return (
-    <span style={{ ...getVariantStyles(), ...style }}>
-      {children}
-    </span>
-  );
-};
-
-
+export { Badge, badgeVariants }

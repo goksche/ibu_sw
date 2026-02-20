@@ -1,70 +1,38 @@
-import React from 'react';
-import { theme } from '../../theme/theme';
+import * as React from 'react'
+import { cn } from '@/lib/utils'
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
-  error?: string;
+export interface InputProps
+  extends React.InputHTMLAttributes<HTMLInputElement> {
+  label?: string
+  error?: string
 }
 
-export const Input: React.FC<InputProps> = ({
-  label,
-  error,
-  style,
-  ...props
-}) => {
-  return (
-    <div style={{ marginBottom: '1rem' }}>
-      {label && (
-        <label
-          style={{
-            display: 'block',
-            marginBottom: theme.spacing.sm,
-            color: theme.colors.text.primary,
-            fontWeight: '500',
-          }}
-        >
-          {label}
-        </label>
-      )}
-      <input
-        {...props}
-        style={{
-          width: '100%',
-          padding: '0.75rem',
-          fontSize: '1rem',
-          background: theme.colors.background.secondary,
-          color: theme.colors.text.primary,
-          border: `1px solid ${error ? theme.colors.accent.error : theme.colors.border.standard}`,
-          borderRadius: theme.borderRadius.input,
-          outline: 'none',
-          transition: theme.transitions.default,
-          ...style,
-        }}
-        onFocus={(e) => {
-          e.target.style.borderColor = theme.colors.border.focus;
-          if (props.onFocus) {
-            props.onFocus(e);
-          }
-        }}
-        onBlur={(e) => {
-          e.target.style.borderColor = error ? theme.colors.accent.error : theme.colors.border.standard;
-          if (props.onBlur) {
-            props.onBlur(e);
-          }
-        }}
-      />
-      {error && (
-        <div
-          style={{
-            marginTop: theme.spacing.xs,
-            color: theme.colors.accent.error,
-            fontSize: '0.875rem',
-          }}
-        >
-          {error}
-        </div>
-      )}
-    </div>
-  );
-};
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, label, error, ...props }, ref) => {
+    return (
+      <div className="w-full">
+        {label && (
+          <label className="block text-sm font-medium text-foreground mb-1.5">
+            {label}
+          </label>
+        )}
+        <input
+          type={type}
+          className={cn(
+            'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+            error && 'border-destructive focus-visible:ring-destructive',
+            className
+          )}
+          ref={ref}
+          {...props}
+        />
+        {error && (
+          <p className="mt-1.5 text-sm text-destructive">{error}</p>
+        )}
+      </div>
+    )
+  }
+)
+Input.displayName = 'Input'
 
+export { Input }

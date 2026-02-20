@@ -28,8 +28,8 @@ export const tournamentService = {
   },
 
   // Delete tournament
-  async delete(id: number): Promise<void> {
-    await api.post(`/tournaments/${id}/delete`);
+  async delete(id: number, password?: string): Promise<void> {
+    await api.post(`/tournaments/${id}/delete`, password ? { password } : undefined);
   },
 
   // Generate groups

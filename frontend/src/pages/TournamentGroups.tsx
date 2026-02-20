@@ -6,6 +6,8 @@ import { participantService } from '../services/participantService';
 import { groupService, GroupWithParticipants } from '../services/groupService';
 import { Tournament, Participant } from '../types';
 import { useNavigate, useParams } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+import { Button, Card, Input, Select } from '@/components/ui';
 
 export default function TournamentGroups() {
   const navigate = useNavigate();
@@ -36,20 +38,35 @@ export default function TournamentGroups() {
   }, [tournamentId, navigate]);
 
   const loadData = async () => {
+    setLoading(true);
     try {
-      const [tournamentData, groupsData, participantsData] = await Promise.all([
-        tournamentService.getById(tournamentId),
-        groupService.getGroups(tournamentId),
-        participantService.getAll(),
-      ]);
+      const tournamentData = await tournamentService.getById(tournamentId);
       setTournament(tournamentData);
-      const fullGroups = await Promise.all(
-        groupsData.map(async (g) => await groupService.getGroup(g.id))
-      );
-      setGroups(fullGroups);
-      setParticipants(participantsData);
-    } catch (err) {
-      console.error('Failed to load data:', err);
+
+      let groupsData: GroupWithParticipants[] = [];
+      try {
+        const baseGroups = await groupService.getGroups(tournamentId);
+        try {
+          groupsData = await Promise.all(
+            baseGroups.map(async (g) => await groupService.getGroup(g.id))
+          );
+        } catch (err) {
+          console.error('Failed to load group details:', err);
+          groupsData = baseGroups as unknown as GroupWithParticipants[];
+        }
+      } catch (err) {
+        console.error('Failed to load groups:', err);
+        groupsData = [];
+      }
+      setGroups(groupsData);
+
+      try {
+        const participantsData = await participantService.getAll();
+        setParticipants(participantsData);
+      } catch (err) {
+        console.error('Failed to load participants:', err);
+        setParticipants([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -124,9 +141,10 @@ export default function TournamentGroups() {
       setGenerateResult(result);
       alert(`Gruppen erfolgreich generiert!\nGruppen: ${result.groups_created}\nTeilnehmer: ${result.participants_assigned}\nMethode: ${result.distribution_method}`);
       loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errObj = err as { response?: { data?: { detail?: string } } };
       console.error('Failed to generate groups:', err);
-      alert(err.response?.data?.detail || 'Fehler beim Generieren der Gruppen');
+      alert(errObj.response?.data?.detail || 'Fehler beim Generieren der Gruppen');
     } finally {
       setGenerating(false);
     }
@@ -144,127 +162,105 @@ export default function TournamentGroups() {
       const result = await tournamentService.generateRoundRobin(tournamentId);
       setGenerateResult(result);
       alert(`Round Robin erfolgreich generiert!\nGruppen: ${result.groups_processed}\nSpiele: ${result.matches_created}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errObj = err as { response?: { data?: { detail?: string } } };
       console.error('Failed to generate round robin:', err);
-      alert(err.response?.data?.detail || 'Fehler beim Generieren der Spiele');
+      alert(errObj.response?.data?.detail || 'Fehler beim Generieren der Spiele');
     } finally {
       setGenerating(false);
     }
   };
 
-  if (loading) return <div style={{ padding: '2rem' }}>Wird geladen...</div>;
-  if (!tournament) return <div style={{ padding: '2rem' }}>Turnier nicht gefunden.</div>;
+  if (loading) return <div className="p-8">Wird geladen...</div>;
+  if (!tournament) return <div className="p-8">Turnier nicht gefunden.</div>;
+
+  const assignedParticipantIds = new Set<number>();
+  groups.forEach((group) => {
+    group.participants?.forEach((participant) => {
+      assignedParticipantIds.add(participant.id);
+    });
+  });
+  const availableParticipants = participants.filter((participant) => !assignedParticipantIds.has(participant.id));
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
+    <div className="p-8 max-w-[1400px] mx-auto bg-background min-h-screen text-foreground">
+      <div className="flex justify-between mb-8">
         <div>
           <h1>{tournament.name}</h1>
-          <p style={{ color: '#666', marginTop: '0.5rem' }}>Gruppenverwaltung</p>
+          <p className="text-muted-foreground mt-2">Gruppenverwaltung</p>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button 
-            onClick={() => navigate(`/tournaments/${tournamentId}/matches`)}
-            style={{ padding: '0.5rem 1rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
+        <div className="flex gap-4">
+          <Button onClick={() => navigate(`/tournaments/${tournamentId}/matches`)}>
             Spiele
-          </button>
-          <button 
-            onClick={() => navigate('/dashboard')}
-            style={{ padding: '0.5rem 1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/dashboard')}>
             Zurück
-          </button>
+          </Button>
         </div>
       </div>
 
       {!tournament.has_group_phase && (
-        <div style={{ padding: '1rem', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '4px', marginBottom: '2rem' }}>
+        <div className="p-4 bg-warning/10 border border-warning rounded-lg mb-8">
           ⚠️ Dieses Turnier hat keine Gruppenphase konfiguriert.
         </div>
       )}
 
       {showCreateForm && (
-        <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '8px' }}>
+        <Card className="mb-8 p-6 bg-muted border border-border">
           <h2>Neue Gruppe erstellen</h2>
           <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Gruppennamen *
-              </label>
-              <input
+            <div className="mb-4">
+              <Input
+                label="Gruppennamen *"
                 type="text"
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
                 required
                 placeholder="z.B. Gruppe A"
-                style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
               />
             </div>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button
-                type="submit"
-                style={{ padding: '0.75rem 2rem', fontSize: '1rem', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-              >
-                Erstellen
-              </button>
-              <button
+            <div className="flex gap-4">
+              <Button type="submit">Erstellen</Button>
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={() => { setShowCreateForm(false); setFormData({ name: '' }); }}
-                style={{ padding: '0.75rem 2rem', fontSize: '1rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
               >
                 Abbrechen
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
+        </Card>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div className="flex justify-between items-center mb-8">
         <h2>Gruppen ({groups.length})</h2>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="flex gap-2">
           {!showCreateForm && tournament.has_group_phase && (
-            <button 
+            <Button
+              variant="warning"
               onClick={handleGenerateGroups}
               disabled={generating}
-              style={{ 
-                padding: '0.5rem 1rem', 
-                background: generating ? '#6c757d' : '#ff9800', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '4px', 
-                cursor: generating ? 'not-allowed' : 'pointer',
-                opacity: generating ? 0.6 : 1
-              }}
+              className={cn(generating && 'opacity-60 cursor-not-allowed')}
             >
               {generating ? '⏳ Generiere...' : '🎲 Gruppen generieren'}
-            </button>
+            </Button>
           )}
           {!showCreateForm && tournament.has_group_phase && groups.length > 0 && (
-            <button 
+            <Button
+              variant="info"
               onClick={handleGenerateRoundRobin}
               disabled={generating}
-              style={{ 
-                padding: '0.5rem 1rem', 
-                background: generating ? '#6c757d' : '#17a2b8', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '4px', 
-                cursor: generating ? 'not-allowed' : 'pointer',
-                opacity: generating ? 0.6 : 1
-              }}
+              className={cn(generating && 'opacity-60 cursor-not-allowed')}
             >
               {generating ? '⏳ Generiere...' : '⚽ Spielplan generieren'}
-            </button>
+            </Button>
           )}
           {!showCreateForm && tournament.has_group_phase && (
-            <button 
-              onClick={() => setShowCreateForm(true)}
-              style={{ padding: '0.5rem 1rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-            >
+            <Button onClick={() => setShowCreateForm(true)}>
               + Neue Gruppe
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -272,89 +268,94 @@ export default function TournamentGroups() {
       {groups.length === 0 ? (
         <p>Noch keine Gruppen vorhanden.</p>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '1.5rem' }}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(400px,1fr))] gap-6">
           {groups.map((group) => (
-            <div key={group.id} style={{ border: '1px solid #dee2e6', borderRadius: '8px', overflow: 'hidden' }}>
-              <div style={{ background: '#007bff', color: 'white', padding: '1rem', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Card key={group.id} className="border border-border overflow-hidden bg-card">
+              <div className="bg-info text-info-foreground p-4 font-semibold flex justify-between items-center">
                 <span>{group.name}</span>
-                <button
+                <Button
+                  variant="destructive"
+                  size="sm"
                   onClick={() => handleDeleteGroup(group.id)}
-                  style={{ padding: '0.25rem 0.5rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
                 >
                   Löschen
-                </button>
+                </Button>
               </div>
 
-              <div style={{ padding: '1rem' }}>
-                <h3 style={{ marginBottom: '0.5rem', fontSize: '0.875rem', color: '#666' }}>
+              <div className="p-4">
+                <h3 className="mb-2 text-sm text-muted-foreground">
                   Teilnehmer ({group.participants.length})
                 </h3>
 
                 {group.participants.length === 0 ? (
-                  <p style={{ color: '#999', fontSize: '0.875rem' }}>Keine Teilnehmer</p>
+                  <p className="text-muted-foreground text-sm">Keine Teilnehmer</p>
                 ) : (
-                  <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1rem 0' }}>
+                  <ul className="list-none p-0 m-0 mb-4">
                     {group.participants.map((participant) => (
-                      <li key={participant.id} style={{ padding: '0.5rem', background: '#f8f9fa', marginBottom: '0.5rem', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <li key={participant.id} className="p-2 bg-muted mb-2 rounded-md flex justify-between items-center">
                         <span>{participant.first_name} {participant.last_name}</span>
-                        <button
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="text-xs px-2 py-1"
                           onClick={() => handleRemoveParticipant(group.id, participant.id)}
-                          style={{ padding: '0.25rem 0.5rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}
                         >
                           ✕
-                        </button>
+                        </Button>
                       </li>
                     ))}
                   </ul>
                 )}
 
                 {showAddParticipantForm === group.id ? (
-                  <div style={{ padding: '0.75rem', background: '#fff3cd', borderRadius: '4px' }}>
-                    <select
+                  <div className="p-3 bg-warning/10 rounded-md">
+                    <Select
                       value={selectedParticipantId}
                       onChange={(e) => setSelectedParticipantId(e.target.value)}
-                      style={{ width: '100%', padding: '0.5rem', marginBottom: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                      className="mb-2"
                     >
                       <option value="">Teilnehmer auswählen...</option>
-                      {participants
-                        .filter(p => !group.participants.some(gp => gp.id === p.id))
-                        .map(p => (
+                      {availableParticipants.length === 0 ? (
+                        <option value="" disabled>Keine verfügbaren Teilnehmer</option>
+                      ) : (
+                        availableParticipants.map(p => (
                           <option key={p.id} value={p.id}>
                             {p.first_name} {p.last_name}
                           </option>
                         ))
-                      }
-                    </select>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button
+                      )}
+                    </Select>
+                    <div className="flex gap-2">
+                      <Button
+                        className="flex-1"
                         onClick={() => handleAddParticipant(group.id)}
                         disabled={!selectedParticipantId}
-                        style={{ flex: 1, padding: '0.5rem', background: selectedParticipantId ? '#28a745' : '#ccc', color: 'white', border: 'none', borderRadius: '4px', cursor: selectedParticipantId ? 'pointer' : 'not-allowed' }}
                       >
                         Hinzufügen
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="flex-1"
                         onClick={() => { setShowAddParticipantForm(null); setSelectedParticipantId(''); }}
-                        style={{ flex: 1, padding: '0.5rem', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                       >
                         Abbrechen
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : (
-                  <button
+                  <Button
+                    variant="info"
+                    className="w-full text-sm"
                     onClick={() => setShowAddParticipantForm(group.id)}
-                    style={{ width: '100%', padding: '0.5rem', background: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
                   >
                     + Teilnehmer hinzufügen
-                  </button>
+                  </Button>
                 )}
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
     </div>
   );
 }
-

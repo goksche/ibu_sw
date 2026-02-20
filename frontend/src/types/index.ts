@@ -127,6 +127,30 @@ export interface LeagueTournamentSummary {
   name: string;
   start_date?: string;
   end_date?: string | null;
+  status?: string | null;
+}
+
+export type LeagueMode = 'liga' | 'masters';
+export type LeagueStatus = 'geplant' | 'laufend' | 'abgeschlossen';
+export type TournamentModeForLeague = 'round_robin' | 'knockout' | 'combined';
+export type SeasonType = 'year' | 'dates' | 'season';
+
+export interface PlacementPointsTop {
+  rank: number;
+  points: number;
+}
+
+export interface PlacementPointsKORound {
+  label: string;
+  from_rank: number;
+  to_rank: number;
+  points: number;
+}
+
+export interface PlacementPointsSchema {
+  top: PlacementPointsTop[];
+  ko_rounds: PlacementPointsKORound[];
+  participation_points: number;
 }
 
 export interface League {
@@ -135,12 +159,45 @@ export interface League {
   description: string | null;
   scoring_schema: Record<string, number> | null;
   mode_presets: Record<string, any> | null;
+  status: LeagueStatus;
+  league_mode: LeagueMode;
+  tournament_mode: TournamentModeForLeague;
+  placement_points: PlacementPointsSchema | Record<string, any> | null;
+  masters_ko_count: number | null;
+  auto_tournament_count: number | null;
+  auto_tournament_mode: string | null;
+  auto_tournament_settings: Record<string, any> | null;
+  season_type: SeasonType;
+  season_year: string | null;
+  start_date: string | null;
+  end_date: string | null;
   participant_ids: number[];
   tournament_ids: number[];
   participants: LeagueParticipantSummary[];
   tournaments: LeagueTournamentSummary[];
   created_at: string;
   updated_at: string;
+}
+
+export interface LeagueStandingEntry {
+  rank: number;
+  participant_id: number;
+  first_name: string;
+  last_name: string;
+  tournaments_played: number;
+  total_points: number;
+  placements: Array<{
+    tournament_id: number;
+    tournament_name: string;
+    placement: number | null;
+    points: number;
+  }>;
+}
+
+export interface LeagueStandingsResponse {
+  league_id: number;
+  league_name: string;
+  entries: LeagueStandingEntry[];
 }
 
 export interface Participant {
@@ -231,3 +288,111 @@ export interface GroupWithParticipants extends Group {
   }>;
 }
 
+export type LiveTickerSlideType = 'groups' | 'qualification' | 'ko';
+
+export interface LiveTickerSlidesEnabled {
+  groups: boolean;
+  qualification: boolean;
+  ko: boolean;
+}
+
+export interface LiveTickerSettings {
+  slide_duration_sec: number;
+  refresh_interval_sec: number;
+  slide_order: LiveTickerSlideType[];
+  slides_enabled: LiveTickerSlidesEnabled;
+  only_running_group_matches: boolean;
+  show_spielfeld: boolean;
+  show_results: boolean;
+  mark_decision_matches: boolean;
+  max_groups_per_slide: 1 | 2;
+}
+
+export interface DashboardSettings {
+  default_sort: 'date' | 'name' | 'status';
+}
+
+export interface PlaceholderSettings {
+  language: string;
+  timezone: string;
+  layout: 'standard' | 'neon' | 'neon_yellow' | 'neon_cyan' | 'neon_blue';
+  font_family:
+    | 'Protest Guerilla'
+    | 'Source Sans 3'
+    | 'Helvetica'
+    | 'Baskerville'
+    | 'Times'
+    | 'Gotham'
+    | 'Bodoni'
+    | 'Didot'
+    | 'Rockwell'
+    | 'Franklin'
+    | 'Sabon'
+    | 'News Gothic'
+    | 'Elliot Six'
+    | 'Angelina'
+    | 'Mushroom 6'
+    | 'Rocksmith'
+    | 'The Doorman'
+    | 'Rampstar';
+}
+
+export interface AppSettings {
+  live_ticker: LiveTickerSettings;
+  dashboard: DashboardSettings;
+  placeholders: PlaceholderSettings;
+}
+
+export interface PageViewLog {
+  id: number;
+  user_id: number | null;
+  path: string;
+  query: string | null;
+  referrer: string | null;
+  title: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
+export interface LoginEventLog {
+  id: number;
+  user_id: number | null;
+  username: string | null;
+  email: string | null;
+  event_type: string;
+  success: boolean;
+  reason: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
+export interface ApiRequestLog {
+  id: number;
+  user_id: number | null;
+  method: string;
+  path: string;
+  status_code: number;
+  duration_ms: number;
+  ip: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
+export interface AdminActionLog {
+  id: number;
+  user_id: number | null;
+  method: string;
+  path: string;
+  status_code: number;
+  action: string;
+  ip: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
+export interface NginxLogResponse {
+  lines: string[];
+  tail: number;
+}

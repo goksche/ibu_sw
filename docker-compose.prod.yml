@@ -49,6 +49,7 @@ services:
       SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
     volumes:
       - backend_logs:/app/logs
+      - nginx_logs:/var/log/nginx:ro
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
     depends_on:
       postgres:
@@ -87,6 +88,7 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx_logs:/var/log/nginx
       - certbot_certs:/etc/letsencrypt
       - certbot_www:/var/www/certbot
     depends_on:
@@ -122,6 +124,8 @@ volumes:
   postgres_data:
     driver: local
   backend_logs:
+    driver: local
+  nginx_logs:
     driver: local
   certbot_certs:
     driver: local

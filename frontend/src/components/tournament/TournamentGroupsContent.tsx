@@ -6,8 +6,10 @@ import { locationService } from '../../services/locationService';
 import { participantService } from '../../services/participantService';
 import { groupService, GroupWithParticipants } from '../../services/groupService';
 import { Tournament, Participant } from '../../types';
-import { theme } from '../../theme/theme';
-import { Button } from '../ui';
+import { Button } from '../ui/Button';
+import { Card, CardContent } from '../ui/Card';
+import { Input } from '../ui/Input';
+import { Label } from '../ui/label';
 
 interface TournamentGroupsContentProps {
   tournamentId: number;
@@ -57,18 +59,32 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
   }, [tournament.location_id]);
 
   const loadData = async () => {
+    setLoading(true);
     try {
-      const [groupsData, participantsData] = await Promise.all([
-        groupService.getGroups(tournamentId),
-        participantService.getAll(),
-      ]);
-      const fullGroups = await Promise.all(
-        groupsData.map(async (g) => await groupService.getGroup(g.id))
-      );
-      setGroups(fullGroups);
-      setParticipants(participantsData);
-    } catch (err) {
-      console.error('Failed to load data:', err);
+      let groupsData: GroupWithParticipants[] = [];
+      try {
+        const baseGroups = await groupService.getGroups(tournamentId);
+        try {
+          groupsData = await Promise.all(
+            baseGroups.map(async (g) => await groupService.getGroup(g.id))
+          );
+        } catch (err) {
+          console.error('Failed to load group details:', err);
+          groupsData = baseGroups as unknown as GroupWithParticipants[];
+        }
+      } catch (err) {
+        console.error('Failed to load groups:', err);
+        groupsData = [];
+      }
+      setGroups(groupsData);
+
+      try {
+        const participantsData = await participantService.getAll();
+        setParticipants(participantsData);
+      } catch (err) {
+        console.error('Failed to load participants:', err);
+        setParticipants([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -171,29 +187,21 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
     }
   };
 
-  const handleGenerateKOBracket = async () => {
-    if (!confirm('Möchten Sie wirklich das KO-Bracket generieren? Bestehende KO-Spiele werden dabei gelöscht.')) {
-      return;
-    }
-
-    setGenerating(true);
-    setGenerateResult(null);
-
-    try {
-      const result = await tournamentService.generateKOBracket(tournamentId);
-      setGenerateResult(result);
-      alert(`KO-Bracket erfolgreich generiert!\nSpiele: ${result.matches_created}\nErste Runde: Top ${result.first_round_size}\nModus: ${result.mode === 'cross' ? 'Cross' : 'Draw'}`);
-    } catch (err: any) {
-      console.error('Failed to generate KO bracket:', err);
-      alert(err.response?.data?.detail || 'Fehler beim Generieren des KO-Brackets');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
   const spielfelderList = tournament.location_id
     ? Object.entries(spielfeldIdToName).map(([id, name]) => ({ id: Number(id), name }))
     : [];
+
+  const groupPhaseEnabled =
+    tournament.has_group_phase || tournament.mode === 'round_robin' || tournament.mode === 'combined';
+
+  const assignedParticipantIds = new Set<number>();
+  groups.forEach((group) => {
+    group.participants?.forEach((participant) => {
+      assignedParticipantIds.add(participant.id);
+    });
+  });
+
+  const availableParticipants = participants.filter((participant) => !assignedParticipantIds.has(participant.id));
 
   const handleGroupSpielfeldChange = async (groupId: number, spielfeldId: number | null) => {
     try {
@@ -205,81 +213,57 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
     }
   };
 
-  if (loading) return <div style={{ color: theme.colors.text.secondary }}>Wird geladen...</div>;
+  if (loading) return <div className="text-muted-foreground">Wird geladen...</div>;
 
   return (
     <div>
-      {!tournament.has_group_phase && (
-        <div style={{ 
-          padding: '1rem', 
-          background: `${theme.colors.accent.warning}20`, 
-          border: `1px solid ${theme.colors.accent.warning}`, 
-          borderRadius: theme.borderRadius.card, 
-          marginBottom: '2rem',
-          color: theme.colors.accent.warning
-        }}>
+      {!groupPhaseEnabled && (
+        <div className="p-4 bg-warning/20 border border-warning rounded-lg mb-8 text-warning">
           ⚠️ Dieses Turnier hat keine Gruppenphase konfiguriert.
         </div>
       )}
 
       {showCreateForm && (
-        <div style={{ 
-          marginBottom: '2rem', 
-          padding: '1.5rem', 
-          background: theme.colors.background.card, 
-          border: `1px solid ${theme.colors.border.standard}`, 
-          borderRadius: theme.borderRadius.card 
-        }}>
-          <h3 style={{ color: theme.colors.text.primary, marginTop: 0 }}>Neue Gruppe erstellen</h3>
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ 
-                display: 'block', 
-                marginBottom: '0.5rem', 
-                fontWeight: 'bold',
-                color: theme.colors.text.primary
-              }}>
-                Gruppennamen *
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                required
-                placeholder="z.B. Gruppe A"
-                style={{ 
-                  width: '100%', 
-                  padding: '0.5rem', 
-                  fontSize: '1rem', 
-                  border: `1px solid ${theme.colors.border.standard}`, 
-                  borderRadius: theme.borderRadius.input,
-                  background: theme.colors.background.secondary,
-                  color: theme.colors.text.primary
-                }}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <Button type="submit" variant="primary">
-                Erstellen
-              </Button>
-              <Button
-                type="button"
-                onClick={() => { setShowCreateForm(false); setFormData({ name: '' }); }}
-                variant="secondary"
-              >
-                Abbrechen
-              </Button>
-            </div>
-          </form>
-        </div>
+        <Card className="mb-8">
+          <CardContent className="p-6">
+            <h3 className="text-foreground mt-0 font-semibold">Neue Gruppe erstellen</h3>
+            <form onSubmit={handleSubmit}>
+              <div className="mb-4">
+                <Label className="block mb-2 font-bold text-foreground">
+                  Gruppennamen *
+                </Label>
+                <Input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  required
+                  placeholder="z.B. Gruppe A"
+                  className="w-full"
+                />
+              </div>
+              <div className="flex gap-4">
+                <Button type="submit" variant="primary">
+                  Erstellen
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => { setShowCreateForm(false); setFormData({ name: '' }); }}
+                  variant="secondary"
+                >
+                  Abbrechen
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h2 style={{ color: theme.colors.text.primary }}>Gruppen ({groups.length})</h2>
+      <div className="flex justify-between items-center mb-8">
+        <h2 className="text-foreground">Gruppen ({groups.length})</h2>
         {canEdit && (
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {!showCreateForm && tournament.has_group_phase && (
+          <div className="flex gap-2 flex-wrap">
+            {!showCreateForm && groupPhaseEnabled && (
               <Button 
                 onClick={handleGenerateGroups}
                 disabled={generating}
@@ -288,7 +272,7 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
                 {generating ? '⏳ Generiere...' : '🎲 Gruppen generieren'}
               </Button>
             )}
-            {!showCreateForm && tournament.has_group_phase && groups.length > 0 && (
+            {!showCreateForm && groupPhaseEnabled && groups.length > 0 && (
               <Button 
                 onClick={handleGenerateRoundRobin}
                 disabled={generating}
@@ -297,16 +281,7 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
                 {generating ? '⏳ Generiere...' : '⚽ Spielplan generieren'}
               </Button>
             )}
-            {!showCreateForm && tournament.has_ko_phase && groups.length > 0 && (
-              <Button 
-                onClick={handleGenerateKOBracket}
-                disabled={generating}
-                variant="warning"
-              >
-                {generating ? '⏳ Generiere...' : '🔄 KO-Bracket generieren/neu generieren'}
-              </Button>
-            )}
-            {!showCreateForm && tournament.has_group_phase && (
+            {!showCreateForm && groupPhaseEnabled && (
               <Button 
                 onClick={() => setShowCreateForm(true)}
                 variant="success"
@@ -319,48 +294,31 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
       </div>
 
       {groups.length === 0 ? (
-        <p style={{ color: theme.colors.text.secondary }}>Noch keine Gruppen vorhanden.</p>
+        <p className="text-muted-foreground">Noch keine Gruppen vorhanden.</p>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '1.5rem' }}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(400px,1fr))] gap-6">
           {groups.map((group) => (
-            <div key={group.id} style={{ 
-              border: `1px solid ${theme.colors.border.standard}`, 
-              borderRadius: theme.borderRadius.card, 
-              overflow: 'hidden',
-              background: theme.colors.background.card
-            }}>
-              <div style={{ 
-                background: theme.colors.accent.primary, 
-                color: theme.colors.background.primary, 
-                padding: '1rem', 
-                fontWeight: 'bold', 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center' 
-              }}>
+            <Card key={group.id} className="overflow-hidden">
+              <div className="bg-primary text-primary-foreground p-4 font-bold flex justify-between items-center">
                 <span>{group.name}</span>
                 {canEdit && (
                   <Button
                     onClick={() => handleDeleteGroup(group.id)}
                     variant="danger"
-                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}
+                    size="sm"
+                    className="px-2 py-1 text-sm"
                   >
                     Löschen
                   </Button>
                 )}
               </div>
 
-              <div style={{ padding: '1rem' }}>
+              <CardContent className="p-4">
                 {tournament.spielfeld_assignment_mode === 'group_fixed' && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ 
-                      display: 'block', 
-                      marginBottom: '0.35rem', 
-                      fontSize: '0.875rem', 
-                      color: theme.colors.text.secondary 
-                    }}>
+                  <div className="mb-4">
+                    <Label className="block mb-1.5 text-sm text-muted-foreground">
                       Spielfeld (Gruppe)
-                    </label>
+                    </Label>
                     {spielfelderList.length > 0 ? (
                       <select
                         value={group.spielfeld_id ?? ''}
@@ -368,14 +326,7 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
                           group.id,
                           e.target.value === '' ? null : Number(e.target.value)
                         )}
-                        style={{ 
-                          width: '100%', 
-                          padding: '0.5rem', 
-                          border: `1px solid ${theme.colors.border.standard}`, 
-                          borderRadius: theme.borderRadius.input,
-                          background: theme.colors.background.secondary,
-                          color: theme.colors.text.primary
-                        }}
+                        className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-foreground"
                       >
                         <option value="">– Kein Spielfeld –</option>
                         {spielfelderList.map((sf) => (
@@ -385,40 +336,28 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
                         ))}
                       </select>
                     ) : (
-                      <div style={{ color: theme.colors.text.disabled, fontSize: '0.875rem' }}>
+                      <div className="text-muted-foreground text-sm">
                         Keine Spielfelder verfügbar (Location fehlt oder hat keine Spielfelder)
                       </div>
                     )}
                   </div>
                 )}
-                <h3 style={{ 
-                  marginBottom: '0.5rem', 
-                  fontSize: '0.875rem', 
-                  color: theme.colors.text.secondary 
-                }}>
+                <h3 className="mb-2 text-sm text-muted-foreground">
                   Teilnehmer ({group.participants.length})
                 </h3>
 
                 {group.participants.length === 0 ? (
-                  <p style={{ color: theme.colors.text.disabled, fontSize: '0.875rem' }}>Keine Teilnehmer</p>
+                  <p className="text-muted-foreground text-sm">Keine Teilnehmer</p>
                 ) : (
-                  <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1rem 0' }}>
+                  <ul className="list-none p-0 m-0 mb-4">
                     {group.participants.map((participant) => (
-                      <li key={participant.id} style={{ 
-                        padding: '0.5rem', 
-                        background: theme.colors.background.secondary, 
-                        marginBottom: '0.5rem', 
-                        borderRadius: theme.borderRadius.card, 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center',
-                        border: `1px solid ${theme.colors.border.standard}`
-                      }}>
-                        <span style={{ color: theme.colors.text.primary }}>{participant.first_name} {participant.last_name}</span>
+                      <li key={participant.id} className="flex justify-between items-center p-2 bg-muted mb-2 rounded-lg border border-border">
+                        <span className="text-foreground">{participant.first_name} {participant.last_name}</span>
                         <Button
                           onClick={() => handleRemoveParticipant(group.id, participant.id)}
                           variant="danger"
-                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                          size="sm"
+                          className="px-2 py-1 text-xs"
                         >
                           ✕
                         </Button>
@@ -428,48 +367,36 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
                 )}
 
                 {showAddParticipantForm === group.id ? (
-                  <div style={{ 
-                    padding: '0.75rem', 
-                    background: `${theme.colors.accent.warning}20`, 
-                    borderRadius: theme.borderRadius.card,
-                    border: `1px solid ${theme.colors.accent.warning}`
-                  }}>
+                  <div className="p-3 bg-warning/20 rounded-lg border border-warning">
                     <select
                       value={selectedParticipantId}
                       onChange={(e) => setSelectedParticipantId(e.target.value)}
-                      style={{ 
-                        width: '100%', 
-                        padding: '0.5rem', 
-                        marginBottom: '0.5rem', 
-                        border: `1px solid ${theme.colors.border.standard}`, 
-                        borderRadius: theme.borderRadius.input,
-                        background: theme.colors.background.secondary,
-                        color: theme.colors.text.primary
-                      }}
+                      className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-foreground mb-2"
                     >
                       <option value="">Teilnehmer auswählen...</option>
-                      {participants
-                        .filter(p => !group.participants.some(gp => gp.id === p.id))
-                        .map(p => (
+                      {availableParticipants.length === 0 ? (
+                        <option value="" disabled>Keine verfügbaren Teilnehmer</option>
+                      ) : (
+                        availableParticipants.map(p => (
                           <option key={p.id} value={p.id}>
                             {p.first_name} {p.last_name}
                           </option>
                         ))
-                      }
+                      )}
                     </select>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <div className="flex gap-2">
                       <Button
                         onClick={() => handleAddParticipant(group.id)}
                         disabled={!selectedParticipantId}
                         variant="success"
-                        style={{ flex: 1, padding: '0.5rem' }}
+                        className="flex-1 p-2"
                       >
                         Hinzufügen
                       </Button>
                       <Button
                         onClick={() => { setShowAddParticipantForm(null); setSelectedParticipantId(''); }}
                         variant="secondary"
-                        style={{ flex: 1, padding: '0.5rem' }}
+                        className="flex-1 p-2"
                       >
                         Abbrechen
                       </Button>
@@ -479,18 +406,16 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
                   <Button
                     onClick={() => setShowAddParticipantForm(group.id)}
                     variant="info"
-                    fullWidth
-                    style={{ padding: '0.5rem', fontSize: '0.875rem' }}
+                    className="w-full p-2 text-sm"
                   >
                     + Teilnehmer hinzufügen
                   </Button>
                 ) : null}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
     </div>
   );
 }
-

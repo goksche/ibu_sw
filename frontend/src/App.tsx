@@ -1,6 +1,8 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Tournaments from './pages/Tournaments';
 import CreateTournament from './pages/CreateTournament';
 import Participants from './pages/Participants';
 import TournamentDetail from './pages/TournamentDetail';
@@ -15,11 +17,18 @@ import LocationDetail from './pages/LocationDetail';
 import CreateLocation from './pages/CreateLocation';
 import EditLocation from './pages/EditLocation';
 import UserManagement from './pages/Admin/UserManagement';
+import Logs from './pages/Admin/Logs';
+import Settings from './pages/Settings';
+import Layout from './components/Layout/Layout';
 import { useAuth } from './contexts/AuthContext';
+import { logsService } from './services/logsService';
+import { settingsService } from './services/settingsService';
+import { applyLayoutPreset } from './utils/layout';
+import { applyFontFamily, DEFAULT_FONT_FAMILY } from './utils/typography';
 
-// BASE_PATH für Plattform-Integration (für React Router basename)
+// BASE_PATH fuer Plattform-Integration (fuer React Router basename)
 function getBasePath(): string {
-  // Prüfe ob BASE_PATH bereits gesetzt ist (wird von der Plattform gesetzt)
+  // Pruefe ob BASE_PATH bereits gesetzt ist (wird von der Plattform gesetzt)
   if (typeof window !== 'undefined' && (window as any).BASE_PATH) {
     return (window as any).BASE_PATH;
   }
@@ -39,6 +48,41 @@ function getBasePath(): string {
 function AppRoutes() {
   const { isAuthenticated, loading, canEdit, isAdmin } = useAuth();
   const basename = getBasePath();
+
+  useEffect(() => {
+    if (loading) return;
+    if (!isAuthenticated) {
+      applyLayoutPreset('standard');
+      applyFontFamily(DEFAULT_FONT_FAMILY);
+      return;
+    }
+
+    const loadLayout = async () => {
+      try {
+        const data = await settingsService.getSettings();
+        applyLayoutPreset(data.placeholders?.layout);
+        applyFontFamily(data.placeholders?.font_family);
+      } catch {
+        applyLayoutPreset('standard');
+        applyFontFamily(DEFAULT_FONT_FAMILY);
+      }
+    };
+
+    loadLayout();
+  }, [isAuthenticated, loading]);
+
+  const RouteTracker = () => {
+    const location = useLocation();
+    useEffect(() => {
+      logsService.trackPageView({
+        path: location.pathname,
+        query: location.search || null,
+        referrer: document.referrer || null,
+        title: document.title || null
+      });
+    }, [location.pathname, location.search]);
+    return null;
+  };
 
   // Show loading state while checking authentication
   if (loading) {
@@ -62,7 +106,9 @@ function AppRoutes() {
         v7_relativeSplatPath: true
       }}
     >
+      <RouteTracker />
       <Routes>
+        {/* Fullscreen routes (no sidebar) */}
         <Route 
           path="/login" 
           element={
@@ -70,126 +116,6 @@ function AppRoutes() {
               <Navigate to="/dashboard" replace />
             ) : (
               <Login />
-            )
-          } 
-        />
-        <Route 
-          path="/dashboard" 
-          element={
-            isAuthenticated ? (
-              <Dashboard />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          } 
-        />
-        <Route 
-          path="/tournaments/create" 
-          element={
-            isAuthenticated && canEdit ? (
-              <CreateTournament />
-            ) : isAuthenticated ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          } 
-        />
-        <Route
-          path="/leagues"
-          element={
-            isAuthenticated ? (
-              <Leagues />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-        <Route
-          path="/leagues/create"
-          element={
-            isAuthenticated && canEdit ? (
-              <CreateLeague />
-            ) : isAuthenticated ? (
-              <Navigate to="/leagues" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-        <Route
-          path="/leagues/:id"
-          element={
-            isAuthenticated ? (
-              <LeagueDetail />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-        <Route
-          path="/leagues/:id/edit"
-          element={
-            isAuthenticated && canEdit ? (
-              <EditLeague />
-            ) : isAuthenticated ? (
-              <Navigate to="/leagues" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-        <Route
-          path="/locations"
-          element={
-            isAuthenticated ? (
-              <Locations />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-        <Route
-          path="/locations/create"
-          element={
-            isAuthenticated && canEdit ? (
-              <CreateLocation />
-            ) : isAuthenticated ? (
-              <Navigate to="/locations" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-        <Route
-          path="/locations/:id"
-          element={
-            isAuthenticated ? (
-              <LocationDetail />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-        <Route
-          path="/locations/:id/edit"
-          element={
-            isAuthenticated && canEdit ? (
-              <EditLocation />
-            ) : isAuthenticated ? (
-              <Navigate to="/locations" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-        <Route 
-          path="/participants" 
-          element={
-            isAuthenticated ? (
-              <Participants />
-            ) : (
-              <Navigate to="/login" replace />
             )
           } 
         />
@@ -203,43 +129,62 @@ function AppRoutes() {
             )
           }
         />
-        <Route 
-          path="/tournaments/:id" 
+
+        {/* All other routes: wrapped in Layout with Sidebar */}
+        <Route
+          path="/*"
           element={
             isAuthenticated ? (
-              <TournamentDetail />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          } 
-        />
-        <Route 
-          path="/tournaments/:id/edit" 
-          element={
-            isAuthenticated && canEdit ? (
-              <EditTournament />
-            ) : isAuthenticated ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          } 
-        />
-        <Route
-          path="/admin/users"
-          element={
-            isAuthenticated && isAdmin ? (
-              <UserManagement />
-            ) : (
-              <Navigate to="/dashboard" replace />
-            )
-          }
-        />
-        <Route
-          path="/"
-          element={
-            isAuthenticated ? (
-              <Navigate to="/dashboard" replace />
+              <Layout>
+                <Routes>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/tournaments" element={<Tournaments />} />
+                  <Route 
+                    path="/tournaments/create" 
+                    element={canEdit ? <CreateTournament /> : <Navigate to="/dashboard" replace />} 
+                  />
+                  <Route path="/tournaments/:id" element={<TournamentDetail />} />
+                  <Route 
+                    path="/tournaments/:id/edit" 
+                    element={canEdit ? <EditTournament /> : <Navigate to="/dashboard" replace />} 
+                  />
+                  <Route path="/leagues" element={<Leagues />} />
+                  <Route 
+                    path="/leagues/create" 
+                    element={canEdit ? <CreateLeague /> : <Navigate to="/leagues" replace />} 
+                  />
+                  <Route path="/leagues/:id" element={<LeagueDetail />} />
+                  <Route 
+                    path="/leagues/:id/edit" 
+                    element={canEdit ? <EditLeague /> : <Navigate to="/leagues" replace />} 
+                  />
+                  <Route path="/locations" element={<Locations />} />
+                  <Route 
+                    path="/locations/create" 
+                    element={canEdit ? <CreateLocation /> : <Navigate to="/locations" replace />} 
+                  />
+                  <Route path="/locations/:id" element={<LocationDetail />} />
+                  <Route 
+                    path="/locations/:id/edit" 
+                    element={canEdit ? <EditLocation /> : <Navigate to="/locations" replace />} 
+                  />
+                  <Route path="/participants" element={<Participants />} />
+                  <Route
+                    path="/admin/users"
+                    element={isAdmin ? <UserManagement /> : <Navigate to="/dashboard" replace />}
+                  />
+                  <Route
+                    path="/admin/logs"
+                    element={isAdmin ? <Logs /> : <Navigate to="/dashboard" replace />}
+                  />
+                  <Route
+                    path="/settings"
+                    element={isAdmin ? <Settings /> : <Navigate to="/dashboard" replace />}
+                  />
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                </Routes>
+              </Layout>
             ) : (
               <Navigate to="/login" replace />
             )
@@ -255,4 +200,3 @@ function App() {
 }
 
 export default App;
-

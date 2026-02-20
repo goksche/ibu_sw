@@ -7,9 +7,10 @@ import { participantService } from '../services/participantService';
 import { qualificationService } from '../services/qualificationService';
 import { locationService } from '../services/locationService';
 import { Participant, LeagueVariant, KOStartRound, QualificationPlan, Location, KOStructure } from '../types';
-import { Button, Card, Input, Textarea } from '../components/ui';
-import { theme } from '../theme/theme';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Textarea } from '../components/ui';
+import { cn } from '@/lib/utils';
 import { ArrowLeft } from 'phosphor-react';
+import TournamentModeVisualization from '../components/tournament/TournamentModeVisualization';
 
 export default function EditTournament() {
   type KODrawModeValue = 'random_first_round' | 'random_each_round' | 'predefined_slots' | 'cross' | 'draw';
@@ -365,13 +366,27 @@ export default function EditTournament() {
   const tieBreakingRuleLabels: Record<string, string> = {
     'wins': 'Siege',
     'diff': 'Differenz',
+    'goals_for': 'LF',
     'direct_encounter': 'Direktbegegnung',
     'decision_match': 'Entscheidungsspiel'
   };
 
+  const koStartRoundLabels: Record<string, string> = {
+    round_of_32: 'Runde der 32',
+    round_of_16: 'Runde der 16',
+    quarterfinal: 'Viertelfinale',
+    semifinal: 'Halbfinale',
+    final: 'Finale'
+  };
+
+  const groupDistributionLabels: Record<string, string> = {
+    random: 'Zufällig',
+    seeded: 'Gesetzt'
+  };
+
   // Verfügbare Gleichstandsregeln (abhängig von Wertungssystem)
   const getAvailableTieBreakingRules = () => {
-    return ['wins', 'diff', 'direct_encounter', 'decision_match'];
+    return ['wins', 'diff', 'goals_for', 'direct_encounter', 'decision_match'];
   };
 
   // Hilfsfunktionen für Reihenfolge der Gleichstandsregeln
@@ -577,45 +592,86 @@ export default function EditTournament() {
     return false;
   };
 
+  const getKoStructureLabel = (value: string | null) => {
+    if (!value) return null;
+    const found = koStructureOptions.find(o => o.value === value);
+    return found ? found.label : value;
+  };
+
+  const getKoDrawMethodLabel = (value: string | null) => {
+    if (!value) return null;
+    const list = formData.mode === 'combined' ? combinedDrawMethods : koOnlyDrawMethods;
+    const found = list.find(o => o.value === value);
+    return found ? found.label : value;
+  };
+
+  const tieRulesLabel = (formData.tie_breaking_rules || [])
+    .map((rule) => tieBreakingRuleLabels[rule] || rule)
+    .join(' > ');
+
+  const groupSettingsSummary: string[] = [];
+  if (formData.has_group_phase) {
+    if (formData.groups_count) {
+      groupSettingsSummary.push(`Gruppen: ${formData.groups_count}`);
+    }
+    if (formData.participants_per_group) {
+      groupSettingsSummary.push(`Teilnehmer pro Gruppe: ${formData.participants_per_group}`);
+    }
+    if (formData.group_distribution) {
+      const label = groupDistributionLabels[formData.group_distribution] || formData.group_distribution;
+      groupSettingsSummary.push(`Verteilung: ${label}`);
+    }
+    if (formData.league_scoring_system) {
+      groupSettingsSummary.push(`Wertung: ${formData.league_scoring_system === 'points' ? 'Punkte' : 'Differenz'}`);
+    }
+    if (tieRulesLabel) {
+      groupSettingsSummary.push(`Gleichstandsregeln: ${tieRulesLabel}`);
+    }
+  }
+
+  const koSettingsSummary: string[] = [];
+  if (formData.has_ko_phase) {
+    if (formData.ko_start_round) {
+      const label = koStartRoundLabels[formData.ko_start_round] || formData.ko_start_round;
+      koSettingsSummary.push(`KO-Start: ${label}`);
+    } else if (formData.ko_first_round_size) {
+      koSettingsSummary.push(`KO-Startgroesse: ${formData.ko_first_round_size}`);
+    }
+    const structureLabel = getKoStructureLabel(formData.ko_structure);
+    if (structureLabel) {
+      koSettingsSummary.push(`Struktur: ${structureLabel}`);
+    }
+    const drawLabel = getKoDrawMethodLabel(formData.ko_draw_method);
+    if (drawLabel) {
+      koSettingsSummary.push(`Auslosung: ${drawLabel}`);
+    }
+  }
 
   return (
-    <div style={{ padding: '2rem', display: 'flex', gap: '2rem', maxWidth: '1400px', margin: '0 auto', background: theme.colors.background.primary, minHeight: '100vh' }}>
+    <div className="p-8 flex gap-8 max-w-[1400px] mx-auto bg-background min-h-screen">
       {/* Linke Seite - Formular */}
-      <div style={{ flex: 1 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem', alignItems: 'center' }}>
-          <h1 style={{ margin: 0, color: theme.colors.text.primary }}>Turnier bearbeiten</h1>
+      <div className="flex-1">
+        <div className="flex justify-between mb-8 items-center">
+          <h1 className="m-0 text-foreground">Turnier bearbeiten</h1>
           <Button variant="secondary" onClick={() => navigate(`/tournaments/${tournamentId}`)}>
-            <ArrowLeft size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+            <ArrowLeft size={20} className="mr-2 align-middle" />
             Zurück
           </Button>
         </div>
 
         {loadingTournament && (
-          <div style={{ padding: '2rem', textAlign: 'center', color: theme.colors.text.secondary }}>Turnier wird geladen...</div>
+          <div className="p-8 text-center text-muted-foreground">Turnier wird geladen...</div>
         )}
 
         {error && (
-          <div style={{ 
-            padding: '1rem', 
-            background: `${theme.colors.accent.error}20`, 
-            color: theme.colors.accent.error, 
-            borderRadius: theme.borderRadius.card, 
-            marginBottom: '1rem',
-            border: `1px solid ${theme.colors.accent.error}`
-          }}>
+          <div className="p-4 bg-destructive/20 text-destructive rounded-lg mb-4 border border-destructive">
             {error}
           </div>
         )}
 
         {!loadingTournament && (
-          <div style={{ 
-            marginBottom: '1.5rem', 
-            padding: '1rem', 
-            background: `${theme.colors.accent.warning}20`, 
-            borderRadius: theme.borderRadius.card, 
-            border: `1px solid ${theme.colors.accent.warning}` 
-          }}>
-            <p style={{ margin: 0, fontSize: '0.875rem', color: theme.colors.accent.warning }}>
+          <div className="mb-6 p-4 bg-warning/20 rounded-lg border border-warning">
+            <p className="m-0 text-sm text-warning">
               <strong>Hinweis:</strong> Wenn Sie Konfigurationseinstellungen ändern (z.B. Modus, Anzahl Gruppen, KO-Struktur), werden alle vorhandenen Gruppen und Spiele gelöscht. 
               Sie müssen diese nach dem Speichern neu generieren.
             </p>
@@ -623,7 +679,8 @@ export default function EditTournament() {
         )}
 
         {!loadingTournament && (
-        <Card style={{ padding: '2rem' }}>
+        <Card>
+          <CardContent className="p-8">
         <form onSubmit={handleSubmit}>
           <Input
             label="Turnier-Name *"
@@ -642,7 +699,7 @@ export default function EditTournament() {
             rows={3}
           />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+          <div className="grid grid-cols-2 gap-4 mb-6">
             <Input
               label="Startdatum *"
               type="date"
@@ -660,23 +717,15 @@ export default function EditTournament() {
             />
           </div>
 
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', marginBottom: theme.spacing.sm, fontWeight: 'bold', color: theme.colors.text.primary }}>
+          <div className="mb-6">
+            <label className="block mb-2 font-bold text-foreground">
               Spielort (optional)
             </label>
             <select
               name="location_id"
               value={formData.location_id ?? ''}
               onChange={(e) => setFormData(prev => ({ ...prev, location_id: e.target.value === '' ? null : Number(e.target.value) }))}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                fontSize: '1rem',
-                background: theme.colors.background.secondary,
-                color: theme.colors.text.primary,
-                border: `1px solid ${theme.colors.border.standard}`,
-                borderRadius: theme.borderRadius.input,
-              }}
+              className="w-full p-3 text-base bg-muted text-foreground border border-border rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <option value="">— Kein Spielort —</option>
               {(locations ?? []).map(loc => (
@@ -684,23 +733,15 @@ export default function EditTournament() {
               ))}
             </select>
             {formData.location_id != null && (formData.mode === 'round_robin' || formData.mode === 'combined') && (
-              <div style={{ marginTop: '1rem' }}>
-                <label style={{ display: 'block', marginBottom: theme.spacing.sm, fontWeight: 'bold', color: theme.colors.text.primary }}>
+              <div className="mt-4">
+                <label className="block mb-2 font-bold text-foreground">
                   Spielfeld-Zuweisung (Gruppenphase)
                 </label>
                 <select
                   name="spielfeld_assignment_mode"
                   value={formData.spielfeld_assignment_mode}
                   onChange={(e) => setFormData(prev => ({ ...prev, spielfeld_assignment_mode: e.target.value as 'random' | 'group_fixed' | 'group_random' }))}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    fontSize: '1rem',
-                    background: theme.colors.background.secondary,
-                    color: theme.colors.text.primary,
-                    border: `1px solid ${theme.colors.border.standard}`,
-                    borderRadius: theme.borderRadius.input,
-                  }}
+                  className="w-full p-3 text-base bg-muted text-foreground border border-border rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <option value="random">Gesamtspielplan (fair) – rundenbasiert über alle Gruppen</option>
                   <option value="group_fixed">Gruppen Zuweisung Fix – pro Gruppe ein Spielfeld (im Gruppen-Tab festlegen)</option>
@@ -710,8 +751,8 @@ export default function EditTournament() {
             )}
           </div>
 
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', marginBottom: theme.spacing.sm, fontWeight: 'bold', color: theme.colors.text.primary }}>
+          <div className="mb-6">
+            <label className="block mb-2 font-bold text-foreground">
               Turnier-Modus *
             </label>
             <select
@@ -719,93 +760,68 @@ export default function EditTournament() {
               value={formData.mode}
               onChange={handleChange}
               required
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                fontSize: '1rem',
-                background: theme.colors.background.secondary,
-                color: theme.colors.text.primary,
-                border: `1px solid ${theme.colors.border.standard}`,
-                borderRadius: theme.borderRadius.input,
-                outline: 'none',
-                transition: theme.transitions.default,
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = theme.colors.border.focus;
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = theme.colors.border.standard;
-              }}
+              className="w-full p-3 text-base bg-muted text-foreground border border-border rounded-md outline-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <option value="round_robin" style={{ background: theme.colors.background.secondary, color: theme.colors.text.primary }}>Liga</option>
-              <option value="knockout" style={{ background: theme.colors.background.secondary, color: theme.colors.text.primary }}>KO-Phase</option>
-              <option value="combined" style={{ background: theme.colors.background.secondary, color: theme.colors.text.primary }}>Kombiniert</option>
+              <option value="round_robin">Liga</option>
+              <option value="knockout">KO-Phase</option>
+              <option value="combined">Kombiniert</option>
             </select>
           </div>
 
         {(formData.mode === 'round_robin' || formData.mode === 'combined') && (
-          <div style={{ marginBottom: '1rem', marginLeft: '0' }}>
-            <h3 style={{ marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>Gruppenphase</h3>
-            <div style={{ marginLeft: '2rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', color: theme.colors.text.primary }}>
-                Anzahl Gruppen
-              </label>
-            <input
-              type="number"
-              name="groups_count"
-              value={formData.groups_count}
-              onChange={handleChange}
-              min={1}
-              style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.secondary, color: theme.colors.text.primary }}
-            />
+          <div className="mb-4 ml-0">
+            <h3 className="mb-2 font-bold text-foreground">Gruppenphase</h3>
+            <div className="ml-8">
+              <Input
+                label="Anzahl Gruppen"
+                type="number"
+                name="groups_count"
+                value={formData.groups_count}
+                onChange={handleChange}
+                min={1}
+              />
             
             {formData.groups_count > 1 && (
               <>
-                <label style={{ display: 'block', marginTop: '1rem', marginBottom: '0.5rem', color: theme.colors.text.primary }}>
+                <label className="block mt-4 mb-2 text-foreground">
                   Auslosungsart
                 </label>
                 <select
                   name="group_distribution"
                   value={formData.group_distribution}
                   onChange={handleChange}
-                  style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.secondary, color: theme.colors.text.primary }}
+                  className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="random">Zufällig (Random)</option>
                   <option value="seeded">Gesetzt (Seeded)</option>
                 </select>
 
                 {formData.group_distribution === 'seeded' && (
-                  <div style={{ marginTop: '1rem', padding: '1rem', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+                  <div className="mt-4 p-4 bg-card rounded-lg border border-border">
+                    <label className="block mb-2 font-bold text-foreground">
                       Gesetzte Spieler auswählen *
                     </label>
-                    <p style={{ marginBottom: '0.75rem', fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+                    <p className="mb-3 text-sm text-muted-foreground">
                       Wählen Sie die Spieler aus, die vor der Auslosung in Gruppen eingeteilt werden sollen. Die anderen Spieler werden dann zufällig zugeteilt.
                     </p>
                     {loadingParticipants ? (
-                      <div style={{ padding: '1rem', textAlign: 'center', color: theme.colors.text.secondary }}>Lade Teilnehmer...</div>
+                      <div className="p-4 text-center text-muted-foreground">Lade Teilnehmer...</div>
                     ) : allParticipants.length === 0 ? (
-                      <div style={{ padding: '1rem', textAlign: 'center', color: theme.colors.text.secondary }}>
+                      <div className="p-4 text-center text-muted-foreground">
                         Keine Teilnehmer verfügbar. Bitte erstellen Sie zuerst Teilnehmer in der Teilnehmer-Verwaltung.
                       </div>
                     ) : (
                       <>
-                        <div style={{ maxHeight: '300px', overflowY: 'auto', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.card, padding: '0.5rem' }}>
+                        <div className="max-h-[300px] overflow-y-auto border border-border rounded-lg p-2">
                           {allParticipants.map(participant => {
                             const isSelected = formData.seeded_participant_ids.includes(participant.id);
                             return (
                               <label
                                 key={participant.id}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '0.5rem',
-                                  padding: '0.5rem',
-                                  cursor: 'pointer',
-                                  borderRadius: theme.borderRadius.card,
-                                  background: isSelected ? `${theme.colors.accent.primary}20` : 'transparent',
-                                  marginBottom: '0.25rem'
-                                }}
+                                className={cn(
+                                  "flex items-center gap-2 p-2 cursor-pointer rounded-lg mb-1",
+                                  isSelected && "bg-primary/10"
+                                )}
                               >
                                 <input
                                   type="checkbox"
@@ -824,7 +840,7 @@ export default function EditTournament() {
                                     }
                                   }}
                                 />
-                                <span style={{ color: theme.colors.text.primary }}>
+                                <span className="text-foreground">
                                   {participant.first_name} {participant.last_name}
                                   {participant.club && ` (${participant.club})`}
                                   {participant.nickname && ` - "${participant.nickname}"`}
@@ -833,7 +849,10 @@ export default function EditTournament() {
                             );
                           })}
                         </div>
-                        <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: formData.seeded_participant_ids.length === 0 ? theme.colors.accent.error : theme.colors.text.secondary }}>
+                        <p className={cn(
+                          "mt-2 text-sm",
+                          formData.seeded_participant_ids.length === 0 ? "text-destructive" : "text-muted-foreground"
+                        )}>
                           {formData.seeded_participant_ids.length === 0 
                             ? 'Bitte wählen Sie mindestens einen gesetzten Spieler aus.'
                             : `${formData.seeded_participant_ids.length} Spieler ausgewählt.`
@@ -846,8 +865,8 @@ export default function EditTournament() {
               </>
             )}
 
-            <div style={{ marginTop: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+            <div className="mt-6">
+              <label className="block mb-2 font-bold text-foreground">
                 Ligatabelle Wertung *
               </label>
               <select
@@ -855,14 +874,14 @@ export default function EditTournament() {
                 value={formData.league_scoring_system || ''}
                 onChange={handleChange}
                 required
-                style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.secondary, color: theme.colors.text.primary }}
+                className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="">-- Bitte wählen --</option>
                 <option value="points">Punkte</option>
                 <option value="difference">Differenz</option>
               </select>
               {formData.league_scoring_system === 'points' && (
-                <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                <p className="mt-2 text-sm text-muted-foreground italic">
                   Standard-Punkteverteilung: Sieg 3, Remis 1, Niederlage 0.
                 </p>
               )}
@@ -870,21 +889,21 @@ export default function EditTournament() {
 
             {formData.mode === 'round_robin' && (
               <>
-                <div style={{ marginTop: '1.5rem' }}>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                <div className="mt-6">
+                  <label className="block mb-2 font-bold text-foreground">
                     Liga-Variante
                   </label>
                   <select
                     name="league_variant"
                     value={formData.league_variant}
                     onChange={handleChange}
-                    style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.secondary, color: theme.colors.text.primary }}
+                    className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="classic">Klassische Liga (Round Robin)</option>
                     <option value="double">Doppelte Liga</option>
                     <option value="multiple">Mehrfache Liga</option>
                   </select>
-                  <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                  <p className="mt-2 text-sm text-muted-foreground italic">
                     {formData.league_variant === 'classic' && 'Jeder gegen jeden einmal (Standard Round Robin)'}
                     {formData.league_variant === 'double' && 'Jeder gegen jeden zweimal (2x Round Robin)'}
                     {formData.league_variant === 'multiple' && 'Jeder gegen jeden mehrfach (konfigurierbarer Multiplikator)'}
@@ -892,8 +911,8 @@ export default function EditTournament() {
                 </div>
 
                 {formData.league_variant === 'multiple' && (
-                  <div style={{ marginTop: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  <div className="mt-4">
+                    <label className="block mb-2 font-bold text-foreground">
                       Anzahl Runden (Multiplikator) *
                     </label>
                     <input
@@ -904,9 +923,9 @@ export default function EditTournament() {
                       min={2}
                       max={10}
                       required
-                      style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.secondary, color: theme.colors.text.primary }}
+                      className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     />
-                    <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                    <p className="mt-2 text-sm text-muted-foreground italic">
                       Wie oft die komplette Round-Robin-Runde wiederholt wird (min: 2, max: 10)
                     </p>
                   </div>
@@ -914,15 +933,15 @@ export default function EditTournament() {
               </>
             )}
 
-            <div style={{ marginTop: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+            <div className="mt-4">
+              <label className="block mb-2 font-bold text-foreground">
                 Gleichstandsregeln *
               </label>
               
               {/* Verfügbare Regeln (Checkboxen mit exklusiver Logik für Entscheidungsspiel) */}
-              <div style={{ marginBottom: '1rem', padding: '0.75rem', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: 'bold' }}>Verfügbare Regeln:</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div className="mb-4 p-3 bg-card rounded-lg border border-border">
+                <p className="m-0 mb-2 text-sm font-bold">Verfügbare Regeln:</p>
+                <div className="flex flex-col gap-2">
                   {getAvailableTieBreakingRules().map(rule => {
                     const isDecisionMatch = rule === 'decision_match';
                     const hasDecisionMatch = formData.tie_breaking_rules.includes('decision_match');
@@ -933,13 +952,10 @@ export default function EditTournament() {
                     return (
                       <label 
                         key={rule} 
-                        style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '0.5rem', 
-                          cursor: isDisabled ? 'not-allowed' : 'pointer',
-                          opacity: isDisabled ? 0.5 : 1
-                        }}
+                        className={cn(
+                          "flex items-center gap-2",
+                          isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                        )}
                       >
                         <input
                           type="checkbox"
@@ -974,7 +990,7 @@ export default function EditTournament() {
                   })}
                 </div>
                 {formData.tie_breaking_rules.includes('decision_match') && (
-                  <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                  <p className="mt-2 text-xs text-muted-foreground italic">
                     Bei Gleichstand wird ein Entscheidungsspiel generiert.
                   </p>
                 )}
@@ -982,29 +998,24 @@ export default function EditTournament() {
 
               {/* Ausgewählte Regeln mit Reihenfolge (nur wenn kein Entscheidungsspiel) */}
               {formData.tie_breaking_rules.length > 0 && !formData.tie_breaking_rules.includes('decision_match') && (
-                <div style={{ padding: '0.75rem', background: theme.colors.background.secondary, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-                  <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: 'bold' }}>Reihenfolge (1. = höchste Priorität):</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div className="p-3 bg-muted rounded-lg border border-border">
+                  <p className="m-0 mb-2 text-sm font-bold text-foreground">Reihenfolge (1. = höchste Priorität):</p>
+                  <div className="flex flex-col gap-2">
                     {formData.tie_breaking_rules.map((rule, index) => (
-                      <div key={`${rule}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-                        <span style={{ minWidth: '2rem', fontWeight: 'bold', color: theme.colors.text.secondary }}>{index + 1}.</span>
-                        <span style={{ flex: 1 }}>{tieBreakingRuleLabels[rule]}</span>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <div key={`${rule}-${index}`} className="flex items-center gap-2 p-2 bg-card rounded-lg border border-border">
+                        <span className="min-w-[2rem] font-bold text-muted-foreground">{index + 1}.</span>
+                        <span className="flex-1">{tieBreakingRuleLabels[rule]}</span>
+                        <div className="flex flex-col gap-1">
                           <button
                             type="button"
                             onClick={() => moveTieBreakingRule(index, 'up')}
                             disabled={index === 0}
-                            style={{
-                              width: '24px',
-                              height: '20px',
-                              padding: 0,
-                              fontSize: '0.75rem',
-                              background: index === 0 ? theme.colors.text.disabled : theme.colors.accent.success,
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '2px',
-                              cursor: index === 0 ? 'not-allowed' : 'pointer'
-                            }}
+                            className={cn(
+                              "w-6 h-5 p-0 text-xs border-none rounded-sm",
+                              index === 0 
+                                ? "bg-muted-foreground/50 text-white cursor-not-allowed" 
+                                : "bg-success text-white cursor-pointer hover:bg-success/90"
+                            )}
                             title="Nach oben"
                           >
                             ▲
@@ -1013,17 +1024,12 @@ export default function EditTournament() {
                             type="button"
                             onClick={() => moveTieBreakingRule(index, 'down')}
                             disabled={index === formData.tie_breaking_rules.length - 1}
-                            style={{
-                              width: '24px',
-                              height: '20px',
-                              padding: 0,
-                              fontSize: '0.75rem',
-                              background: index === formData.tie_breaking_rules.length - 1 ? theme.colors.text.disabled : theme.colors.accent.success,
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '2px',
-                              cursor: index === formData.tie_breaking_rules.length - 1 ? 'not-allowed' : 'pointer'
-                            }}
+                            className={cn(
+                              "w-6 h-5 p-0 text-xs border-none rounded-sm",
+                              index === formData.tie_breaking_rules.length - 1 
+                                ? "bg-muted-foreground/50 text-white cursor-not-allowed" 
+                                : "bg-success text-white cursor-pointer hover:bg-success/90"
+                            )}
                             title="Nach unten"
                           >
                             ▼
@@ -1040,19 +1046,19 @@ export default function EditTournament() {
         )}
 
         {(formData.mode === 'knockout' || formData.mode === 'combined') && (
-          <div style={{ marginBottom: '1rem', marginLeft: '0', padding: '1rem', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-            <h3 style={{ marginBottom: '0.5rem', fontWeight: 'bold', color: theme.colors.text.primary }}>
+          <div className="mb-4 ml-0 p-4 bg-card rounded-lg border border-border">
+            <h3 className="mb-2 font-bold text-foreground">
               {formData.mode === 'knockout' ? 'KO-Phase (Reine Ausscheidungsrunde)' : 'KO-Phase (Nach Gruppenphase)'}
             </h3>
             {formData.mode === 'combined' && (
-              <p style={{ marginBottom: '1rem', fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+              <p className="mb-4 text-sm text-muted-foreground italic">
                 Hinweis: Ligatabelle Wertung und Gleichstandsregeln werden in der Gruppenphase konfiguriert.
               </p>
             )}
-            <div style={{ marginLeft: '1rem' }}>
+            <div className="ml-4">
               {formData.mode === 'combined' && (
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                <div className="mb-4">
+                  <label className="block mb-2 font-bold text-foreground">
                     KO-Start-Runde *
                   </label>
                   <select
@@ -1060,7 +1066,7 @@ export default function EditTournament() {
                     value={formData.ko_start_round || ''}
                     onChange={handleChange}
                     required
-                    style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.secondary, color: theme.colors.text.primary }}
+                    className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="">-- Bitte wählen --</option>
                     <option value="round_of_32">Sechzehntelfinale (32 Teilnehmer)</option>
@@ -1072,28 +1078,28 @@ export default function EditTournament() {
                   
                   {/* Qualification Plan Display */}
                   {loadingQualificationPlan && (
-                    <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+                    <p className="mt-2 text-sm text-muted-foreground">
                       Berechne Qualifikationsplan...
                     </p>
                   )}
                   {qualificationPlan && !loadingQualificationPlan && (
-                    <div style={{ marginTop: '1rem', padding: '1rem', background: theme.colors.background.secondary, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 'bold', color: theme.colors.text.primary, marginBottom: '0.5rem' }}>
+                    <div className="mt-4 p-4 bg-muted rounded-lg border border-border">
+                      <div className="text-sm font-bold text-foreground mb-2">
                         Qualifikationsplan
                       </div>
-                      <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>
+                      <div className="text-sm text-muted-foreground mb-2">
                         {qualificationPlan.required_participants} Teilnehmer gesamt
                       </div>
-                      <div style={{ fontSize: '0.875rem', color: theme.colors.text.secondary, marginBottom: '0.5rem' }}>
+                      <div className="text-sm text-muted-foreground mb-2">
                         Basis: {qualificationPlan.basis_per_group} Teilnehmer pro Gruppe
                       </div>
                       {qualificationPlan.fallback_rules.length > 0 && (
-                        <div style={{ marginTop: '0.5rem' }}>
-                          <div style={{ fontSize: '0.875rem', fontWeight: 'bold', color: theme.colors.text.primary, marginBottom: '0.25rem' }}>
+                        <div className="mt-2">
+                          <div className="text-sm font-bold text-foreground mb-1">
                             Zusätzliche Qualifikanten:
                           </div>
                           {qualificationPlan.fallback_rules.map((rule, idx) => (
-                            <div key={idx} style={{ fontSize: '0.875rem', color: theme.colors.text.secondary }}>
+                            <div key={idx} className="text-sm text-muted-foreground">
                               • {rule.count}x bester {rule.position}. Platzierter
                             </div>
                           ))}
@@ -1104,17 +1110,17 @@ export default function EditTournament() {
                 </div>
               )}
               {formData.mode === 'knockout' && (
-                <div style={{ marginBottom: '1rem', padding: '0.75rem', background: theme.colors.background.secondary, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-                  <p style={{ margin: 0, fontSize: '0.875rem', color: theme.colors.text.primary }}>
+                <div className="mb-4 p-3 bg-muted rounded-lg border border-border">
+                  <p className="m-0 text-sm text-foreground">
                     Die Teilnehmeranzahl wird automatisch basierend auf den hinzugefügten Teilnehmern ermittelt. 
                     Der Turnierbaum wird erstellt, sobald Teilnehmer zum Turnier hinzugefügt wurden.
                   </p>
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  <label className="block mb-2 font-bold text-foreground">
                     Turnierstruktur *
                   </label>
                   <select
@@ -1122,7 +1128,7 @@ export default function EditTournament() {
                     value={formData.ko_structure || ''}
                     onChange={handleChange}
                     required
-                    style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.secondary, color: theme.colors.text.primary }}
+                    className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="">-- Bitte wählen --</option>
                     {getAllowedKOStructures(formData.mode).map(option => (
@@ -1132,9 +1138,9 @@ export default function EditTournament() {
                     ))}
                   </select>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '1.75rem' }}>
+                <div className="flex items-start pt-7">
                   {formData.ko_structure && (
-                    <p style={{ margin: 0, fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                    <p className="m-0 text-sm text-muted-foreground italic">
                       {getAllowedKOStructures(formData.mode).find(o => o.value === formData.ko_structure)?.description}
                     </p>
                   )}
@@ -1142,9 +1148,9 @@ export default function EditTournament() {
               </div>
 
               {needsDrawMethod(formData.ko_structure, formData.ko_draw_method) && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                    <label className="block mb-2 font-bold text-foreground">
                       Auslosung {formData.ko_draw_method !== 'manual' ? '*' : ''}
                     </label>
                     <select
@@ -1152,7 +1158,7 @@ export default function EditTournament() {
                       value={formData.ko_draw_method || ''}
                       onChange={handleChange}
                       required={formData.ko_draw_method !== 'manual'}
-                      style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.secondary, color: theme.colors.text.primary }}
+                      className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <option value="">-- Bitte wählen --</option>
                       {getAllowedKODrawMethods(formData.mode, formData.has_group_phase).map(option => (
@@ -1162,9 +1168,9 @@ export default function EditTournament() {
                       ))}
                     </select>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '1.75rem' }}>
+                  <div className="flex items-start pt-7">
                     {formData.ko_draw_method && (
-                      <p style={{ margin: 0, fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                      <p className="m-0 text-sm text-muted-foreground italic">
                         {getAllowedKODrawMethods(formData.mode, formData.has_group_phase).find(o => o.value === formData.ko_draw_method)?.description}
                       </p>
                     )}
@@ -1174,9 +1180,9 @@ export default function EditTournament() {
 
               {/* KO-Auslosungsmodus nur anzeigen, wenn nicht manuelle Paarungen */}
               {formData.ko_draw_method !== 'manual' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                    <label className="block mb-2 font-bold text-foreground">
                       KO-Auslosungsmodus *
                     </label>
                     <select
@@ -1184,7 +1190,7 @@ export default function EditTournament() {
                       value={formData.ko_distribution || 'random_first_round'}
                       onChange={handleChange}
                       required
-                      style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.secondary, color: theme.colors.text.primary }}
+                      className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {koDrawModeOptions.map(option => (
                         <option key={option.value} value={option.value}>
@@ -1193,8 +1199,8 @@ export default function EditTournament() {
                       ))}
                     </select>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '1.75rem' }}>
-                    <p style={{ margin: 0, fontSize: '0.875rem', color: theme.colors.text.secondary, fontStyle: 'italic' }}>
+                  <div className="flex items-start pt-7">
+                    <p className="m-0 text-sm text-muted-foreground italic">
                       {koDrawModeOptions.find(o => o.value === formData.ko_distribution)?.description}
                     </p>
                   </div>
@@ -1202,11 +1208,11 @@ export default function EditTournament() {
               )}
 
               {formData.has_group_phase && formData.ko_draw_method && (
-                <div style={{ marginBottom: '1rem', padding: '0.75rem', background: theme.colors.background.card, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.border.standard}` }}>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                <div className="mb-4 p-3 bg-card rounded-lg border border-border">
+                  <label className="block mb-2 font-bold text-foreground">
                     Auslosungs-Restriktionen
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
+                  <label className="flex items-center gap-2 cursor-pointer mb-2">
                     <input
                       type="checkbox"
                       name="ko_block_same_group"
@@ -1215,7 +1221,7 @@ export default function EditTournament() {
                     />
                     <span>Keine Paarung aus der gleichen Gruppe</span>
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       name="ko_block_same_position"
@@ -1229,23 +1235,23 @@ export default function EditTournament() {
 
 
               {needsGroupWinnerAdvantage(formData.ko_structure, formData.mode) && (
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <div className="mb-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       name="ko_group_winner_advantage"
                       checked={formData.ko_group_winner_advantage}
                       onChange={handleChange}
                     />
-                    <span style={{ fontWeight: 'bold' }}>Vorteil für Gruppensieger</span>
+                    <span className="font-bold text-foreground">Vorteil für Gruppensieger</span>
                   </label>
                 </div>
               )}
 
 
               {(formData.ko_draw_method === 'pot_system' || formData.ko_draw_method === 'full_random') && (
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                <div className="mb-4">
+                  <label className="block mb-2 font-bold text-foreground">
                     Zufalls-Seed (optional)
                   </label>
                   <input
@@ -1255,31 +1261,31 @@ export default function EditTournament() {
                     onChange={handleChange}
                     min={0}
                     placeholder="Leer = zufällig"
-                    style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', border: `1px solid ${theme.colors.border.standard}`, borderRadius: theme.borderRadius.input, background: theme.colors.background.secondary, color: theme.colors.text.primary }}
+                    className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
-                  <p style={{ marginTop: '0.25rem', fontSize: '0.75rem', color: theme.colors.text.secondary }}>
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Optional: Fester Seed für reproduzierbare Zufallsauslosungen
                   </p>
                 </div>
               )}
 
               {formData.ko_draw_method === 'manual' && (
-                <div style={{ marginBottom: '1rem', padding: '1rem', background: `${theme.colors.accent.warning}20`, borderRadius: theme.borderRadius.card, border: `1px solid ${theme.colors.accent.warning}` }}>
-                  <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: theme.colors.accent.warning }}>
+                <div className="mb-4 p-4 bg-warning/20 rounded-lg border border-warning">
+                  <p className="m-0 mb-4 text-sm text-warning">
                     {formData.mode === 'combined'
                       ? 'Paarungen werden nach Abschluss der Gruppenphase mit den qualifizierten Teilnehmern festgelegt (Spiele → KO-Phase). Runde 1 speichern, dann Runde 2, …'
                       : 'Paarungen werden im Turnier-Bereich "Spiele" / "KO-Phase" manuell festgelegt (Runde 1 speichern, dann Runde 2, …).'}
                   </p>
                 </div>
               )}
-              <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: theme.colors.text.secondary }}>
+              <p className="mt-2 text-xs text-muted-foreground">
                 Bei Änderung der Auslosungsart muss das KO-Bracket ggf. neu generiert werden (Spiele → KO-Phase).
               </p>
             </div>
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+        <div className="flex gap-4 mt-8">
           <Button
             type="submit"
             variant="success"
@@ -1297,28 +1303,81 @@ export default function EditTournament() {
           </Button>
         </div>
       </form>
+      </CardContent>
       </Card>
         )}
       </div>
 
       {/* Rechte Seite - Erklärungen */}
-      <div style={{ flex: 1, maxWidth: '400px' }}>
-        <div style={{ position: 'sticky', top: '2rem' }}>
-          <Card style={{ marginBottom: '1rem', border: `1px solid ${theme.colors.accent.info}` }}>
-            <h2 style={{ marginTop: 0, color: theme.colors.accent.info }}>Turnier bearbeiten</h2>
-            <p style={{ color: theme.colors.text.secondary, marginBottom: '1rem' }}>
-              Hier können Sie die Einstellungen des Turniers anpassen. Bitte beachten Sie die folgenden Hinweise:
-            </p>
-            <ul style={{ margin: 0, paddingLeft: '1.5rem', color: theme.colors.text.secondary }}>
-              <li style={{ marginBottom: '0.5rem' }}>Änderungen an Basisinformationen (Name, Beschreibung, Daten) sind jederzeit möglich.</li>
-              <li style={{ marginBottom: '0.5rem' }}>Konfigurationsänderungen löschen automatisch alle Gruppen und Spiele.</li>
-              <li style={{ marginBottom: '0.5rem' }}>Nach Konfigurationsänderungen müssen Gruppen und Spiele neu generiert werden.</li>
-              <li style={{ marginBottom: '0.5rem' }}>Teilnehmer werden nicht gelöscht, bleiben aber ohne Gruppen-Zuordnung.</li>
-            </ul>
+      <div className="flex-1 max-w-[400px]">
+        <div className="sticky top-8">
+          <Card className="mb-4 border-primary">
+            <CardHeader>
+              <CardTitle className="mt-0 text-primary">Turnier bearbeiten</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                Hier können Sie die Einstellungen des Turniers anpassen. Bitte beachten Sie die folgenden Hinweise:
+              </p>
+              <ul className="m-0 pl-6 text-muted-foreground">
+                <li className="mb-2">Änderungen an Basisinformationen (Name, Beschreibung, Daten) sind jederzeit möglich.</li>
+                <li className="mb-2">Konfigurationsänderungen löschen automatisch alle Gruppen und Spiele.</li>
+                <li className="mb-2">Nach Konfigurationsänderungen müssen Gruppen und Spiele neu generiert werden.</li>
+                <li className="mb-2">Teilnehmer werden nicht gelöscht, bleiben aber ohne Gruppen-Zuordnung.</li>
+              </ul>
+            </CardContent>
           </Card>
-          <Card style={{ border: `1px solid ${theme.colors.accent.warning}` }}>
-            <h3 style={{ marginTop: 0, color: theme.colors.accent.warning }}>Aktueller Modus: {currentMode.title}</h3>
-            <p style={{ color: theme.colors.text.secondary, marginBottom: '0.5rem', fontSize: '0.9rem' }}>{currentMode.description}</p>
+          <Card className="border-warning">
+            <CardHeader>
+              <CardTitle className="mt-0 text-warning">Aktueller Modus: {currentMode.title}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-2 text-sm">{currentMode.description}</p>
+            </CardContent>
+          </Card>
+          <Card className="mt-4 border-warning">
+            <CardHeader>
+              <CardTitle className="mt-0 text-warning">Aktuelle Einstellungen</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {groupSettingsSummary.length > 0 ? (
+                <>
+                  <div className="font-bold text-foreground mb-2">Gruppenphase</div>
+                  <ul className="m-0 pl-6 text-muted-foreground text-sm">
+                    {groupSettingsSummary.map((item) => (
+                      <li key={item} className="mb-1.5">{item}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <div className="text-muted-foreground mb-3">Keine Gruppenphase aktiv.</div>
+              )}
+              {koSettingsSummary.length > 0 ? (
+                <>
+                  <div className="font-bold text-foreground mt-4 mb-2">KO-Phase</div>
+                  <ul className="m-0 pl-6 text-muted-foreground text-sm">
+                    {koSettingsSummary.map((item) => (
+                      <li key={item} className="mb-1.5">{item}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <div className="text-muted-foreground mt-3">Keine KO-Phase aktiv.</div>
+              )}
+              <div className="mt-4">
+                <TournamentModeVisualization
+                  mode={formData.mode}
+                  hasGroupPhase={formData.has_group_phase}
+                  hasKoPhase={formData.has_ko_phase}
+                  groupsCount={formData.groups_count}
+                  participantsPerGroup={formData.participants_per_group}
+                  groupDistribution={formData.group_distribution}
+                  koStartRound={formData.ko_start_round}
+                  koStructure={formData.ko_structure}
+                  koDrawMethod={formData.ko_draw_method}
+                />
+              </div>
+            </CardContent>
           </Card>
         </div>
       </div>
