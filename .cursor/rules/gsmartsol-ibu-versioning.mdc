@@ -1,0 +1,24 @@
+---
+description: Git-Versionierung – Trennung GSmartSol (gsmartsol.ch) und IBU/FinalStage
+alwaysApply: true
+---
+
+# Versionierung: GSmartSol vs. IBU
+
+Zwei Produktlinien im selben Repo – **getrennte Tag-Namen**, keine Vermischung.
+
+## IBU / FinalStage (Turnier-App)
+
+- **Git-Tags:** Semver ohne Präfix, z. B. `v1.0.0`, `v1.6.0`, `v1.4.1`
+- **Code u. a.:** `backend/`, `frontend/` (Vite-App), Docker, `tournament.py`
+
+## GSmartSol (gsmartsol.ch)
+
+- **Git-Tags:** Präfix **`gsmartsol-`**, z. B. `gsmartsol-v1.0`, `gsmartsol-v1.1`
+- **Code u. a.:** `nginx/gsmartsol-www/` (statische Site, 3D-Kalkulator-HTML), Deploy-Skripte für Server C
+
+## Regeln
+
+- **Keinen** IBU-Tag (`v*`) für einen GSmartSol-Release verwenden und umgekehrt.
+- Neuen GSmartSol-Stand releasen: neuen Tag `gsmartsol-v*` setzen, nicht `v*` überschreiben oder umbenennen.
+- Referenz GSmartSol v1.0: Tag **`gsmartsol-v1.0`**.
