@@ -52,12 +52,24 @@ ROOT_WITH_LOGO = LOGO_LOC + """
 
 changed = False
 
-# --- Self-heal: mehrfaches identisches ROOT_ONLY (fehlerhafter früherer Patch) ---
+# --- Self-heal: doppelte location-Blöcke (fehlerhafte frühere Patch-Läufe) ---
+while text.count(CALC) > 1:
+    last = text.rfind(CALC)
+    text = text[:last].rstrip() + "\n" + text[last + len(CALC) :].lstrip("\n")
+    changed = True
+    print("nginx: removed duplicate location /3d-druck-kalkulator.html")
+
 while text.count(ROOT_ONLY) > 1:
     last = text.rfind(ROOT_ONLY)
     text = text[:last].rstrip() + "\n" + text[last + len(ROOT_ONLY) :].lstrip("\n")
     changed = True
     print("nginx: removed duplicate location = /")
+
+while text.count(LOGO_LOC) > 1:
+    last = text.rfind(LOGO_LOC)
+    text = text[:last].rstrip() + "\n" + text[last + len(LOGO_LOC) :].lstrip("\n")
+    changed = True
+    print("nginx: removed duplicate logo location")
 
 # --- Logo fehlt, aber Rechner + Index schon da ---
 if "location = /gsmartsol-3d-prints-logo.png" not in text and "location = /3d-druck-kalkulator.html" in text:
