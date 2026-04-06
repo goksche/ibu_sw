@@ -16,7 +16,7 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Co
 ::-webkit-scrollbar-thumb{background:rgba(0,212,255,0.2);border-radius:2px}
 
 /* ── HEADER ── */
-header{display:flex;align-items:center;justify-content:space-between;padding:1rem 2rem;border-bottom:1px solid var(--border);background:rgba(4,5,13,0.97);position:sticky;top:0;z-index:200}
+header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;padding:1rem 2rem;border-bottom:1px solid var(--border);background:rgba(4,5,13,0.97);position:sticky;top:0;z-index:200}
 .logo-g{color:var(--cyan);font-size:1.2rem;font-weight:700}
 .logo-rest{color:var(--text);font-size:1.2rem;font-weight:700}
 .logo-sub{font-size:0.6rem;letter-spacing:.2em;color:var(--muted);margin-top:2px}
@@ -26,7 +26,6 @@ header{display:flex;align-items:center;justify-content:space-between;padding:1re
 .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);position:relative;display:inline-block}
 .dot::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--cyan);animation:ripple 2s infinite}
 @keyframes ripple{0%{transform:scale(1);opacity:.8}100%{transform:scale(3);opacity:0}}
-header{flex-wrap:wrap;gap:.75rem}
 .header-nav{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 .header-links{font-size:.65rem;letter-spacing:.08em;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
 .header-links a{color:var(--muted);text-decoration:none;transition:color .2s}
