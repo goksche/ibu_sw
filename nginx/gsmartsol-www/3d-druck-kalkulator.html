@@ -81,11 +81,19 @@ textarea{resize:vertical;min-height:80px}
 .hint{font-size:.68rem;color:var(--muted);margin-top:4px}
 .field{margin-bottom:.2rem}
 
-/* ── FILAMENT TABLE ── */
-.fil-head{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 1fr 36px;gap:6px;padding:0 6px 8px;font-size:.6rem;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
-.fil-row{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 1fr 36px;gap:6px;margin-bottom:8px;align-items:center}
-.fil-row input,.fil-row select{padding:7px 9px;font-size:.8rem}
-@media(max-width:700px){.fil-head{display:none}.fil-row{grid-template-columns:1fr 1fr;}}
+/* ── FILAMENT BLOCKS (Admin) ── */
+.fil-head-main{display:grid;grid-template-columns:1.4fr .75fr .75fr .8fr .8fr .75fr 36px;gap:6px;padding:0 6px 8px;font-size:.55rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.fil-block{border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:12px;background:rgba(0,0,0,.15)}
+.fil-row-main{display:grid;grid-template-columns:1.4fr .75fr .75fr .8fr .8fr .75fr 36px;gap:6px;align-items:center;margin-bottom:10px}
+.fil-row-main input{padding:7px 9px;font-size:.78rem}
+.fil-colors-section{margin-top:4px;padding-top:10px;border-top:1px dashed rgba(0,212,255,.12)}
+.fil-colors-section>label{font-size:.58rem;letter-spacing:.12em;color:var(--cyan);margin-bottom:6px;display:block}
+.fil-color-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:8px}
+.color-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 8px 4px 6px;border-radius:4px;border:1px solid var(--border);font-size:.68rem;background:rgba(0,0,0,.35)}
+.color-chip i{display:inline-block;width:12px;height:12px;border-radius:2px;border:1px solid rgba(255,255,255,.15);flex-shrink:0}
+.color-chip button{background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:1rem;line-height:1;padding:0 0 0 4px}
+.fil-color-add{max-width:280px;font-size:.78rem}
+@media(max-width:900px){.fil-head-main{display:none}.fil-row-main{grid-template-columns:1fr 1fr;}.fil-row-main .btn-remove{grid-column:1/-1;justify-self:end}}
 
 /* ── PARTS TABLE ── */
 .parts-head{display:grid;grid-template-columns:2fr 0.7fr 1fr 1.2fr 1fr 36px;gap:6px;padding:0 6px 8px;font-size:.6rem;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
@@ -225,15 +233,22 @@ footer .foot-sep{opacity:.45;margin:0 6px}
     <div class="g2">
       <div class="field">
         <label>Material</label>
-        <select id="c-filament" onchange="calcCustomer()">
+        <select id="c-filament" onchange="onFilamentMaterialChange()">
           <option value="">-- Bitte wählen --</option>
         </select>
         <p class="hint" id="c-fil-info"></p>
       </div>
       <div class="field">
-        <label>Bemerkungen zum Auftrag</label>
-        <textarea id="c-remarks" placeholder="z.B. Farbe, besondere Anforderungen, Verwendungszweck..." oninput="calcCustomer()"></textarea>
+        <label>Farbe</label>
+        <select id="c-fil-color" onchange="calcCustomer()">
+          <option value="">-- Zuerst Material wählen --</option>
+        </select>
+        <p class="hint">Nur Farben, die für dieses Material freigegeben sind.</p>
       </div>
+    </div>
+    <div class="field" style="margin-top:.5rem">
+      <label>Bemerkungen zum Auftrag</label>
+      <textarea id="c-remarks" placeholder="Besondere Anforderungen, Verwendungszweck..." oninput="calcCustomer()"></textarea>
     </div>
   </div>
 
@@ -353,13 +368,14 @@ footer .foot-sep{opacity:.45;margin:0 6px}
     <button class="btn-add" style="width:auto;margin:0" onclick="addFilament()">+ Filament hinzufügen</button>
   </div>
   <div class="card">
-    <div class="fil-head">
+    <p class="hint" style="margin-bottom:12px">Pro Zeile: Name, Dicke (Filament-Durchmesser mm), max. Drucktemperatur, Einkauf/Verkauf pro kg, Druckrate. Farben nur über die Liste „Farbe hinzufügen“ wählen (keine freie Eingabe).</p>
+    <div class="fil-head-main">
       <div>Name / Bezeichnung</div>
-      <div>Dichte (g/cm³)</div>
-      <div>Einkauf (CHF/kg)</div>
-      <div>Verkauf (CHF/kg)</div>
-      <div>Druckrate (g/h)</div>
-      <div>Farbe</div>
+      <div>Dicke (mm)</div>
+      <div>Max °C</div>
+      <div>Einkauf</div>
+      <div>Verkauf</div>
+      <div>g/h</div>
       <div></div>
     </div>
     <div id="a-filaments"></div>
@@ -590,31 +606,112 @@ function showPage(p){
 }
 
 // ═══════════════════════════════════════
-// STORAGE
+// STORAGE & FILAMENT PALETTE (Farben nur aus Liste)
 // ═══════════════════════════════════════
+var FILAMENT_COLOR_PALETTE=[
+  {label:'Schwarz',hex:'#1a1a1a'},{label:'Weiss',hex:'#e8eaf0'},{label:'Natur',hex:'#c4a574'},
+  {label:'Grau',hex:'#6b7280'},{label:'Silber',hex:'#9ca3af'},{label:'Rot',hex:'#dc2626'},
+  {label:'Orange',hex:'#ea580c'},{label:'Gelb',hex:'#eab308'},{label:'Gruen',hex:'#16a34a'},
+  {label:'Tuerkis',hex:'#14b8a6'},{label:'Cyan',hex:'#06b6d4'},{label:'Blau',hex:'#2563eb'},
+  {label:'Violett',hex:'#7c3aed'},{label:'Magenta',hex:'#c026d3'},{label:'Rosarot',hex:'#f472b6'},
+  {label:'Transparent',hex:'#88ccff'},{label:'Gold',hex:'#d4a017'},{label:'Bronze',hex:'#8b5a2b'}
+];
+
+function normalizeFilament(f){
+  if(!f) f={};
+  var co=f.colorOptions;
+  if(!Array.isArray(co)||!co.length){
+    if(f.color) co=[{label:'Standard',hex:f.color}];
+    else co=[{label:'Schwarz',hex:'#1a1a1a'},{label:'Weiss',hex:'#e8eaf0'}];
+  }
+  return {
+    name:f.name||'',
+    thicknessMm:f.thicknessMm!=null?f.thicknessMm:1.75,
+    maxTempC:f.maxTempC!=null?f.maxTempC:220,
+    density:f.density!=null?f.density:1.24,
+    buy:parseFloat(f.buy)||0,
+    sell:parseFloat(f.sell)||0,
+    rate:parseFloat(f.rate)||25,
+    colorOptions:co
+  };
+}
+
 function loadSettings(){
   const d=localStorage.getItem('gsmartsol-settings');
-  return d?JSON.parse(d):{
+  if(d){
+    var o=JSON.parse(d);
+    if(o.filaments&&o.filaments.length) o.filaments=o.filaments.map(normalizeFilament);
+    return o;
+  }
+  return {
     electricity:0.08, wear:0.05, machinerate:5.00, printrate:25, minprice:5, vat:8.1,
     shipPickup:0, shipDomestic:8.50, shipInternational:18.00, shipPackaging:2.50,
     email:'', impressum:'GSmartSol · Altdorf URI',
     filaments:[
-      {name:'PLA Standard',   density:1.24, buy:18, sell:28, rate:26, color:'#e8eaf0'},
-      {name:'PETG',           density:1.27, buy:22, sell:34, rate:24, color:'#00d4ff'},
-      {name:'ABS/ASA',        density:1.05, buy:24, sell:36, rate:22, color:'#d4a010'},
-      {name:'PLA Carbon',     density:1.30, buy:45, sell:68, rate:20, color:'#444'},
-      {name:'TPU Flex',       density:1.21, buy:28, sell:42, rate:14, color:'#8820c0'},
+      normalizeFilament({name:'PLA Standard',   buy:18, sell:28, rate:26, maxTempC:220, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'},{label:'Weiss',hex:'#e8eaf0'},{label:'Rot',hex:'#dc2626'}]}),
+      normalizeFilament({name:'PETG',           buy:22, sell:34, rate:24, maxTempC:250, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'},{label:'Cyan',hex:'#06b6d4'},{label:'Transparent',hex:'#88ccff'}]}),
+      normalizeFilament({name:'ABS/ASA',        buy:24, sell:36, rate:22, maxTempC:260, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'},{label:'Grau',hex:'#6b7280'}]}),
+      normalizeFilament({name:'PLA Carbon',     buy:45, sell:68, rate:20, maxTempC:220, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'}]}),
+      normalizeFilament({name:'TPU Flex',       buy:28, sell:42, rate:14, maxTempC:230, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'},{label:'Weiss',hex:'#e8eaf0'},{label:'Rot',hex:'#dc2626'}]})
     ]
   };
 }
 function saveSettings(s){ localStorage.setItem('gsmartsol-settings',JSON.stringify(s)); }
+
+function paletteSelectOptionsHtml(){
+  return '<option value="">-- Farbe hinzufügen --</option>'+FILAMENT_COLOR_PALETTE.map(function(p){
+    var payload=encodeURIComponent(JSON.stringify({label:p.label,hex:p.hex}));
+    return '<option value="'+payload+'">'+p.label.replace(/</g,'&lt;')+'</option>';
+  }).join('');
+}
+
+function renderFilChips(blockId){
+  var block=document.getElementById('fil-'+blockId);
+  if(!block) return;
+  var hid=block.querySelector('.fil-colors-json');
+  var arr=JSON.parse(hid.value||'[]');
+  var wrap=block.querySelector('.fil-color-chips');
+  wrap.innerHTML=arr.map(function(c,idx){
+    var lab=String(c.label||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    var hx=/^#[0-9A-Fa-f]{6}$/.test(c.hex||'')?c.hex:'#888888';
+    return '<span class="color-chip"><i style="background:'+hx+'"></i>'+lab+
+      '<button type="button" onclick="removeFilColor('+blockId+','+idx+')" aria-label="Entfernen">×</button></span>';
+  }).join('');
+}
+
+function onAddFilColor(blockId,sel){
+  var v=sel.value;
+  if(!v) return;
+  sel.value='';
+  var o;
+  try{ o=JSON.parse(decodeURIComponent(v)); }catch(e){ return; }
+  if(!o||!o.label||!o.hex) return;
+  var block=document.getElementById('fil-'+blockId);
+  var hid=block.querySelector('.fil-colors-json');
+  var arr=JSON.parse(hid.value||'[]');
+  if(arr.some(function(x){return x.label===o.label;})) return;
+  arr.push({label:o.label,hex:o.hex});
+  hid.value=JSON.stringify(arr);
+  renderFilChips(blockId);
+  saveAdmin();
+}
+
+function removeFilColor(blockId,idx){
+  var block=document.getElementById('fil-'+blockId);
+  var hid=block.querySelector('.fil-colors-json');
+  var arr=JSON.parse(hid.value||'[]');
+  arr.splice(idx,1);
+  hid.value=JSON.stringify(arr);
+  renderFilChips(blockId);
+  saveAdmin();
+}
 
 // ═══════════════════════════════════════
 // ADMIN
 // ═══════════════════════════════════════
 let adminFilCount=0;
 function loadAdmin(){
-  const s=loadSettings();
+  var s=loadSettings();
   document.getElementById('a-electricity').value=s.electricity;
   document.getElementById('a-wear').value=s.wear;
   document.getElementById('a-machinerate').value=s.machinerate??5.00;
@@ -629,44 +726,55 @@ function loadAdmin(){
   document.getElementById('a-impressum').value=s.impressum;
   document.getElementById('a-filaments').innerHTML='';
   adminFilCount=0;
-  s.filaments.forEach(f=>addFilament(f));
+  s.filaments.forEach(function(f){ addFilament(f); });
 }
 function addFilament(f){
   adminFilCount++;
-  const id=adminFilCount;
-  const el=document.createElement('div');
-  el.className='fil-row'; el.id='fil-'+id;
-  el.innerHTML=`
-    <input type="text"   value="${f?f.name:''}"    placeholder="z.B. PLA Standard" oninput="saveAdmin()"/>
-    <input type="number" value="${f?f.density:1.24}" min="0.5" step="0.01" oninput="saveAdmin()"/>
-    <input type="number" value="${f?f.buy:20}"      min="0" step="1" oninput="saveAdmin()"/>
-    <input type="number" value="${f?f.sell:30}"     min="0" step="1" oninput="saveAdmin()"/>
-    <input type="number" value="${f?f.rate:25}"     min="1" step="1" oninput="saveAdmin()"/>
-    <input type="color"  value="${f?f.color:'#00d4ff'}" oninput="saveAdmin()" style="padding:3px;height:36px;cursor:pointer"/>
-    <button class="btn-remove" onclick="removeFilament(${id})">×</button>
-  `;
+  var id=adminFilCount;
+  var ff=normalizeFilament(f||{});
+  var colorsJson=JSON.stringify(ff.colorOptions||[]).replace(/"/g,'&quot;');
+  var el=document.createElement('div');
+  el.className='fil-block';
+  el.id='fil-'+id;
+  el.innerHTML=
+    '<div class="fil-row-main">'+
+    '<input type="text" value="'+(ff.name||'').replace(/"/g,'&quot;')+'" placeholder="z.B. PLA Standard" oninput="saveAdmin()"/>'+
+    '<input type="number" value="'+ff.thicknessMm+'" min="0.1" step="0.05" title="Filament-Durchmesser" oninput="saveAdmin()"/>'+
+    '<input type="number" value="'+ff.maxTempC+'" min="0" step="1" title="max. Drucktemperatur °C" oninput="saveAdmin()"/>'+
+    '<input type="number" value="'+ff.buy+'" min="0" step="0.5" oninput="saveAdmin()"/>'+
+    '<input type="number" value="'+ff.sell+'" min="0" step="0.5" oninput="saveAdmin()"/>'+
+    '<input type="number" value="'+ff.rate+'" min="1" step="1" oninput="saveAdmin()"/>'+
+    '<button type="button" class="btn-remove" onclick="removeFilament('+id+')">×</button></div>'+
+    '<input type="hidden" class="fil-colors-json" value="" />'+
+    '<div class="fil-colors-section"><label>Verfügbare Farben</label>'+
+    '<div class="fil-color-chips" id="fil-chips-'+id+'"></div>'+
+    '<select class="fil-color-add" onchange="onAddFilColor('+id+',this)">'+paletteSelectOptionsHtml()+'</select></div>';
   document.getElementById('a-filaments').appendChild(el);
+  el.querySelector('.fil-colors-json').value=JSON.stringify(ff.colorOptions||[]);
+  renderFilChips(id);
 }
 function removeFilament(id){
-  const el=document.getElementById('fil-'+id);
-  if(el){el.remove();saveAdmin();}
+  var el=document.getElementById('fil-'+id);
+  if(el){ el.remove(); saveAdmin(); }
 }
 function saveAdmin(){
-  const filaments=[];
-  document.querySelectorAll('.fil-row').forEach(row=>{
-    const inputs=row.querySelectorAll('input');
-    if(inputs[0].value.trim()){
-      filaments.push({
-        name:inputs[0].value.trim(),
-        density:parseFloat(inputs[1].value)||1.24,
-        buy:parseFloat(inputs[2].value)||0,
-        sell:parseFloat(inputs[3].value)||0,
-        rate:parseFloat(inputs[4].value)||25,
-        color:inputs[5].value
-      });
-    }
+  var filaments=[];
+  document.querySelectorAll('.fil-block').forEach(function(block){
+    var ins=block.querySelectorAll('.fil-row-main input');
+    if(!ins.length||!ins[0].value.trim()) return;
+    var colors=JSON.parse(block.querySelector('.fil-colors-json').value||'[]');
+    filaments.push({
+      name:ins[0].value.trim(),
+      thicknessMm:parseFloat(ins[1].value)||1.75,
+      maxTempC:parseFloat(ins[2].value)||200,
+      buy:parseFloat(ins[3].value)||0,
+      sell:parseFloat(ins[4].value)||0,
+      rate:parseFloat(ins[5].value)||25,
+      density:1.24,
+      colorOptions:Array.isArray(colors)?colors:[]
+    });
   });
-  const s={
+  var s={
     electricity:parseFloat(document.getElementById('a-electricity').value)||0.08,
     wear:parseFloat(document.getElementById('a-wear').value)||0.05,
     machinerate:parseFloat(document.getElementById('a-machinerate').value)||5.00,
@@ -679,7 +787,7 @@ function saveAdmin(){
     shipPackaging:parseFloat(document.getElementById('a-ship-packaging').value)||2.50,
     email:document.getElementById('a-email').value,
     impressum:document.getElementById('a-impressum').value,
-    filaments
+    filaments:filaments
   };
   saveSettings(s);
 }
@@ -698,17 +806,41 @@ function populateFilamentSelect(){
     opt.value=i; opt.textContent=f.name+' ('+f.sell+' CHF/kg)';
     sel.appendChild(opt);
   });
-  if(prev!=='') sel.value=prev;
+  if(prev!=='' && sel.querySelector('option[value="'+prev+'"]')) sel.value=prev;
+  refreshCustomerColorOptions();
   updateFilInfo();
   calcCustomer();
+}
+function onFilamentMaterialChange(){
+  refreshCustomerColorOptions();
+  calcCustomer();
+}
+function refreshCustomerColorOptions(){
+  var s=loadSettings();
+  var idx=document.getElementById('c-filament').value;
+  var sel=document.getElementById('c-fil-color');
+  var prev=sel.value;
+  sel.innerHTML='<option value="">-- Farbe wählen --</option>';
+  if(idx==='') return;
+  var f=normalizeFilament(s.filaments[parseInt(idx,10)]);
+  (f.colorOptions||[]).forEach(function(c,i){
+    var opt=document.createElement('option');
+    opt.value=String(i);
+    opt.textContent=c.label;
+    sel.appendChild(opt);
+  });
+  if(prev!=='' && sel.querySelector('option[value="'+prev+'"]')) sel.value=prev;
 }
 function updateFilInfo(){
   const s=loadSettings();
   const idx=document.getElementById('c-filament').value;
   const info=document.getElementById('c-fil-info');
   if(idx===''){info.textContent='';return;}
-  const f=s.filaments[parseInt(idx)];
-  info.textContent=`Dichte: ${f.density} g/cm³ · Druckrate: ~${f.rate} g/h · Preis: ${f.sell} CHF/kg`;
+  const f=normalizeFilament(s.filaments[parseInt(idx,10)]);
+  var ci=document.getElementById('c-fil-color').value;
+  var extra='';
+  if(ci!=='' && f.colorOptions && f.colorOptions[parseInt(ci,10)]) extra=' · Farbe: '+f.colorOptions[parseInt(ci,10)].label;
+  info.textContent='Dicke '+f.thicknessMm+' mm · max. '+f.maxTempC+' °C · ~'+f.rate+' g/h · '+f.sell+' CHF/kg'+extra;
 }
 function addCustomerPart(name='',qty=1,grams=0){
   custPartCount++;
@@ -734,7 +866,7 @@ function calcCustomer(){
   updateFilInfo();
   const s=loadSettings();
   const idx=document.getElementById('c-filament').value;
-  const fil=idx!==''?s.filaments[parseInt(idx)]:null;
+  const fil=idx!==''?normalizeFilament(s.filaments[parseInt(idx)]):null;
   const energyPerH=s.electricity+s.wear;
   const machineRate=s.machinerate??5.00;
   const rate=fil?fil.rate:s.printrate;
@@ -826,13 +958,20 @@ function addBDRow(tbody,label,val){
 function openContact(){
   const s=loadSettings();
   const idx=document.getElementById('c-filament').value;
-  const fil=idx!==''?s.filaments[parseInt(idx)]:null;
+  const fil=idx!==''?normalizeFilament(s.filaments[parseInt(idx)]):null;
   if(!fil){showToast('Bitte zuerst ein Material wählen','error');return;}
+  if(fil.colorOptions&&fil.colorOptions.length){
+    var cPick=document.getElementById('c-fil-color').value;
+    if(cPick===''){showToast('Bitte Farbe wählen','error');return;}
+  }
   const total=document.getElementById('c-total').textContent;
   if(total==='—'){showToast('Bitte Teile eingeben','error');return;}
 
   // build summary
-  let lines=`<strong style="color:var(--cyan)">Material:</strong> ${fil.name}<br>`;
+  var cIdx=document.getElementById('c-fil-color').value;
+  var colLine='';
+  if(cIdx!=='' && fil.colorOptions && fil.colorOptions[parseInt(cIdx,10)]) colLine=' · Farbe: '+fil.colorOptions[parseInt(cIdx,10)].label;
+  let lines='<strong style="color:var(--cyan)">Material:</strong> '+fil.name+colLine+'<br>';
   document.querySelectorAll('.part-row').forEach(row=>{
     const inputs=row.querySelectorAll('input');
     const name=inputs[0].value||'Teil';
@@ -883,6 +1022,7 @@ function showToast(msg,type){
 // INIT
 // ═══════════════════════════════════════
 loadAdmin();
+saveSettings(loadSettings());
 populateFilamentSelect();
 addCustomerPart('',1,0);
 addCustomerPart('',1,0);
