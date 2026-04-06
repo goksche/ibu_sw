@@ -82,9 +82,9 @@ textarea{resize:vertical;min-height:80px}
 .field{margin-bottom:.2rem}
 
 /* ── FILAMENT BLOCKS (Admin) ── */
-.fil-head-main{display:grid;grid-template-columns:1.4fr .75fr .75fr .8fr .8fr .75fr 36px;gap:6px;padding:0 6px 8px;font-size:.55rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.fil-head-main{display:grid;grid-template-columns:1.4fr .75fr .75fr .8fr .8fr 36px;gap:6px;padding:0 6px 8px;font-size:.55rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
 .fil-block{border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:12px;background:rgba(0,0,0,.15)}
-.fil-row-main{display:grid;grid-template-columns:1.4fr .75fr .75fr .8fr .8fr .75fr 36px;gap:6px;align-items:center;margin-bottom:10px}
+.fil-row-main{display:grid;grid-template-columns:1.4fr .75fr .75fr .8fr .8fr 36px;gap:6px;align-items:center;margin-bottom:10px}
 .fil-row-main input{padding:7px 9px;font-size:.78rem}
 .fil-colors-section{margin-top:4px;padding-top:10px;border-top:1px dashed rgba(0,212,255,.12)}
 .fil-colors-section>label{font-size:.58rem;letter-spacing:.12em;color:var(--cyan);margin-bottom:6px;display:block}
@@ -368,14 +368,13 @@ footer .foot-sep{opacity:.45;margin:0 6px}
     <button class="btn-add" style="width:auto;margin:0" onclick="addFilament()">+ Filament hinzufügen</button>
   </div>
   <div class="card">
-    <p class="hint" style="margin-bottom:12px">Pro Zeile: Name, Dicke (Filament-Durchmesser mm), max. Drucktemperatur, Einkauf/Verkauf pro kg, Druckrate. Farben nur über die Liste „Farbe hinzufügen“ wählen (keine freie Eingabe).</p>
+    <p class="hint" style="margin-bottom:12px">Pro Zeile: Name, Dicke (Filament-Durchmesser mm), max. Drucktemperatur, Einkauf/Verkauf pro kg. Druckzeit-Kalkulation nutzt die <strong>Druckrate Standard (g/h)</strong> oben. Farben nur über „Farbe hinzufügen“.</p>
     <div class="fil-head-main">
       <div>Name / Bezeichnung</div>
       <div>Dicke (mm)</div>
       <div>Max °C</div>
       <div>Einkauf</div>
       <div>Verkauf</div>
-      <div>g/h</div>
       <div></div>
     </div>
     <div id="a-filaments"></div>
@@ -631,7 +630,6 @@ function normalizeFilament(f){
     density:f.density!=null?f.density:1.24,
     buy:parseFloat(f.buy)||0,
     sell:parseFloat(f.sell)||0,
-    rate:parseFloat(f.rate)||25,
     colorOptions:co
   };
 }
@@ -648,11 +646,11 @@ function loadSettings(){
     shipPickup:0, shipDomestic:8.50, shipInternational:18.00, shipPackaging:2.50,
     email:'', impressum:'GSmartSol · Altdorf URI',
     filaments:[
-      normalizeFilament({name:'PLA Standard',   buy:18, sell:28, rate:26, maxTempC:220, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'},{label:'Weiss',hex:'#e8eaf0'},{label:'Rot',hex:'#dc2626'}]}),
-      normalizeFilament({name:'PETG',           buy:22, sell:34, rate:24, maxTempC:250, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'},{label:'Cyan',hex:'#06b6d4'},{label:'Transparent',hex:'#88ccff'}]}),
-      normalizeFilament({name:'ABS/ASA',        buy:24, sell:36, rate:22, maxTempC:260, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'},{label:'Grau',hex:'#6b7280'}]}),
-      normalizeFilament({name:'PLA Carbon',     buy:45, sell:68, rate:20, maxTempC:220, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'}]}),
-      normalizeFilament({name:'TPU Flex',       buy:28, sell:42, rate:14, maxTempC:230, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'},{label:'Weiss',hex:'#e8eaf0'},{label:'Rot',hex:'#dc2626'}]})
+      normalizeFilament({name:'PLA Standard',   buy:18, sell:28, maxTempC:220, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'},{label:'Weiss',hex:'#e8eaf0'},{label:'Rot',hex:'#dc2626'}]}),
+      normalizeFilament({name:'PETG',           buy:22, sell:34, maxTempC:250, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'},{label:'Cyan',hex:'#06b6d4'},{label:'Transparent',hex:'#88ccff'}]}),
+      normalizeFilament({name:'ABS/ASA',        buy:24, sell:36, maxTempC:260, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'},{label:'Grau',hex:'#6b7280'}]}),
+      normalizeFilament({name:'PLA Carbon',     buy:45, sell:68, maxTempC:220, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'}]}),
+      normalizeFilament({name:'TPU Flex',       buy:28, sell:42, maxTempC:230, thicknessMm:1.75, colorOptions:[{label:'Schwarz',hex:'#1a1a1a'},{label:'Weiss',hex:'#e8eaf0'},{label:'Rot',hex:'#dc2626'}]})
     ]
   };
 }
@@ -743,7 +741,6 @@ function addFilament(f){
     '<input type="number" value="'+ff.maxTempC+'" min="0" step="1" title="max. Drucktemperatur °C" oninput="saveAdmin()"/>'+
     '<input type="number" value="'+ff.buy+'" min="0" step="0.5" oninput="saveAdmin()"/>'+
     '<input type="number" value="'+ff.sell+'" min="0" step="0.5" oninput="saveAdmin()"/>'+
-    '<input type="number" value="'+ff.rate+'" min="1" step="1" oninput="saveAdmin()"/>'+
     '<button type="button" class="btn-remove" onclick="removeFilament('+id+')">×</button></div>'+
     '<input type="hidden" class="fil-colors-json" value="" />'+
     '<div class="fil-colors-section"><label>Verfügbare Farben</label>'+
@@ -769,7 +766,6 @@ function saveAdmin(){
       maxTempC:parseFloat(ins[2].value)||200,
       buy:parseFloat(ins[3].value)||0,
       sell:parseFloat(ins[4].value)||0,
-      rate:parseFloat(ins[5].value)||25,
       density:1.24,
       colorOptions:Array.isArray(colors)?colors:[]
     });
@@ -837,10 +833,11 @@ function updateFilInfo(){
   const info=document.getElementById('c-fil-info');
   if(idx===''){info.textContent='';return;}
   const f=normalizeFilament(s.filaments[parseInt(idx,10)]);
+  var pr=s.printrate||25;
   var ci=document.getElementById('c-fil-color').value;
   var extra='';
   if(ci!=='' && f.colorOptions && f.colorOptions[parseInt(ci,10)]) extra=' · Farbe: '+f.colorOptions[parseInt(ci,10)].label;
-  info.textContent='Dicke '+f.thicknessMm+' mm · max. '+f.maxTempC+' °C · ~'+f.rate+' g/h · '+f.sell+' CHF/kg'+extra;
+  info.textContent='Dicke '+f.thicknessMm+' mm · max. '+f.maxTempC+' °C · ~'+pr+' g/h (Standard) · '+f.sell+' CHF/kg'+extra;
 }
 function addCustomerPart(name='',qty=1,grams=0){
   custPartCount++;
@@ -869,7 +866,7 @@ function calcCustomer(){
   const fil=idx!==''?normalizeFilament(s.filaments[parseInt(idx)]):null;
   const energyPerH=s.electricity+s.wear;
   const machineRate=s.machinerate??5.00;
-  const rate=fil?fil.rate:s.printrate;
+  const rate=s.printrate||25;
   const sellPer1000=fil?fil.sell:0;
 
   // shipping
