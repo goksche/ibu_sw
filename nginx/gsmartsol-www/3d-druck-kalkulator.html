@@ -139,6 +139,14 @@ textarea{resize:vertical;min-height:80px}
 .breakdown .sum-row td{border-top:1px solid var(--border);font-weight:700;color:#fff;padding-top:12px}
 .breakdown .sum-row td:last-child{color:var(--cyan)}
 
+/* ── Maschinenkostenrechner (HK / SK) ── */
+.machine-sub{font-size:.72rem;font-weight:600;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase;margin-bottom:.8rem}
+.machine-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.machine-table thead th{font-size:.7rem;font-weight:600;letter-spacing:.1em;color:#b8c4d4;text-transform:uppercase;padding:5px 6px;border-bottom:1px solid var(--border);text-align:left}
+.machine-table thead th:last-child{text-align:right}
+.machine-metric-label{font-size:.65rem;letter-spacing:.12em;color:var(--hint);margin-bottom:5px;text-transform:uppercase}
+@media(max-width:700px){#page-machine .g2{grid-template-columns:1fr}}
+
 /* ── BADGE ── */
 .badge{display:inline-block;font-size:.6rem;letter-spacing:.1em;padding:3px 8px;border-radius:2px;text-transform:uppercase}
 .badge-cyan{background:rgba(0,212,255,.1);color:var(--cyan);border:1px solid rgba(0,212,255,.2)}
@@ -221,7 +229,8 @@ footer .foot-sep{opacity:.45;margin:0 6px}
       <button class="nav-tab active" id="tab-customer" onclick="showPage('customer')">
         <span class="dot" style="margin-right:6px"></span>Kalkulator
       </button>
-      <button class="nav-tab" id="tab-admin" onclick="openAdmin()">Admin</button>
+      <button class="nav-tab" id="tab-machine" onclick="openAdmin('machine')" style="display:none" type="button">Maschinenkosten</button>
+      <button class="nav-tab" id="tab-admin" onclick="openAdmin('admin')" type="button">Admin</button>
     </div>
   </div>
 </header>
@@ -434,6 +443,104 @@ footer .foot-sep{opacity:.45;margin:0 6px}
   </div>
 </div>
 
+<!-- ══════════════════════════════════════
+     MASCHINENKOSTEN (HK / SK)
+══════════════════════════════════════ -->
+<div class="page" id="page-machine">
+  <h1><span>Maschinen</span>kostenrechner</h1>
+  <p class="page-sub">HK / SK · BAMBU LAB P2S · STUNDENSATZ-KALKULATION</p>
+
+  <div class="section-title">Druckerparameter</div>
+  <div class="card">
+    <div class="g3">
+      <div class="field">
+        <label>Anschaffungspreis (CHF)</label>
+        <input type="number" id="m-price" value="800" min="100" step="50" oninput="calcMachine()"/>
+        <p class="hint">Kaufpreis inkl. Zubehör</p>
+      </div>
+      <div class="field">
+        <label>Abschreibungsdauer (Jahre)</label>
+        <input type="number" id="m-years" value="3" min="1" max="10" step="1" oninput="calcMachine()"/>
+        <p class="hint">Linear auf Restwert 0</p>
+      </div>
+      <div class="field">
+        <label>Betriebsstunden pro Woche</label>
+        <input type="number" id="m-hours" value="27.5" min="1" max="168" step="0.5" oninput="calcMachine()"/>
+        <p class="hint">Ø Druckstunden/Woche</p>
+      </div>
+    </div>
+    <hr class="cyber"/>
+    <div class="g3">
+      <div class="field">
+        <label>Strompreis (Rp/kWh)</label>
+        <input type="number" id="m-elec" value="25" min="5" max="50" step="1" oninput="calcMachine()"/>
+        <p class="hint">CH Ø ~25 Rp/kWh</p>
+      </div>
+      <div class="field">
+        <label>Wartung & Verbrauchsmaterial (CHF/Jahr)</label>
+        <input type="number" id="m-maint" value="80" min="0" step="10" oninput="calcMachine()"/>
+        <p class="hint">Düsen, Riemen, Druckbett etc.</p>
+      </div>
+      <div class="field">
+        <label>Gemeinkosten anteilig (CHF/Monat)</label>
+        <input type="number" id="m-overhead" value="20" min="0" step="5" oninput="calcMachine()"/>
+        <p class="hint">Raum, Strom Basis, Internet</p>
+      </div>
+    </div>
+    <hr class="cyber"/>
+    <div class="g2">
+      <div class="field">
+        <label>Gewinnmarge auf Maschinenzeit (CHF/h)</label>
+        <input type="number" id="m-profit" value="5.00" min="0" step="0.50" oninput="calcMachine()"/>
+        <p class="hint">Empfehlung: 3–8 CHF/h je nach Markt</p>
+      </div>
+      <div class="field">
+        <label>Ø Druckerleistung (Watt)</label>
+        <input type="number" id="m-watt" value="180" min="50" max="500" step="10" oninput="calcMachine()"/>
+        <p class="hint">P2S ~180W (Drucken + Heizen)</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Ergebnis</div>
+  <div class="card">
+    <div class="g4" id="m-metrics" style="margin-bottom:1.5rem"></div>
+
+    <div class="g2">
+      <div>
+        <div class="machine-sub">Herstellkosten (HK)</div>
+        <table class="machine-table">
+          <thead><tr>
+            <th>Position</th>
+            <th>CHF/h</th>
+          </tr></thead>
+          <tbody id="m-hk-table"></tbody>
+        </table>
+      </div>
+      <div>
+        <div class="machine-sub">Selbstkosten (SK) & Stundensatz</div>
+        <table class="machine-table">
+          <thead><tr>
+            <th>Position</th>
+            <th>CHF/h</th>
+          </tr></thead>
+          <tbody id="m-sk-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Werte in Admin übernehmen</div>
+  <div class="card">
+    <p class="hint" style="margin-bottom:1.2rem;max-width:none">Die berechneten Werte werden direkt in die Admin-Einstellungen geschrieben. Du kannst sie dort noch manuell anpassen.</p>
+    <div class="g3" id="m-preview" style="margin-bottom:1.5rem"></div>
+    <div class="btn-row">
+      <button class="btn-primary" type="button" onclick="applyMachineToAdmin()">Werte in Admin übernehmen</button>
+      <button class="btn-secondary" type="button" onclick="showPage('admin')">Zur Admin-Seite</button>
+    </div>
+  </div>
+</div>
+
 <!-- CONTACT MODAL -->
 <div class="contact-modal" id="contact-modal">
   <div class="contact-box">
@@ -509,9 +616,18 @@ function adminOtpBack(){
   document.getElementById('admin-email').focus();
 }
 
-function openAdmin(){
+var adminTargetPage = 'admin';
+
+function revealMachineTabIfLoggedIn(){
+  var mTab = document.getElementById('tab-machine');
+  if(mTab && sessionStorage.getItem(GSMARTSOL_ADMIN_TOKEN_KEY)) mTab.style.display = '';
+}
+
+function openAdmin(target){
+  adminTargetPage = target || 'admin';
   if(sessionStorage.getItem(GSMARTSOL_ADMIN_TOKEN_KEY)){
-    showPage('admin');
+    showPage(adminTargetPage);
+    if(adminTargetPage === 'machine') calcMachine();
     return;
   }
   resetAdminOtpUI();
@@ -577,7 +693,8 @@ async function verifyAdminOtp(){
       sessionStorage.setItem(GSMARTSOL_ADMIN_TOKEN_KEY, 'ok');
     }
     closeAdminOtp();
-    showPage('admin');
+    revealMachineTabIfLoggedIn();
+    showPage(adminTargetPage);
   } catch(e){
     setOtpFeedback('otp-feedback-2', 'Netzwerkfehler: ' + (e.message || 'unbekannt'), 'err');
   } finally {
@@ -587,6 +704,8 @@ async function verifyAdminOtp(){
 
 function logoutAdmin(){
   sessionStorage.removeItem(GSMARTSOL_ADMIN_TOKEN_KEY);
+  var mTab = document.getElementById('tab-machine');
+  if(mTab) mTab.style.display = 'none';
   showPage('customer');
   showToast('Abgemeldet');
 }
@@ -602,11 +721,13 @@ document.getElementById('admin-email') && document.getElementById('admin-email')
 // PAGE NAVIGATION
 // ═══════════════════════════════════════
 function showPage(p){
-  document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(function(el){ el.classList.remove('active'); });
+  document.querySelectorAll('.nav-tab').forEach(function(el){ el.classList.remove('active'); });
   document.getElementById('page-'+p).classList.add('active');
-  document.getElementById('tab-'+p).classList.add('active');
+  var tab = document.getElementById('tab-'+p);
+  if(tab) tab.classList.add('active');
   if(p==='customer') populateFilamentSelect();
+  if(p==='machine') calcMachine();
 }
 
 // ═══════════════════════════════════════
@@ -1021,8 +1142,124 @@ function showToast(msg,type){
 }
 
 // ═══════════════════════════════════════
+// MASCHINENKOSTENRECHNER (HK / SK)
+// ═══════════════════════════════════════
+function mv(id){ return parseFloat(document.getElementById('m-'+id).value)||0; }
+
+function mRow(tbody,label,val,isSum){
+  var tr=document.createElement('tr');
+  tr.style.borderBottom='1px solid rgba(0,212,255,0.07)';
+  if(isSum){
+    tr.style.borderTop='1px solid rgba(0,212,255,0.25)';
+    tr.style.fontWeight='700';
+  }
+  var labCol=isSum?'var(--text)':'var(--hint)';
+  var valCol=isSum?'var(--cyan)':'var(--text)';
+  tr.innerHTML='<td style="padding:7px 6px;color:'+labCol+'">'+label+'</td><td style="padding:7px 6px;text-align:right;color:'+valCol+'">'+val.toFixed(3)+'</td>';
+  tbody.appendChild(tr);
+}
+
+function calcMachine(){
+  var price=mv('price'), years=mv('years'), hPerWeek=mv('hours');
+  var elecRp=mv('elec'), maintYear=mv('maint'), overheadMonth=mv('overhead');
+  var profit=mv('profit'), watt=mv('watt');
+
+  var hoursPerYear=hPerWeek*52;
+
+  var abschYear=price/years;
+  var abschH=hoursPerYear>0?abschYear/hoursPerYear:0;
+  var stromH=(watt/1000)*(elecRp/100);
+  var maintH=hoursPerYear>0?maintYear/hoursPerYear:0;
+  var hkH=abschH+stromH+maintH;
+
+  var overheadYear=overheadMonth*12;
+  var overheadH=hoursPerYear>0?overheadYear/hoursPerYear:0;
+  var skH=hkH+overheadH;
+  var stundensatz=skH+profit;
+
+  var metricsEl=document.getElementById('m-metrics');
+  if(!metricsEl) return;
+  metricsEl.innerHTML=
+    '<div class="card" style="margin:0;background:rgba(0,0,0,.3)">'+
+      '<div class="machine-metric-label">Stunden/Jahr</div>'+
+      '<div style="font-size:1.4rem;font-weight:700;color:var(--cyan)">'+hoursPerYear.toFixed(0)+' h</div>'+
+    '</div>'+
+    '<div class="card" style="margin:0;background:rgba(0,0,0,.3)">'+
+      '<div class="machine-metric-label">Abschreibung/Jahr</div>'+
+      '<div style="font-size:1.4rem;font-weight:700;color:var(--cyan)">CHF '+abschYear.toFixed(0)+'</div>'+
+    '</div>'+
+    '<div class="card" style="margin:0;border-color:rgba(0,212,255,.4)">'+
+      '<div class="machine-metric-label">HK</div>'+
+      '<div style="font-size:1.4rem;font-weight:700;color:var(--cyan)">'+hkH.toFixed(3)+' CHF/h</div>'+
+    '</div>'+
+    '<div class="card" style="margin:0;border-color:rgba(0,212,255,.4)">'+
+      '<div class="machine-metric-label">SK</div>'+
+      '<div style="font-size:1.4rem;font-weight:700;color:var(--cyan)">'+skH.toFixed(3)+' CHF/h</div>'+
+    '</div>';
+
+  var hkt=document.getElementById('m-hk-table');
+  if(hkt){
+    hkt.innerHTML='';
+    mRow(hkt,'Abschreibung',abschH);
+    mRow(hkt,'Strom ('+watt+'W)',stromH);
+    mRow(hkt,'Wartung / Material',maintH);
+    mRow(hkt,'Herstellkosten (HK)',hkH,true);
+  }
+
+  var skt=document.getElementById('m-sk-table');
+  if(skt){
+    skt.innerHTML='';
+    mRow(skt,'Herstellkosten (HK)',hkH);
+    mRow(skt,'Gemeinkosten',overheadH);
+    mRow(skt,'Selbstkosten (SK)',skH,true);
+    var tr=document.createElement('tr');
+    tr.style.cssText='border-top:1px solid rgba(0,212,255,.1)';
+    tr.innerHTML='<td style="padding:7px 6px;color:var(--hint)">+ Gewinnmarge</td><td style="padding:7px 6px;text-align:right;color:var(--text)">'+profit.toFixed(3)+'</td>';
+    skt.appendChild(tr);
+    mRow(skt,'Empfohlener Stundensatz',stundensatz,true);
+  }
+
+  var prev=document.getElementById('m-preview');
+  if(prev){
+    prev.innerHTML=
+      '<div class="card" style="margin:0;background:rgba(0,0,0,.3)">'+
+        '<div class="machine-metric-label">→ Admin: Stromkosten (CHF/h)</div>'+
+        '<div style="font-size:1.2rem;font-weight:700;color:var(--cyan)">'+stromH.toFixed(3)+'</div>'+
+      '</div>'+
+      '<div class="card" style="margin:0;background:rgba(0,0,0,.3)">'+
+        '<div class="machine-metric-label">→ Admin: Maschinenverschleiss (CHF/h)</div>'+
+        '<div style="font-size:1.2rem;font-weight:700;color:var(--cyan)">'+(abschH+maintH+overheadH).toFixed(3)+'</div>'+
+      '</div>'+
+      '<div class="card" style="margin:0;border-color:rgba(0,212,255,.4)">'+
+        '<div class="machine-metric-label">→ Admin: Maschinenstunden-Stundensatz (CHF/h)</div>'+
+        '<div style="font-size:1.2rem;font-weight:700;color:var(--cyan)">'+profit.toFixed(2)+'</div>'+
+      '</div>';
+  }
+}
+
+function applyMachineToAdmin(){
+  var elecRp=mv('elec'), watt=mv('watt');
+  var stromH=(watt/1000)*(elecRp/100);
+  var price=mv('price'), years=mv('years'), hPerWeek=mv('hours');
+  var maintYear=mv('maint'), overheadMonth=mv('overhead');
+  var hoursPerYear=hPerWeek*52;
+  var abschH=hoursPerYear>0?(price/years)/hoursPerYear:0;
+  var maintH=hoursPerYear>0?maintYear/hoursPerYear:0;
+  var overheadH=hoursPerYear>0?(overheadMonth*12)/hoursPerYear:0;
+  var profit=mv('profit');
+
+  document.getElementById('a-electricity').value=stromH.toFixed(4);
+  document.getElementById('a-wear').value=(abschH+maintH+overheadH).toFixed(4);
+  document.getElementById('a-machinerate').value=profit.toFixed(2);
+  saveAdmin();
+  showPage('admin');
+  showToast('Werte in Admin übernommen');
+}
+
+// ═══════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════
+revealMachineTabIfLoggedIn();
 loadAdmin();
 saveSettings(loadSettings());
 populateFilamentSelect();
