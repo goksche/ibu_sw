@@ -21,9 +21,9 @@ input,select,textarea,button,.nav-tab,.btn-primary,.btn-secondary,.btn-add,.btn-
 
 /* ── HEADER ── */
 header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;padding:1rem 2rem;border-bottom:1px solid var(--border);background:rgba(4,5,13,0.97);position:sticky;top:0;z-index:200}
-.logo-g{color:var(--cyan);font-size:1.2rem;font-weight:700}
-.logo-rest{color:var(--text);font-size:1.2rem;font-weight:700}
-.logo-sub{font-size:0.68rem;letter-spacing:.16em;color:#9aa6b8;margin-top:2px}
+.header-brand{display:flex;align-items:center;text-decoration:none;outline:none}
+.header-brand:focus-visible{box-shadow:0 0 0 2px rgba(0,212,255,.45);border-radius:4px}
+.header-brand img{display:block;height:clamp(40px,10vw,54px);width:auto;max-width:min(100%,380px);object-fit:contain}
 .nav-tabs{display:flex;gap:6px}
 .nav-tab{background:transparent;border:1px solid var(--border);border-radius:3px;color:#9aa6b8;font-size:0.72rem;font-weight:600;letter-spacing:.1em;padding:7px 16px;cursor:pointer;transition:all .2s;text-transform:uppercase}
 .nav-tab.active,.nav-tab:hover{border-color:rgba(0,212,255,0.5);color:var(--cyan);background:rgba(0,212,255,0.05)}
@@ -215,10 +215,9 @@ footer .foot-sep{opacity:.45;margin:0 6px}
 
 <!-- HEADER -->
 <header>
-  <div>
-    <div><span class="logo-g">G</span><span class="logo-rest">SmartSol</span></div>
-    <div class="logo-sub">3D PRINTS · ALTDORF URI</div>
-  </div>
+  <a class="header-brand" href="https://gsmartsol.ch/" title="GSmartSol – Start">
+    <img src="gsmartsol-3d-prints-logo.png" width="360" height="120" alt="GSmartSol 3D PRINTS – FDM Multicolor Prints – Altdorf Uri Schweiz" decoding="async" fetchpriority="high"/>
+  </a>
   <div class="header-nav">
     <div class="header-links">
       <a href="https://gsmartsol.ch/">Start / GSmartSol</a>

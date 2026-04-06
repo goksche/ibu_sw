@@ -6,7 +6,7 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Www = Join-Path $RepoRoot "nginx\gsmartsol-www"
 
 ssh $Server "mkdir -p /opt/gsmartsol-www && chmod 755 /opt/gsmartsol-www"
-scp "$Www\index.html" "$Www\3d-druck-kalkulator.html" "$Www\patch_nginx.py" "${Server}:/opt/gsmartsol-www/"
+scp "$Www\index.html" "$Www\3d-druck-kalkulator.html" "$Www\gsmartsol-3d-prints-logo.png" "$Www\patch_nginx.py" "${Server}:/opt/gsmartsol-www/"
 
 ssh $Server 'cp -a /etc/nginx/sites-available/gsmartsol.ch /etc/nginx/sites-available/gsmartsol.ch.bak_deploy_$(date +%Y%m%d%H%M%S) && python3 /opt/gsmartsol-www/patch_nginx.py && nginx -t && nginx -s reload && echo OK'
 
