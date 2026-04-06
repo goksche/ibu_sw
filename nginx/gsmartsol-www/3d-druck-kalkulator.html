@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GSmartSol – 3D Druck Kalkulator</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#04050d;--cyan:#00d4ff;--text:#e8eaf0;--muted:#4a5068;
+  --border:rgba(0,212,255,0.15);--card:rgba(255,255,255,0.03);
+  --danger:#e03030;--green:#18a030;--warn:#d4a010;
+}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Courier New',monospace;overflow-x:hidden}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:rgba(0,212,255,0.2);border-radius:2px}
+
+/* ── HEADER ── */
+header{display:flex;align-items:center;justify-content:space-between;padding:1rem 2rem;border-bottom:1px solid var(--border);background:rgba(4,5,13,0.97);position:sticky;top:0;z-index:200}
+.logo-g{color:var(--cyan);font-size:1.2rem;font-weight:700}
+.logo-rest{color:var(--text);font-size:1.2rem;font-weight:700}
+.logo-sub{font-size:0.6rem;letter-spacing:.2em;color:var(--muted);margin-top:2px}
+.nav-tabs{display:flex;gap:6px}
+.nav-tab{background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-family:'Courier New',monospace;font-size:0.68rem;letter-spacing:.12em;padding:7px 16px;cursor:pointer;transition:all .2s;text-transform:uppercase}
+.nav-tab.active,.nav-tab:hover{border-color:rgba(0,212,255,0.5);color:var(--cyan);background:rgba(0,212,255,0.05)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);position:relative;display:inline-block}
+.dot::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--cyan);animation:ripple 2s infinite}
+@keyframes ripple{0%{transform:scale(1);opacity:.8}100%{transform:scale(3);opacity:0}}
+header{flex-wrap:wrap;gap:.75rem}
+.header-nav{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.header-links{font-size:.65rem;letter-spacing:.08em;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.header-links a{color:var(--muted);text-decoration:none;transition:color .2s}
+.header-links a:hover{color:var(--cyan)}
+.header-links .sep{opacity:.45;user-select:none}
+
+/* ── PAGES ── */
+.page{display:none;max-width:980px;margin:0 auto;padding:2.5rem 1.5rem 5rem}
+.page.active{display:block}
+
+/* ── OTP OVERLAY ── */
+#otp-overlay{position:fixed;inset:0;background:rgba(4,5,13,0.97);z-index:999;display:flex;align-items:center;justify-content:center}
+.otp-box{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:2.5rem;max-width:380px;width:100%;text-align:center}
+.otp-box h2{font-size:1rem;letter-spacing:.2em;color:var(--cyan);margin-bottom:.5rem;text-transform:uppercase}
+.otp-box p{font-size:.75rem;color:var(--muted);margin-bottom:1.5rem}
+.otp-digits{display:flex;gap:10px;justify-content:center;margin-bottom:1.2rem}
+.otp-digits input{width:44px;height:52px;text-align:center;font-size:1.4rem;font-weight:700;background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'Courier New',monospace;outline:none;transition:border-color .2s}
+.otp-digits input:focus{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(0,212,255,.08)}
+.otp-error{font-size:.72rem;color:var(--danger);min-height:1.2rem;margin-bottom:.8rem}
+.otp-hint{font-size:.65rem;color:var(--muted);margin-top:1rem}
+
+/* ── TYPOGRAPHY ── */
+h1{font-size:1.7rem;font-weight:700;letter-spacing:.04em;margin-bottom:.3rem}
+h1 span{color:var(--cyan)}
+.page-sub{font-size:.75rem;color:var(--muted);letter-spacing:.14em;margin-bottom:2.5rem}
+.section-title{font-size:.68rem;letter-spacing:.25em;color:var(--cyan);text-transform:uppercase;margin-bottom:1rem;display:flex;align-items:center;gap:10px}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ── CARD ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:1.5rem;margin-bottom:1.5rem;position:relative}
+.card::before,.card::after{content:'';position:absolute;width:12px;height:12px;border-color:rgba(0,212,255,.2);border-style:solid}
+.card::before{top:-1px;left:-1px;border-width:1px 0 0 1px}
+.card::after{bottom:-1px;right:-1px;border-width:0 1px 1px 0}
+
+/* ── GRIDS ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+@media(max-width:660px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+/* ── FORM ── */
+label{display:block;font-size:.65rem;letter-spacing:.15em;color:var(--muted);margin-bottom:5px;text-transform:uppercase}
+input[type=number],input[type=text],input[type=email],select,textarea{
+  width:100%;background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:3px;
+  color:var(--text);font-family:'Courier New',monospace;font-size:.85rem;padding:9px 12px;outline:none;transition:border-color .2s
+}
+input:focus,select:focus,textarea:focus{border-color:rgba(0,212,255,.5);box-shadow:0 0 0 2px rgba(0,212,255,.06)}
+select option{background:#080c18}
+textarea{resize:vertical;min-height:80px}
+.hint{font-size:.68rem;color:var(--muted);margin-top:4px}
+.field{margin-bottom:.2rem}
+
+/* ── FILAMENT TABLE ── */
+.fil-head{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 1fr 36px;gap:6px;padding:0 6px 8px;font-size:.6rem;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.fil-row{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 1fr 36px;gap:6px;margin-bottom:8px;align-items:center}
+.fil-row input,.fil-row select{padding:7px 9px;font-size:.8rem}
+@media(max-width:700px){.fil-head{display:none}.fil-row{grid-template-columns:1fr 1fr;}}
+
+/* ── PARTS TABLE ── */
+.parts-head{display:grid;grid-template-columns:2fr 0.7fr 1fr 1.2fr 1fr 36px;gap:6px;padding:0 6px 8px;font-size:.6rem;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.part-row{display:grid;grid-template-columns:2fr 0.7fr 1fr 1.2fr 1fr 36px;gap:6px;margin-bottom:8px;align-items:center}
+.part-row input,.part-row select{padding:7px 9px;font-size:.8rem}
+@media(max-width:700px){.parts-head{display:none}.part-row{grid-template-columns:1fr 1fr}}
+.computed{background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.12);border-radius:3px;padding:7px 10px;font-size:.82rem;color:var(--cyan);text-align:right}
+
+/* ── BUTTONS ── */
+.btn-add{background:transparent;border:1px dashed rgba(0,212,255,.3);border-radius:3px;color:var(--cyan);font-family:'Courier New',monospace;font-size:.7rem;letter-spacing:.14em;padding:8px 16px;cursor:pointer;transition:all .2s;width:100%;margin-top:6px}
+.btn-add:hover{background:rgba(0,212,255,.05);border-color:rgba(0,212,255,.6)}
+.btn-remove{width:32px;height:32px;background:transparent;border:1px solid rgba(224,48,48,.3);border-radius:3px;color:var(--danger);cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+.btn-remove:hover{background:rgba(224,48,48,.1);border-color:var(--danger)}
+.btn-primary{background:var(--cyan);border:none;border-radius:3px;color:#04050d;font-family:'Courier New',monospace;font-size:.78rem;font-weight:700;letter-spacing:.14em;padding:11px 26px;cursor:pointer;transition:background .2s;text-transform:uppercase}
+.btn-primary:hover{background:#33dcff}
+.btn-secondary{background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-family:'Courier New',monospace;font-size:.78rem;letter-spacing:.14em;padding:11px 26px;cursor:pointer;transition:all .2s;text-transform:uppercase}
+.btn-secondary:hover{border-color:rgba(0,212,255,.4);color:var(--cyan)}
+.btn-danger{background:transparent;border:1px solid rgba(224,48,48,.4);border-radius:3px;color:var(--danger);font-family:'Courier New',monospace;font-size:.72rem;letter-spacing:.12em;padding:7px 14px;cursor:pointer;transition:all .2s;text-transform:uppercase}
+.btn-danger:hover{background:rgba(224,48,48,.08)}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+/* ── RESULT ── */
+.result-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem}
+@media(max-width:640px){.result-grid{grid-template-columns:1fr 1fr}}
+.res-card{background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:4px;padding:1rem 1.1rem}
+.res-label{font-size:.6rem;letter-spacing:.17em;color:var(--muted);margin-bottom:5px;text-transform:uppercase}
+.res-value{font-size:1.35rem;font-weight:700;color:var(--cyan)}
+.res-value.big{font-size:1.8rem;color:#fff}
+.total-box{background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.3);border-radius:6px;padding:1.4rem 1.8rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem}
+.total-label{font-size:.68rem;letter-spacing:.18em;color:var(--muted);margin-bottom:4px;text-transform:uppercase}
+.total-chf{font-size:2.2rem;font-weight:700;color:#fff}
+.total-chf span{font-size:.95rem;color:var(--cyan);margin-right:6px}
+.breakdown{width:100%;border-collapse:collapse;font-size:.82rem}
+.breakdown th{font-size:.6rem;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--border);text-align:left}
+.breakdown td{padding:8px 8px;border-bottom:1px solid rgba(0,212,255,.05)}
+.breakdown td:last-child{text-align:right;color:var(--cyan)}
+.breakdown tr:last-child td{border-bottom:none}
+.breakdown .sum-row td{border-top:1px solid var(--border);font-weight:700;color:#fff;padding-top:12px}
+.breakdown .sum-row td:last-child{color:var(--cyan)}
+
+/* ── BADGE ── */
+.badge{display:inline-block;font-size:.6rem;letter-spacing:.1em;padding:3px 8px;border-radius:2px;text-transform:uppercase}
+.badge-cyan{background:rgba(0,212,255,.1);color:var(--cyan);border:1px solid rgba(0,212,255,.2)}
+.badge-green{background:rgba(24,160,48,.1);color:var(--green);border:1px solid rgba(24,160,48,.2)}
+
+/* ── CONTACT FORM ── */
+.contact-modal{display:none;position:fixed;inset:0;background:rgba(4,5,13,.92);z-index:500;align-items:center;justify-content:center;padding:1rem}
+.contact-modal.open{display:flex}
+.contact-box{background:#080c18;border:1px solid var(--border);border-radius:8px;padding:2rem;max-width:520px;width:100%;max-height:90vh;overflow-y:auto}
+.contact-box h2{font-size:.9rem;letter-spacing:.2em;color:var(--cyan);margin-bottom:.4rem;text-transform:uppercase}
+.contact-box p{font-size:.75rem;color:var(--muted);margin-bottom:1.5rem}
+.contact-summary{background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:4px;padding:1rem;margin-bottom:1.2rem;font-size:.78rem;line-height:1.8}
+.contact-summary span{color:var(--cyan)}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:2rem;right:2rem;background:#080c18;border:1px solid rgba(0,212,255,.3);border-radius:4px;padding:.9rem 1.4rem;font-size:.78rem;color:var(--cyan);z-index:999;transform:translateY(80px);opacity:0;transition:all .35s;letter-spacing:.08em}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.error{border-color:rgba(224,48,48,.4);color:var(--danger)}
+
+/* ── DIVIDER ── */
+hr.cyber{border:none;border-top:1px solid var(--border);margin:1.5rem 0}
+
+footer{border-top:1px solid rgba(0,212,255,.07);background:rgba(4,5,13,.9);padding:16px 2rem;text-align:center;font-size:.7rem;letter-spacing:.07em;color:var(--muted)}
+footer strong{color:#8a90a8}
+footer a{color:#8a90a8;text-decoration:none;transition:color .2s}
+footer a:hover{color:var(--cyan)}
+footer .foot-sep{opacity:.45;margin:0 6px}
+</style>
+</head>
+<body>
+
+<!-- OTP OVERLAY -->
+<div id="otp-overlay" style="display:none">
+  <div class="otp-box">
+    <h2>Admin Zugang</h2>
+    <p>Einmalpasswort eingeben</p>
+    <div class="otp-digits">
+      <input type="text" maxlength="1" id="o1" inputmode="numeric"/>
+      <input type="text" maxlength="1" id="o2" inputmode="numeric"/>
+      <input type="text" maxlength="1" id="o3" inputmode="numeric"/>
+      <input type="text" maxlength="1" id="o4" inputmode="numeric"/>
+      <input type="text" maxlength="1" id="o5" inputmode="numeric"/>
+      <input type="text" maxlength="1" id="o6" inputmode="numeric"/>
+    </div>
+    <div class="otp-error" id="otp-error"></div>
+    <button class="btn-primary" style="width:100%" onclick="verifyOtp()">Bestätigen</button>
+    <p class="otp-hint">Das OTP wird bei jedem Seitenaufruf generiert.<br>Aktuelles OTP: <span id="otp-display" style="color:var(--cyan)"></span></p>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div>
+    <div><span class="logo-g">G</span><span class="logo-rest">SmartSol</span></div>
+    <div class="logo-sub">3D PRINTS · ALTDORF URI</div>
+  </div>
+  <div class="header-nav">
+    <div class="header-links">
+      <a href="https://gsmartsol.ch/">Start / GSmartSol</a>
+      <span class="sep">·</span>
+      <a href="https://www.finalstage.ch" target="_blank" rel="noopener noreferrer">FinalStage</a>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" id="tab-customer" onclick="showPage('customer')">
+        <span class="dot" style="margin-right:6px"></span>Kalkulator
+      </button>
+      <button class="nav-tab" id="tab-admin" onclick="openAdmin()">Admin</button>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════
+     CUSTOMER PAGE
+══════════════════════════════════════ -->
+<div class="page active" id="page-customer">
+  <h1><span>3D</span> Druck Kalkulator</h1>
+  <p class="page-sub">FDM MULTICOLOR PRINTS · KOSTENBERECHNUNG · KEIN DESIGN-SERVICE</p>
+
+  <div class="section-title">Filamenttyp wählen</div>
+  <div class="card">
+    <div class="g2">
+      <div class="field">
+        <label>Material</label>
+        <select id="c-filament" onchange="calcCustomer()">
+          <option value="">-- Bitte wählen --</option>
+        </select>
+        <p class="hint" id="c-fil-info"></p>
+      </div>
+      <div class="field">
+        <label>Bemerkungen zum Auftrag</label>
+        <textarea id="c-remarks" placeholder="z.B. Farbe, besondere Anforderungen, Verwendungszweck..." oninput="calcCustomer()"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Druckteile</div>
+  <div class="card">
+    <div class="parts-head">
+      <div>Teilname</div>
+      <div>Menge</div>
+      <div>Filament (g)</div>
+      <div>Druckzeit (ca.)</div>
+      <div>Kosten CHF</div>
+      <div></div>
+    </div>
+    <div id="c-parts"></div>
+    <button class="btn-add" onclick="addCustomerPart()">+ Teil hinzufügen</button>
+  </div>
+
+  <div class="section-title">Lieferung</div>
+  <div class="card">
+    <div class="g2">
+      <div class="field">
+        <label>Lieferoption</label>
+        <select id="c-shipping" onchange="calcCustomer()">
+          <option value="pickup">Abholung in Altdorf URI</option>
+          <option value="domestic">Versand Inland (Schweiz)</option>
+          <option value="international">Versand Ausland</option>
+        </select>
+        <p class="hint" id="c-ship-info"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Schätzung</div>
+  <div class="card">
+    <div class="result-grid">
+      <div class="res-card">
+        <div class="res-label">Filament total</div>
+        <div class="res-value" id="c-res-grams">— g</div>
+      </div>
+      <div class="res-card">
+        <div class="res-label">Druckzeit (ca.)</div>
+        <div class="res-value" id="c-res-time">— h</div>
+      </div>
+      <div class="res-card">
+        <div class="res-label">Materialkosten</div>
+        <div class="res-value" id="c-res-mat">CHF —</div>
+      </div>
+      <div class="res-card">
+        <div class="res-label">Aufwand</div>
+        <div class="res-value" id="c-res-energy">CHF —</div>
+      </div>
+    </div>
+
+    <table class="breakdown">
+      <thead><tr><th>Position</th><th style="text-align:right">CHF</th></tr></thead>
+      <tbody id="c-breakdown"></tbody>
+    </table>
+
+    <div style="height:1.2rem"></div>
+    <div class="total-box">
+      <div>
+        <div class="total-label">Geschätzte Gesamtkosten</div>
+        <div class="total-chf"><span>CHF</span><span id="c-total">—</span></div>
+        <div style="font-size:.65rem;color:var(--muted);margin-top:4px">Unverbindliche Schätzung · Finaler Preis nach Auftragsbestätigung</div>
+      </div>
+      <button class="btn-primary" onclick="openContact()">Angebot anfordern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     ADMIN PAGE
+══════════════════════════════════════ -->
+<div class="page" id="page-admin">
+  <h1><span>Admin</span> Einstellungen</h1>
+  <p class="page-sub">GRUNDEINSTELLUNGEN · FILAMENTTYPEN · ENERGIEKOSTEN</p>
+
+  <div class="section-title">Energiekosten & Maschinenkosten</div>
+  <div class="card">
+    <div class="g3">
+      <div class="field">
+        <label>Stromkosten (CHF/h)</label>
+        <input type="number" id="a-electricity" value="0.08" min="0" step="0.01" oninput="saveAdmin()"/>
+        <p class="hint">Ø Stromverbrauch P2S ~200W → ~0.08 CHF/h</p>
+      </div>
+      <div class="field">
+        <label>Maschinenverschleiss (CHF/h)</label>
+        <input type="number" id="a-wear" value="0.05" min="0" step="0.01" oninput="saveAdmin()"/>
+        <p class="hint">Düse, Riemen, Wartung anteilig</p>
+      </div>
+      <div class="field">
+        <label>Maschinenstunden-Stundensatz (CHF/h)</label>
+        <input type="number" id="a-machinerate" value="5.00" min="0" step="0.50" oninput="saveAdmin()"/>
+        <p class="hint">Wird mit der Druckzeit multipliziert und zum Preis addiert</p>
+      </div>
+    </div>
+    <hr class="cyber"/>
+    <div class="g3">
+      <div class="field">
+        <label>Druckrate Standard (g/h)</label>
+        <input type="number" id="a-printrate" value="25" min="1" step="1" oninput="saveAdmin()"/>
+        <p class="hint">P2S 0.4mm/0.2mm ~22–28 g/h</p>
+      </div>
+      <div class="field">
+        <label>Mindestpreis pro Auftrag (CHF)</label>
+        <input type="number" id="a-minprice" value="5" min="0" step="1" oninput="saveAdmin()"/>
+      </div>
+      <div class="field">
+        <label>Mehrwertsteuer (%)</label>
+        <input type="number" id="a-vat" value="8.1" min="0" step="0.1" oninput="saveAdmin()"/>
+        <p class="hint">CH MwSt 2024: 8.1%</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Filamenttypen
+    <button class="btn-add" style="width:auto;margin:0" onclick="addFilament()">+ Filament hinzufügen</button>
+  </div>
+  <div class="card">
+    <div class="fil-head">
+      <div>Name / Bezeichnung</div>
+      <div>Dichte (g/cm³)</div>
+      <div>Einkauf (CHF/kg)</div>
+      <div>Verkauf (CHF/kg)</div>
+      <div>Druckrate (g/h)</div>
+      <div>Farbe</div>
+      <div></div>
+    </div>
+    <div id="a-filaments"></div>
+  </div>
+
+  <div class="section-title">Porto & Versand</div>
+  <div class="card">
+    <div class="g3">
+      <div class="field">
+        <label>Abholung (CHF)</label>
+        <input type="number" id="a-ship-pickup" value="0" min="0" step="0.50" oninput="saveAdmin()"/>
+        <p class="hint">Kostenlos oder Bearbeitungsgebühr</p>
+      </div>
+      <div class="field">
+        <label>Versand Inland (CHF)</label>
+        <input type="number" id="a-ship-domestic" value="8.50" min="0" step="0.50" oninput="saveAdmin()"/>
+        <p class="hint">Post Priority / A-Post Schweiz</p>
+      </div>
+      <div class="field">
+        <label>Versand Ausland (CHF)</label>
+        <input type="number" id="a-ship-international" value="18.00" min="0" step="0.50" oninput="saveAdmin()"/>
+        <p class="hint">Europa / Welt</p>
+      </div>
+    </div>
+    <div style="margin-top:1rem">
+      <div class="field">
+        <label>Verpackungsmaterial (CHF)</label>
+        <input type="number" id="a-ship-packaging" value="2.50" min="0" step="0.50" oninput="saveAdmin()"/>
+        <p class="hint">Schachtel, Polster, Klebeband – wird zu jeder Versandoption addiert</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Kontakt E-Mail</div>
+  <div class="card">
+    <div class="g2">
+      <div class="field">
+        <label>Empfänger E-Mail (Angebotsanfragen)</label>
+        <input type="text" id="a-email" placeholder="info@gsmartsol.ch" oninput="saveAdmin()"/>
+      </div>
+      <div class="field">
+        <label>Impressum / Kontaktinfo (wird auf Kundenseite angezeigt)</label>
+        <textarea id="a-impressum" placeholder="GSmartSol · Altdorf URI · info@gsmartsol.ch" oninput="saveAdmin()"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-primary" onclick="saveAdmin();showToast('Einstellungen gespeichert','ok')">Speichern</button>
+    <button class="btn-secondary" onclick="showPage('customer')">Zur Kundenseite</button>
+  </div>
+</div>
+
+<!-- CONTACT MODAL -->
+<div class="contact-modal" id="contact-modal">
+  <div class="contact-box">
+    <h2>Angebot anfordern</h2>
+    <p>Sende uns deine Kalkulation – wir melden uns innerhalb von 24h.</p>
+    <div class="contact-summary" id="contact-summary"></div>
+    <div class="field" style="margin-bottom:.8rem">
+      <label>Dein Name</label>
+      <input type="text" id="cf-name" placeholder="Max Muster"/>
+    </div>
+    <div class="field" style="margin-bottom:.8rem">
+      <label>E-Mail Adresse</label>
+      <input type="email" id="cf-email" placeholder="deine@email.com"/>
+    </div>
+    <div class="field" style="margin-bottom:1.2rem">
+      <label>Nachricht (optional)</label>
+      <textarea id="cf-message" placeholder="Weitere Infos, Farbwünsche, Liefertermin..."></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="submitContact()">Anfrage senden</button>
+      <button class="btn-secondary" onclick="closeContact()">Abbrechen</button>
+    </div>
+    <p style="font-size:.65rem;color:var(--muted);margin-top:1rem" id="contact-impressum"></p>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<footer>© 2026 <strong>GSmartSol</strong> · Altdorf URI · Alle Rechte vorbehalten<span class="foot-sep">·</span><a href="https://gsmartsol.ch/">Start</a><span class="foot-sep">·</span><a href="https://www.finalstage.ch" target="_blank" rel="noopener noreferrer">FinalStage</a></footer>
+
+<script>
+// ═══════════════════════════════════════
+// OTP SYSTEM
+// ═══════════════════════════════════════
+let currentOtp = '';
+function genOtp(){
+  currentOtp = String(Math.floor(100000+Math.random()*900000));
+  document.getElementById('otp-display').textContent = currentOtp;
+}
+function openAdmin(){
+  genOtp();
+  document.getElementById('otp-error').textContent='';
+  ['o1','o2','o3','o4','o5','o6'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('otp-overlay').style.display='flex';
+  setTimeout(()=>document.getElementById('o1').focus(),100);
+}
+function verifyOtp(){
+  const entered=['o1','o2','o3','o4','o5','o6'].map(id=>document.getElementById(id).value).join('');
+  if(entered===currentOtp){
+    document.getElementById('otp-overlay').style.display='none';
+    showPage('admin');
+  } else {
+    document.getElementById('otp-error').textContent='Falsches OTP. Bitte erneut versuchen.';
+    genOtp();
+    ['o1','o2','o3','o4','o5','o6'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('o1').focus();
+  }
+}
+// OTP digit auto-advance
+document.querySelectorAll('.otp-digits input').forEach((inp,i,arr)=>{
+  inp.addEventListener('input',()=>{
+    if(inp.value&&i<arr.length-1) arr[i+1].focus();
+    if(i===arr.length-1&&inp.value) verifyOtp();
+  });
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Backspace'&&!inp.value&&i>0) arr[i-1].focus();
+    if(e.key==='Enter') verifyOtp();
+  });
+});
+
+// ═══════════════════════════════════════
+// PAGE NAVIGATION
+// ═══════════════════════════════════════
+function showPage(p){
+  document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  document.getElementById('tab-'+p).classList.add('active');
+  if(p==='customer') populateFilamentSelect();
+}
+
+// ═══════════════════════════════════════
+// STORAGE
+// ═══════════════════════════════════════
+function loadSettings(){
+  const d=localStorage.getItem('gsmartsol-settings');
+  return d?JSON.parse(d):{
+    electricity:0.08, wear:0.05, machinerate:5.00, printrate:25, minprice:5, vat:8.1,
+    shipPickup:0, shipDomestic:8.50, shipInternational:18.00, shipPackaging:2.50,
+    email:'', impressum:'GSmartSol · Altdorf URI',
+    filaments:[
+      {name:'PLA Standard',   density:1.24, buy:18, sell:28, rate:26, color:'#e8eaf0'},
+      {name:'PETG',           density:1.27, buy:22, sell:34, rate:24, color:'#00d4ff'},
+      {name:'ABS/ASA',        density:1.05, buy:24, sell:36, rate:22, color:'#d4a010'},
+      {name:'PLA Carbon',     density:1.30, buy:45, sell:68, rate:20, color:'#444'},
+      {name:'TPU Flex',       density:1.21, buy:28, sell:42, rate:14, color:'#8820c0'},
+    ]
+  };
+}
+function saveSettings(s){ localStorage.setItem('gsmartsol-settings',JSON.stringify(s)); }
+
+// ═══════════════════════════════════════
+// ADMIN
+// ═══════════════════════════════════════
+let adminFilCount=0;
+function loadAdmin(){
+  const s=loadSettings();
+  document.getElementById('a-electricity').value=s.electricity;
+  document.getElementById('a-wear').value=s.wear;
+  document.getElementById('a-machinerate').value=s.machinerate??5.00;
+  document.getElementById('a-printrate').value=s.printrate;
+  document.getElementById('a-minprice').value=s.minprice;
+  document.getElementById('a-vat').value=s.vat;
+  document.getElementById('a-ship-pickup').value=s.shipPickup??0;
+  document.getElementById('a-ship-domestic').value=s.shipDomestic??8.50;
+  document.getElementById('a-ship-international').value=s.shipInternational??18.00;
+  document.getElementById('a-ship-packaging').value=s.shipPackaging??2.50;
+  document.getElementById('a-email').value=s.email;
+  document.getElementById('a-impressum').value=s.impressum;
+  document.getElementById('a-filaments').innerHTML='';
+  adminFilCount=0;
+  s.filaments.forEach(f=>addFilament(f));
+}
+function addFilament(f){
+  adminFilCount++;
+  const id=adminFilCount;
+  const el=document.createElement('div');
+  el.className='fil-row'; el.id='fil-'+id;
+  el.innerHTML=`
+    <input type="text"   value="${f?f.name:''}"    placeholder="z.B. PLA Standard" oninput="saveAdmin()"/>
+    <input type="number" value="${f?f.density:1.24}" min="0.5" step="0.01" oninput="saveAdmin()"/>
+    <input type="number" value="${f?f.buy:20}"      min="0" step="1" oninput="saveAdmin()"/>
+    <input type="number" value="${f?f.sell:30}"     min="0" step="1" oninput="saveAdmin()"/>
+    <input type="number" value="${f?f.rate:25}"     min="1" step="1" oninput="saveAdmin()"/>
+    <input type="color"  value="${f?f.color:'#00d4ff'}" oninput="saveAdmin()" style="padding:3px;height:36px;cursor:pointer"/>
+    <button class="btn-remove" onclick="removeFilament(${id})">×</button>
+  `;
+  document.getElementById('a-filaments').appendChild(el);
+}
+function removeFilament(id){
+  const el=document.getElementById('fil-'+id);
+  if(el){el.remove();saveAdmin();}
+}
+function saveAdmin(){
+  const filaments=[];
+  document.querySelectorAll('.fil-row').forEach(row=>{
+    const inputs=row.querySelectorAll('input');
+    if(inputs[0].value.trim()){
+      filaments.push({
+        name:inputs[0].value.trim(),
+        density:parseFloat(inputs[1].value)||1.24,
+        buy:parseFloat(inputs[2].value)||0,
+        sell:parseFloat(inputs[3].value)||0,
+        rate:parseFloat(inputs[4].value)||25,
+        color:inputs[5].value
+      });
+    }
+  });
+  const s={
+    electricity:parseFloat(document.getElementById('a-electricity').value)||0.08,
+    wear:parseFloat(document.getElementById('a-wear').value)||0.05,
+    machinerate:parseFloat(document.getElementById('a-machinerate').value)||5.00,
+    printrate:parseFloat(document.getElementById('a-printrate').value)||25,
+    minprice:parseFloat(document.getElementById('a-minprice').value)||5,
+    vat:parseFloat(document.getElementById('a-vat').value)||8.1,
+    shipPickup:parseFloat(document.getElementById('a-ship-pickup').value)||0,
+    shipDomestic:parseFloat(document.getElementById('a-ship-domestic').value)||8.50,
+    shipInternational:parseFloat(document.getElementById('a-ship-international').value)||18.00,
+    shipPackaging:parseFloat(document.getElementById('a-ship-packaging').value)||2.50,
+    email:document.getElementById('a-email').value,
+    impressum:document.getElementById('a-impressum').value,
+    filaments
+  };
+  saveSettings(s);
+}
+
+// ═══════════════════════════════════════
+// CUSTOMER
+// ═══════════════════════════════════════
+let custPartCount=0;
+function populateFilamentSelect(){
+  const s=loadSettings();
+  const sel=document.getElementById('c-filament');
+  const prev=sel.value;
+  sel.innerHTML='<option value="">-- Material wählen --</option>';
+  s.filaments.forEach((f,i)=>{
+    const opt=document.createElement('option');
+    opt.value=i; opt.textContent=f.name+' ('+f.sell+' CHF/kg)';
+    sel.appendChild(opt);
+  });
+  if(prev!=='') sel.value=prev;
+  updateFilInfo();
+  calcCustomer();
+}
+function updateFilInfo(){
+  const s=loadSettings();
+  const idx=document.getElementById('c-filament').value;
+  const info=document.getElementById('c-fil-info');
+  if(idx===''){info.textContent='';return;}
+  const f=s.filaments[parseInt(idx)];
+  info.textContent=`Dichte: ${f.density} g/cm³ · Druckrate: ~${f.rate} g/h · Preis: ${f.sell} CHF/kg`;
+}
+function addCustomerPart(name='',qty=1,grams=0){
+  custPartCount++;
+  const id=custPartCount;
+  const el=document.createElement('div');
+  el.className='part-row'; el.id='cp-'+id;
+  el.innerHTML=`
+    <input type="text"   value="${name}"  placeholder="Teilname" oninput="calcCustomer()"/>
+    <input type="number" value="${qty}"   min="1" step="1" oninput="calcCustomer()"/>
+    <input type="number" value="${grams}" min="0" step="1" placeholder="0" oninput="calcCustomer()"/>
+    <div class="computed" id="cpt-${id}">—</div>
+    <div class="computed" id="cpc-${id}">—</div>
+    <button class="btn-remove" onclick="removeCustPart(${id})">×</button>
+  `;
+  document.getElementById('c-parts').appendChild(el);
+  calcCustomer();
+}
+function removeCustPart(id){
+  const el=document.getElementById('cp-'+id);
+  if(el){el.remove();calcCustomer();}
+}
+function calcCustomer(){
+  updateFilInfo();
+  const s=loadSettings();
+  const idx=document.getElementById('c-filament').value;
+  const fil=idx!==''?s.filaments[parseInt(idx)]:null;
+  const energyPerH=s.electricity+s.wear;
+  const machineRate=s.machinerate??5.00;
+  const rate=fil?fil.rate:s.printrate;
+  const sellPer1000=fil?fil.sell:0;
+
+  // shipping
+  const shipMode=document.getElementById('c-shipping').value;
+  const shipInfo=document.getElementById('c-ship-info');
+  const pkg=s.shipPackaging??2.50;
+  let shipBase=0, shipLabel='';
+  if(shipMode==='pickup'){
+    shipBase=s.shipPickup??0;
+    shipLabel=shipBase>0?`Abholung: CHF ${shipBase.toFixed(2)}`:'Abholung: kostenlos';
+  } else if(shipMode==='domestic'){
+    shipBase=(s.shipDomestic??8.50)+pkg;
+    shipLabel=`Inland: CHF ${(s.shipDomestic??8.50).toFixed(2)} + Verpackung CHF ${pkg.toFixed(2)}`;
+  } else {
+    shipBase=(s.shipInternational??18.00)+pkg;
+    shipLabel=`Ausland: CHF ${(s.shipInternational??18.00).toFixed(2)} + Verpackung CHF ${pkg.toFixed(2)}`;
+  }
+  shipInfo.textContent=shipLabel;
+
+  let totalG=0,totalH=0,totalMat=0,totalEnergy=0,totalMachine=0;
+  const rows=[];
+
+  document.querySelectorAll('.part-row').forEach(row=>{
+    const inputs=row.querySelectorAll('input');
+    const name=inputs[0].value||'Teil';
+    const qty=parseFloat(inputs[1].value)||1;
+    const grams=parseFloat(inputs[2].value)||0;
+    const timeH=rate>0?grams/rate:0;
+    const mat=(grams/1000)*sellPer1000*qty;
+    const eng=timeH*energyPerH*qty;
+    const mach=timeH*machineRate*qty;
+    const cost=mat+eng+mach;
+
+    const ptEl=row.querySelector('[id^="cpt-"]');
+    const pcEl=row.querySelector('[id^="cpc-"]');
+    if(ptEl) ptEl.textContent=fil?(timeH*qty).toFixed(1)+' h':'— h';
+    if(pcEl) pcEl.textContent=fil?cost.toFixed(2):'—';
+
+    totalG+=grams*qty;
+    totalH+=timeH*qty;
+    totalMat+=mat;
+    totalEnergy+=eng;
+    totalMachine+=mach;
+    if(grams>0) rows.push({name,qty,grams,timeH:timeH*qty,mat,eng,mach,cost});
+  });
+
+  const subtotal=totalMat+totalEnergy+totalMachine;
+  const vatAmt=subtotal*(s.vat/100);
+  const total=Math.max(subtotal+vatAmt+shipBase,rows.length>0?s.minprice:0);
+
+  document.getElementById('c-res-grams').textContent=totalG.toFixed(0)+' g';
+  document.getElementById('c-res-time').textContent=fil?totalH.toFixed(1)+' h':'— h';
+  document.getElementById('c-res-mat').textContent=fil?'CHF '+totalMat.toFixed(2):'CHF —';
+  document.getElementById('c-res-energy').textContent=fil?'CHF '+(totalEnergy+totalMachine).toFixed(2):'CHF —';
+  document.getElementById('c-total').textContent=fil&&rows.length>0?total.toFixed(2):'—';
+
+  const tbody=document.getElementById('c-breakdown');
+  tbody.innerHTML='';
+  if(fil&&rows.length>0){
+    rows.forEach(r=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${r.name} ×${r.qty} (${(r.grams*r.qty).toFixed(0)} g, ~${r.timeH.toFixed(1)} h)</td><td>${r.cost.toFixed(2)}</td>`;
+      tbody.appendChild(tr);
+    });
+    addBDRow(tbody,'Materialkosten',totalMat.toFixed(2));
+    addBDRow(tbody,`Strom & Verschleiss (${totalH.toFixed(1)} h × ${energyPerH.toFixed(2)} CHF/h)`,totalEnergy.toFixed(2));
+    addBDRow(tbody,`Maschinenstunden (${totalH.toFixed(1)} h × ${machineRate.toFixed(2)} CHF/h)`,totalMachine.toFixed(2));
+    addBDRow(tbody,'MwSt '+s.vat+'%',vatAmt.toFixed(2));
+    if(shipBase>0) addBDRow(tbody,shipMode==='pickup'?'Abholung':shipMode==='domestic'?'Versand Inland (inkl. Verpackung)':'Versand Ausland (inkl. Verpackung)',shipBase.toFixed(2));
+    if(total>subtotal+vatAmt+shipBase) addBDRow(tbody,'Mindestpreis',s.minprice.toFixed(2));
+    const sumTr=document.createElement('tr');
+    sumTr.className='sum-row';
+    sumTr.innerHTML=`<td>Gesamt (inkl. MwSt & Versand)</td><td>${total.toFixed(2)}</td>`;
+    tbody.appendChild(sumTr);
+  }
+}
+function addBDRow(tbody,label,val){
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td style="color:var(--muted)">${label}</td><td>${val}</td>`;
+  tbody.appendChild(tr);
+}
+
+// ═══════════════════════════════════════
+// CONTACT FORM
+// ═══════════════════════════════════════
+function openContact(){
+  const s=loadSettings();
+  const idx=document.getElementById('c-filament').value;
+  const fil=idx!==''?s.filaments[parseInt(idx)]:null;
+  if(!fil){showToast('Bitte zuerst ein Material wählen','error');return;}
+  const total=document.getElementById('c-total').textContent;
+  if(total==='—'){showToast('Bitte Teile eingeben','error');return;}
+
+  // build summary
+  let lines=`<strong style="color:var(--cyan)">Material:</strong> ${fil.name}<br>`;
+  document.querySelectorAll('.part-row').forEach(row=>{
+    const inputs=row.querySelectorAll('input');
+    const name=inputs[0].value||'Teil';
+    const qty=inputs[1].value||1;
+    const g=inputs[2].value||0;
+    if(parseFloat(g)>0) lines+=`${name} ×${qty} — ${g} g<br>`;
+  });
+  const remarks=document.getElementById('c-remarks').value;
+  if(remarks) lines+=`<br><em>${remarks}</em><br>`;
+  lines+=`<br><strong style="color:var(--cyan)">Geschätzter Preis: CHF ${total}</strong>`;
+
+  document.getElementById('contact-summary').innerHTML=lines;
+  document.getElementById('contact-impressum').textContent=s.impressum;
+  document.getElementById('contact-modal').classList.add('open');
+}
+function closeContact(){document.getElementById('contact-modal').classList.remove('open');}
+function submitContact(){
+  const name=document.getElementById('cf-name').value.trim();
+  const email=document.getElementById('cf-email').value.trim();
+  if(!name||!email){showToast('Name und E-Mail erforderlich','error');return;}
+  if(!/\S+@\S+\.\S+/.test(email)){showToast('Ungültige E-Mail','error');return;}
+
+  const s=loadSettings();
+  const to=s.email||'info@gsmartsol.ch';
+  const summary=document.getElementById('contact-summary').innerText;
+  const msg=document.getElementById('cf-message').value;
+  const subject=encodeURIComponent('3D Druck Anfrage – GSmartSol Kalkulator');
+  const body=encodeURIComponent(
+    `Name: ${name}\nE-Mail: ${email}\n\n--- Kalkulation ---\n${summary}\n\n--- Nachricht ---\n${msg||'(keine)'}\n\nGesendet via GSmartSol Kalkulator`
+  );
+  window.open(`mailto:${to}?subject=${subject}&body=${body}`,'_blank');
+  closeContact();
+  showToast('E-Mail-Client geöffnet – bitte Anfrage absenden');
+}
+
+// ═══════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════
+function showToast(msg,type){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='toast'+(type==='error'?' error':'');
+  setTimeout(()=>t.classList.add('show'),10);
+  setTimeout(()=>t.classList.remove('show'),3200);
+}
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+loadAdmin();
+populateFilamentSelect();
+addCustomerPart('',1,0);
+addCustomerPart('',1,0);
+</script>
+</body>
+</html>

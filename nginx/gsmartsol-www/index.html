@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coming Soon</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #04050d;
+      --cyan:   #00d4ff;
+      --text:   #e8eaf0;
+      --muted:  #4a5068;
+      --border: rgba(0, 212, 255, 0.12);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      overflow: hidden;
+    }
+
+    /* Background canvas */
+    canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    /* Vignette */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      background: radial-gradient(ellipse at center,
+        transparent 40%,
+        rgba(4, 5, 13, 0.85) 100%);
+      pointer-events: none;
+    }
+
+    /* Page layout */
+    .page {
+      position: relative;
+      z-index: 2;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    /* Status pill */
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 5px 16px 5px 10px;
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: 3rem;
+    }
+    .status-dot {
+      position: relative;
+      width: 8px; height: 8px;
+    }
+    .status-dot::before,
+    .status-dot::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: var(--cyan);
+    }
+    .status-dot::after {
+      animation: ripple 2s ease-out infinite;
+    }
+    @keyframes ripple {
+      0%   { transform: scale(1); opacity: 0.8; }
+      100% { transform: scale(3); opacity: 0; }
+    }
+
+    /* Headline */
+    h1 {
+      font-size: clamp(2.4rem, 7vw, 6.5rem);
+      font-weight: 300;
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      margin-bottom: 1.8rem;
+      color: var(--text);
+    }
+    h1 strong {
+      font-weight: 700;
+      color: #fff;
+      text-shadow:
+        0 0 40px rgba(0, 212, 255, 0.35),
+        0 0 80px rgba(0, 212, 255, 0.12);
+    }
+
+    /* Divider line */
+    .divider {
+      width: 48px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      margin: 0 auto 1.8rem;
+    }
+
+    /* Subtext */
+    p.sub {
+      max-width: 440px;
+      font-size: clamp(0.9rem, 2vw, 1.05rem);
+      line-height: 1.8;
+      color: #7a8098;
+      margin-bottom: 3rem;
+      font-weight: 300;
+    }
+
+    /* Email form */
+    .form {
+      display: flex;
+      width: 100%;
+      max-width: 400px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+    .form:focus-within {
+      border-color: rgba(0, 212, 255, 0.45);
+      box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.05);
+    }
+    .form input {
+      flex: 1;
+      padding: 13px 18px;
+      background: rgba(255,255,255,0.03);
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 0.88rem;
+      letter-spacing: 0.04em;
+    }
+    .form input::placeholder { color: var(--muted); }
+    .form button {
+      padding: 13px 22px;
+      background: var(--cyan);
+      border: none;
+      color: #04050d;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .form button:hover { background: #33dcff; }
+
+    /* Footer */
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 2;
+      border-top: 1px solid rgba(0, 212, 255, 0.07);
+      background: rgba(4, 5, 13, 0.7);
+      backdrop-filter: blur(8px);
+      padding: 14px 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    .footer strong {
+      color: #8a90a8;
+      font-weight: 600;
+    }
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 6px 12px;
+      font-size: 0.72rem;
+    }
+    .footer-links a {
+      color: #8a90a8;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover {
+      color: var(--cyan);
+    }
+    .footer-sep {
+      opacity: 0.5;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+<div class="vignette"></div>
+
+<main class="page">
+  <div class="status">
+    <span class="status-dot"></span>
+    In Entwicklung
+  </div>
+
+  <h1>Hier entsteht<br><strong>etwas Grosses.</strong></h1>
+
+  <div class="divider"></div>
+
+  <p class="sub">
+    Wir werden unser Business bald präsentieren.
+  </p>
+
+  <div class="form">
+    <input type="email" placeholder="deine@email.com" autocomplete="email" />
+    <button>Notify me</button>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="footer-links">
+    <a href="https://www.finalstage.ch" target="_blank" rel="noopener noreferrer">FinalStage</a>
+    <span class="footer-sep">·</span>
+    <a href="/3d-druck-kalkulator.html">3D Druck Kalkulator</a>
+  </div>
+  <div>
+    &copy; 2026 <strong>GSmartSol</strong>. Alle Rechte vorbehalten.
+  </div>
+</footer>
+
+<script>
+(function () {
+  const canvas = document.getElementById('bg');
+  const ctx    = canvas.getContext('2d');
+  let W, H, tick = 0;
+
+  const CYAN       = '0, 212, 255';
+  const SCAN_SPEED = 0.4;
+  const N_PARTICLES = 55;
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    initParticles();
+  }
+
+  function drawGrid() {
+    const horizon = H * 0.52;
+    const vp = { x: W / 2, y: horizon };
+    const LINES = 24;
+    const SPREAD = 3.6;
+
+    ctx.save();
+    ctx.lineWidth = 1;
+
+    for (let i = 0; i <= LINES; i++) {
+      const t    = i / LINES;
+      const yRaw = horizon + Math.pow(t, 1.6) * (H - horizon);
+      const y    = ((yRaw - horizon + tick * SCAN_SPEED) % (H - horizon)) + horizon;
+      const xL   = vp.x - (W * SPREAD / 2) * Math.pow(t, 1.0);
+      const xR   = vp.x + (W * SPREAD / 2) * Math.pow(t, 1.0);
+      const alpha = Math.pow(t, 0.7) * 0.18;
+      ctx.strokeStyle = `rgba(${CYAN}, ${alpha})`;
+      ctx.beginPath();
+      ctx.moveTo(xL, y);
+      ctx.lineTo(xR, y);
+      ctx.stroke();
+    }
+
+    const VLINES = 16;
+    for (let i = 0; i <= VLINES; i++) {
+      const t  = i / VLINES;
+      const xB = vp.x - W * SPREAD / 2 + t * W * SPREAD;
+      ctx.strokeStyle = `rgba(${CYAN}, 0.06)`;
+      ctx.beginPath();
+      ctx.moveTo(vp.x, horizon);
+      ctx.lineTo(xB, H + 40);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function drawHorizon() {
+    const y = H * 0.52;
+    const grad = ctx.createLinearGradient(0, y - 60, 0, y + 60);
+    grad.addColorStop(0,   `rgba(${CYAN}, 0)`);
+    grad.addColorStop(0.5, `rgba(${CYAN}, 0.07)`);
+    grad.addColorStop(1,   `rgba(${CYAN}, 0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, y - 60, W, 120);
+  }
+
+  let particles = [];
+  function initParticles() {
+    particles = Array.from({ length: N_PARTICLES }, () => makeParticle());
+  }
+  function makeParticle(fromBottom) {
+    return {
+      x:     Math.random() * W,
+      y:     fromBottom ? H + 4 : Math.random() * H,
+      r:     Math.random() * 1.2 + 0.3,
+      vy:    -(Math.random() * 0.35 + 0.1),
+      alpha: Math.random() * 0.5 + 0.1,
+      fade:  Math.random() * 0.003 + 0.001
+    };
+  }
+  function drawParticles() {
+    particles.forEach((p, i) => {
+      p.y    += p.vy;
+      p.alpha -= p.fade;
+      if (p.alpha <= 0 || p.y < -10) { particles[i] = makeParticle(true); return; }
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${CYAN}, ${p.alpha})`;
+      ctx.fill();
+    });
+  }
+
+  let scanY = 0;
+  function drawScanLine() {
+    scanY = (scanY + 0.8) % H;
+    const grad = ctx.createLinearGradient(0, scanY - 60, 0, scanY + 2);
+    grad.addColorStop(0, `rgba(${CYAN}, 0)`);
+    grad.addColorStop(1, `rgba(${CYAN}, 0.04)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, scanY - 60, W, 62);
+    ctx.strokeStyle = `rgba(${CYAN}, 0.12)`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, scanY);
+    ctx.lineTo(W, scanY);
+    ctx.stroke();
+  }
+
+  function loop() {
+    tick++;
+    ctx.clearRect(0, 0, W, H);
+    const bg = ctx.createRadialGradient(W/2, H*0.5, 0, W/2, H*0.5, W * 0.8);
+    bg.addColorStop(0, '#080c1a');
+    bg.addColorStop(1, '#04050d');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    drawGrid();
+    drawHorizon();
+    drawParticles();
+    drawScanLine();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+  loop();
+})();
+</script>
+</body>
+</html>
