@@ -36,16 +36,19 @@ header{display:flex;align-items:center;justify-content:space-between;flex-wrap:w
 .page{display:none;max-width:980px;margin:0 auto;padding:2.5rem 1.5rem 5rem}
 .page.active{display:block}
 
-/* ── OTP OVERLAY ── */
-#otp-overlay{position:fixed;inset:0;background:rgba(4,5,13,0.97);z-index:999;display:flex;align-items:center;justify-content:center}
-.otp-box{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:2.5rem;max-width:380px;width:100%;text-align:center}
-.otp-box h2{font-size:1rem;letter-spacing:.2em;color:var(--cyan);margin-bottom:.5rem;text-transform:uppercase}
-.otp-box p{font-size:.75rem;color:var(--muted);margin-bottom:1.5rem}
-.otp-digits{display:flex;gap:10px;justify-content:center;margin-bottom:1.2rem}
-.otp-digits input{width:44px;height:52px;text-align:center;font-size:1.4rem;font-weight:700;background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'Courier New',monospace;outline:none;transition:border-color .2s}
-.otp-digits input:focus{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(0,212,255,.08)}
-.otp-error{font-size:.72rem;color:var(--danger);min-height:1.2rem;margin-bottom:.8rem}
-.otp-hint{font-size:.65rem;color:var(--muted);margin-top:1rem}
+/* ── OTP OVERLAY (FinalStage: E-Mail + Code) ── */
+#otp-overlay{position:fixed;inset:0;background:rgba(4,5,13,0.97);z-index:999;display:flex;align-items:center;justify-content:center;padding:1rem}
+.otp-box{background:rgba(8,12,26,0.82);border:1px solid var(--border);border-radius:12px;padding:2rem;max-width:430px;width:100%;text-align:left;box-shadow:0 24px 60px rgba(0,0,0,0.55);backdrop-filter:blur(8px)}
+.otp-box h2{font-size:1.15rem;font-weight:600;letter-spacing:-0.02em;color:#f4f8ff;margin-bottom:.35rem;text-align:center}
+.otp-lead{font-size:.75rem;color:var(--muted);margin-bottom:1.25rem;line-height:1.5;text-align:center}
+.otp-code-hint{font-size:.72rem;color:var(--muted);margin-bottom:1rem;line-height:1.5}
+.otp-code-hint strong{color:var(--cyan);font-weight:600}
+.otp-feedback{font-size:.72rem;min-height:1.1rem;margin-bottom:.75rem;padding:.55rem .75rem;border-radius:4px;display:none}
+.otp-feedback.show{display:block}
+.otp-feedback.err{color:var(--danger);border:1px solid rgba(224,48,48,.35);background:rgba(224,48,48,.08)}
+.otp-feedback.info{color:#7ae8ff;border:1px solid rgba(0,212,255,.35);background:rgba(0,212,255,.1)}
+.otp-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border:1px solid rgba(0,212,255,.2);border-radius:999px;font-size:.65rem;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);margin:0 auto 1rem;justify-content:center;width:fit-content}
+.otp-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--cyan)}
 
 /* ── TYPOGRAPHY ── */
 h1{font-size:1.7rem;font-weight:700;letter-spacing:.04em;margin-bottom:.3rem}
@@ -154,22 +157,38 @@ footer .foot-sep{opacity:.45;margin:0 6px}
 </head>
 <body>
 
-<!-- OTP OVERLAY -->
+<!-- OTP OVERLAY (wie test.finalstage.ch Login: E-Mail → Code per E-Mail) -->
 <div id="otp-overlay" style="display:none">
   <div class="otp-box">
-    <h2>Admin Zugang</h2>
-    <p>Einmalpasswort eingeben</p>
-    <div class="otp-digits">
-      <input type="text" maxlength="1" id="o1" inputmode="numeric"/>
-      <input type="text" maxlength="1" id="o2" inputmode="numeric"/>
-      <input type="text" maxlength="1" id="o3" inputmode="numeric"/>
-      <input type="text" maxlength="1" id="o4" inputmode="numeric"/>
-      <input type="text" maxlength="1" id="o5" inputmode="numeric"/>
-      <input type="text" maxlength="1" id="o6" inputmode="numeric"/>
+    <div style="display:flex;flex-direction:column;align-items:center">
+      <div class="otp-badge"><span class="otp-badge-dot"></span> Admin</div>
     </div>
-    <div class="otp-error" id="otp-error"></div>
-    <button class="btn-primary" style="width:100%" onclick="verifyOtp()">Bestätigen</button>
-    <p class="otp-hint">Das OTP wird bei jedem Seitenaufruf generiert.<br>Aktuelles OTP: <span id="otp-display" style="color:var(--cyan)"></span></p>
+    <h2>Admin-Zugang</h2>
+    <p class="otp-lead">Wie bei FinalStage: Zugang nur mit E-Mail, die auf der Plattform freigeschaltet ist. Du erhältst einen Code per E-Mail.</p>
+
+    <div id="otp-step-email">
+      <div class="field">
+        <label>E-Mail</label>
+        <input type="email" id="admin-email" autocomplete="email" placeholder="deine@email.com"/>
+      </div>
+      <div class="otp-feedback" id="otp-feedback"></div>
+      <button type="button" class="btn-primary" style="width:100%" id="btn-send-otp" onclick="sendAdminOtp()">Code senden</button>
+    </div>
+
+    <div id="otp-step-code" style="display:none">
+      <p class="otp-code-hint">Code wurde an <strong id="admin-email-display"></strong> gesendet.</p>
+      <div class="field">
+        <label>Einmalcode</label>
+        <input type="text" id="admin-otp-code" inputmode="numeric" autocomplete="one-time-code" placeholder="Code aus der E-Mail"/>
+      </div>
+      <div class="otp-feedback" id="otp-feedback-2"></div>
+      <div class="btn-row" style="margin-top:.5rem">
+        <button type="button" class="btn-secondary" style="flex:1" onclick="adminOtpBack()">Zurück</button>
+        <button type="button" class="btn-primary" style="flex:1" id="btn-verify-otp" onclick="verifyAdminOtp()">Anmelden</button>
+      </div>
+    </div>
+
+    <button type="button" class="btn-secondary" style="width:100%;margin-top:1rem" onclick="closeAdminOtp()">Abbrechen</button>
   </div>
 </div>
 
@@ -391,6 +410,7 @@ footer .foot-sep{opacity:.45;margin:0 6px}
   <div class="btn-row">
     <button class="btn-primary" onclick="saveAdmin();showToast('Einstellungen gespeichert','ok')">Speichern</button>
     <button class="btn-secondary" onclick="showPage('customer')">Zur Kundenseite</button>
+    <button class="btn-secondary" onclick="logoutAdmin()">Abmelden</button>
   </div>
 </div>
 
@@ -427,42 +447,135 @@ footer .foot-sep{opacity:.45;margin:0 6px}
 
 <script>
 // ═══════════════════════════════════════
-// OTP SYSTEM
+// ADMIN OTP (wie test.finalstage.ch: /auth/send-otp + /auth/verify-otp)
+// API: Standard test.finalstage.ch — überschreibbar: window.GSMARTSOL_API_BASE = 'https://…/api/v1'
 // ═══════════════════════════════════════
-let currentOtp = '';
-function genOtp(){
-  currentOtp = String(Math.floor(100000+Math.random()*900000));
-  document.getElementById('otp-display').textContent = currentOtp;
+var GSMARTSOL_API_BASE = (typeof window !== 'undefined' && window.GSMARTSOL_API_BASE) || 'https://test.finalstage.ch/api/v1';
+var GSMARTSOL_ADMIN_TOKEN_KEY = 'gsmartsol_kalk_admin_token';
+
+function apiDetail(data){
+  if(!data) return 'Anfrage fehlgeschlagen';
+  var d = data.detail;
+  if(typeof d === 'string') return d;
+  if(Array.isArray(d)) return d.map(function(x){ return x.msg || JSON.stringify(x); }).join(' ');
+  return 'Anfrage fehlgeschlagen';
 }
+
+function setOtpFeedback(elId, msg, kind){
+  var el = document.getElementById(elId);
+  if(!el) return;
+  el.className = 'otp-feedback show ' + (kind === 'err' ? 'err' : 'info');
+  el.textContent = msg || '';
+  if(!msg){ el.className = 'otp-feedback'; el.style.display = 'none'; }
+  else el.style.display = 'block';
+}
+
+function resetAdminOtpUI(){
+  document.getElementById('otp-step-email').style.display = 'block';
+  document.getElementById('otp-step-code').style.display = 'none';
+  setOtpFeedback('otp-feedback', '', 'info');
+  setOtpFeedback('otp-feedback-2', '', 'info');
+  var c = document.getElementById('admin-otp-code');
+  if(c) c.value = '';
+}
+
+function closeAdminOtp(){
+  document.getElementById('otp-overlay').style.display = 'none';
+  resetAdminOtpUI();
+}
+
+function adminOtpBack(){
+  resetAdminOtpUI();
+  document.getElementById('admin-email').focus();
+}
+
 function openAdmin(){
-  genOtp();
-  document.getElementById('otp-error').textContent='';
-  ['o1','o2','o3','o4','o5','o6'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('otp-overlay').style.display='flex';
-  setTimeout(()=>document.getElementById('o1').focus(),100);
-}
-function verifyOtp(){
-  const entered=['o1','o2','o3','o4','o5','o6'].map(id=>document.getElementById(id).value).join('');
-  if(entered===currentOtp){
-    document.getElementById('otp-overlay').style.display='none';
+  if(sessionStorage.getItem(GSMARTSOL_ADMIN_TOKEN_KEY)){
     showPage('admin');
-  } else {
-    document.getElementById('otp-error').textContent='Falsches OTP. Bitte erneut versuchen.';
-    genOtp();
-    ['o1','o2','o3','o4','o5','o6'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('o1').focus();
+    return;
+  }
+  resetAdminOtpUI();
+  document.getElementById('otp-overlay').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('admin-email').focus(); }, 80);
+}
+
+async function sendAdminOtp(){
+  var email = (document.getElementById('admin-email').value || '').trim();
+  setOtpFeedback('otp-feedback', '', 'info');
+  if(!email){ setOtpFeedback('otp-feedback', 'Bitte E-Mail eingeben.', 'err'); return; }
+  var btn = document.getElementById('btn-send-otp');
+  btn.disabled = true;
+  try{
+    var r = await fetch(GSMARTSOL_API_BASE + '/auth/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    var data = await r.json().catch(function(){ return {}; });
+    if(!r.ok){
+      setOtpFeedback('otp-feedback', apiDetail(data), 'err');
+      return;
+    }
+    document.getElementById('otp-step-email').style.display = 'none';
+    document.getElementById('otp-step-code').style.display = 'block';
+    document.getElementById('admin-email-display').textContent = email;
+    setOtpFeedback('otp-feedback-2', '', 'info');
+    if(data.dev_otp_code){
+      setOtpFeedback('otp-feedback-2', 'Testumgebung: Code ' + data.dev_otp_code + ' (nur wenn E-Mail-Versand deaktiviert ist)', 'info');
+    } else {
+      setOtpFeedback('otp-feedback-2', 'Gib den Code aus der E-Mail ein.', 'info');
+    }
+    setTimeout(function(){ document.getElementById('admin-otp-code').focus(); }, 50);
+  } catch(e){
+    setOtpFeedback('otp-feedback', 'Netzwerkfehler: ' + (e.message || 'unbekannt'), 'err');
+  } finally {
+    btn.disabled = false;
   }
 }
-// OTP digit auto-advance
-document.querySelectorAll('.otp-digits input').forEach((inp,i,arr)=>{
-  inp.addEventListener('input',()=>{
-    if(inp.value&&i<arr.length-1) arr[i+1].focus();
-    if(i===arr.length-1&&inp.value) verifyOtp();
-  });
-  inp.addEventListener('keydown',e=>{
-    if(e.key==='Backspace'&&!inp.value&&i>0) arr[i-1].focus();
-    if(e.key==='Enter') verifyOtp();
-  });
+
+async function verifyAdminOtp(){
+  var email = (document.getElementById('admin-email').value || '').trim();
+  var otp = (document.getElementById('admin-otp-code').value || '').trim();
+  setOtpFeedback('otp-feedback-2', '', 'info');
+  if(!otp){ setOtpFeedback('otp-feedback-2', 'Bitte Einmalcode eingeben.', 'err'); return; }
+  var btn = document.getElementById('btn-verify-otp');
+  btn.disabled = true;
+  try{
+    var r = await fetch(GSMARTSOL_API_BASE + '/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ email: email, otp_code: otp })
+    });
+    var data = await r.json().catch(function(){ return {}; });
+    if(!r.ok){
+      setOtpFeedback('otp-feedback-2', apiDetail(data), 'err');
+      return;
+    }
+    if(data.access_token){
+      sessionStorage.setItem(GSMARTSOL_ADMIN_TOKEN_KEY, data.access_token);
+    } else {
+      sessionStorage.setItem(GSMARTSOL_ADMIN_TOKEN_KEY, 'ok');
+    }
+    closeAdminOtp();
+    showPage('admin');
+  } catch(e){
+    setOtpFeedback('otp-feedback-2', 'Netzwerkfehler: ' + (e.message || 'unbekannt'), 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function logoutAdmin(){
+  sessionStorage.removeItem(GSMARTSOL_ADMIN_TOKEN_KEY);
+  showPage('customer');
+  showToast('Abgemeldet');
+}
+
+document.getElementById('admin-otp-code') && document.getElementById('admin-otp-code').addEventListener('keydown', function(e){
+  if(e.key === 'Enter') verifyAdminOtp();
+});
+document.getElementById('admin-email') && document.getElementById('admin-email').addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ e.preventDefault(); sendAdminOtp(); }
 });
 
 // ═══════════════════════════════════════
