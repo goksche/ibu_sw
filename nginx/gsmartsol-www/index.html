@@ -12,15 +12,20 @@
       --cyan:   #00d4ff;
       --text:   #e8eaf0;
       --muted:  #4a5068;
+      --text-soft: #6f7690;
+      --text-muted: #8f96ad;
       --border: rgba(0, 212, 255, 0.12);
+      --card-bg: rgba(8, 12, 26, 0.82);
+      --card-border: rgba(0, 212, 255, 0.18);
     }
 
     html, body {
-      height: 100%;
+      min-height: 100%;
       background: var(--bg);
       color: var(--text);
       font-family: 'Segoe UI', system-ui, sans-serif;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
 
     /* Background canvas */
@@ -45,13 +50,14 @@
     .page {
       position: relative;
       z-index: 2;
-      height: 100vh;
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       text-align: center;
-      padding: 2rem;
+      padding: 2rem 1.25rem 5rem;
+      box-sizing: border-box;
     }
 
     /* Status pill */
@@ -119,8 +125,70 @@
       font-size: clamp(0.9rem, 2vw, 1.05rem);
       line-height: 1.8;
       color: #7a8098;
-      margin-bottom: 3rem;
+      margin-bottom: 1.75rem;
       font-weight: 300;
+    }
+
+    /* Kacheln (wie test.finalstage.ch) */
+    .card-panel {
+      width: 100%;
+      max-width: 560px;
+      text-align: left;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem 1.5rem;
+      margin-bottom: 1.75rem;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    }
+    .card-panel h2 {
+      font-size: 0.75rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-soft);
+      margin-bottom: 0.9rem;
+      font-weight: 600;
+    }
+    .tiles {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 480px) {
+      .tiles { grid-template-columns: repeat(2, 1fr); }
+    }
+    a.tile-link {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.35rem;
+      padding: 1rem;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      text-decoration: none;
+      color: inherit;
+      transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    }
+    a.tile-link:hover {
+      border-color: rgba(0, 212, 255, 0.35);
+      background: rgba(0, 212, 255, 0.06);
+      box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.12);
+    }
+    a.tile-link:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px;
+    }
+    a.tile-link strong {
+      font-size: 0.9rem;
+      color: #f4f8ff;
+      font-weight: 600;
+    }
+    a.tile-link span {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.4;
     }
 
     /* Email form */
@@ -187,26 +255,6 @@
       color: #8a90a8;
       font-weight: 600;
     }
-    .footer-links {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: center;
-      gap: 6px 12px;
-      font-size: 0.72rem;
-    }
-    .footer-links a {
-      color: #8a90a8;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-    .footer-links a:hover {
-      color: var(--cyan);
-    }
-    .footer-sep {
-      opacity: 0.5;
-      user-select: none;
-    }
   </style>
 </head>
 <body>
@@ -228,6 +276,20 @@
     Wir werden unser Business bald präsentieren.
   </p>
 
+  <div class="card-panel">
+    <h2>Mehr entdecken</h2>
+    <div class="tiles">
+      <a class="tile-link" href="https://www.finalstage.ch" target="_blank" rel="noopener noreferrer">
+        <strong>FinalStage</strong>
+        <span>Turnier- und Meisterschaftsplattform – Planung, Spiele, Tabellen.</span>
+      </a>
+      <a class="tile-link" href="/3d-druck-kalkulator.html">
+        <strong>3D-Druck Kalkulator</strong>
+        <span>FDM-Druck: Material, Zeit und Kosten grob schätzen.</span>
+      </a>
+    </div>
+  </div>
+
   <div class="form">
     <input type="email" placeholder="deine@email.com" autocomplete="email" />
     <button>Notify me</button>
@@ -235,14 +297,7 @@
 </main>
 
 <footer class="footer">
-  <div class="footer-links">
-    <a href="https://www.finalstage.ch" target="_blank" rel="noopener noreferrer">FinalStage</a>
-    <span class="footer-sep">·</span>
-    <a href="/3d-druck-kalkulator.html">3D Druck Kalkulator</a>
-  </div>
-  <div>
-    &copy; 2026 <strong>GSmartSol</strong>. Alle Rechte vorbehalten.
-  </div>
+  &copy; 2026 <strong>GSmartSol</strong>. Alle Rechte vorbehalten.
 </footer>
 
 <script>
