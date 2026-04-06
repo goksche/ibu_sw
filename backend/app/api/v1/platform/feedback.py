@@ -34,7 +34,7 @@ async def get_feedback(
     query = db.query(Feedback)
     
     # Regular users see only their own feedback
-    if current_user.role.value != "admin":
+    if current_user.role.value not in ("admin", "power_admin"):
         query = query.filter(Feedback.user_id == current_user.id)
     
     # Filter by app_id if provided
@@ -101,7 +101,7 @@ async def get_feedback_details(
         )
     
     # Regular users can only see their own feedback
-    if current_user.role.value != "admin" and feedback.user_id != current_user.id:
+    if current_user.role.value not in ("admin", "power_admin") and feedback.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to view this feedback"
@@ -126,7 +126,7 @@ async def update_feedback(
         )
     
     # Only admins can update feedback
-    if current_user.role.value != "admin":
+    if current_user.role.value not in ("admin", "power_admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can update feedback"
@@ -197,7 +197,7 @@ async def get_feedback_comments(
         )
     
     # Regular users can only see comments on their own feedback
-    if current_user.role.value != "admin" and feedback.user_id != current_user.id:
+    if current_user.role.value not in ("admin", "power_admin") and feedback.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to view comments for this feedback"

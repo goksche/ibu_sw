@@ -1,0 +1,14 @@
+-- Manuell ausführen, wenn ein Turnier „unsichtbar“ ist (GET /tournaments/:id → 404),
+-- weil creator_id NULL war und visibility private/shared ist.
+--
+-- 1) Eigene user_id prüfen, z. B.:
+--    SELECT id, username FROM users;
+--
+-- 2) Turnier prüfen:
+--    SELECT id, name, visibility, creator_id FROM tournaments WHERE id = 21;
+--
+-- 3) Nur wenn creator_id NULL und du der Besitzer bist:
+--    UPDATE tournaments SET creator_id = <DEINE_USER_ID> WHERE id = 21 AND creator_id IS NULL;
+--
+-- Alternativ: Sichtbarkeit auf public setzen (nur wenn gewollt):
+--    UPDATE tournaments SET visibility = 'public' WHERE id = 21;

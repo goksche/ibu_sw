@@ -1,5 +1,6 @@
 // Platform Dashboard - Shows available apps for user
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { platformService } from '../services/platformService';
@@ -9,6 +10,7 @@ import { SignOut, Gear, SquaresFour } from 'phosphor-react';
 
 export default function PlatformDashboard() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [apps, setApps] = useState<App[]>([]);
   const [user, setUser] = useState<UserWithPermissions | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,35 +49,35 @@ export default function PlatformDashboard() {
   };
 
   if (loading) {
-    return <div className="p-8 text-muted-foreground">Loading...</div>;
+    return <div className="p-8 text-muted-foreground">{t('app.loading')}</div>;
   }
 
   return (
     <div className="p-8 max-w-[1200px] mx-auto bg-background min-h-screen">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="m-0 text-foreground">Dashboard</h1>
+        <h1 className="m-0 text-foreground">{t('platform.title')}</h1>
         <div className="flex gap-4">
           {user?.role === 'admin' && (
             <Button variant="secondary" onClick={() => navigate('/admin')}>
               <Gear size={20} className="mr-2 align-middle" />
-              Admin
+              {t('platform.admin')}
             </Button>
           )}
           <Button variant="secondary" onClick={handleLogout}>
             <SignOut size={20} className="mr-2 align-middle" />
-            Logout
+            {t('platform.logout')}
           </Button>
         </div>
       </div>
 
       <div className="mb-4">
-        <p className="text-muted-foreground">Willkommen, {user?.username}!</p>
+        <p className="text-muted-foreground">{t('platform.welcome', { username: user?.username })}</p>
       </div>
 
-      <h2 className="mb-4 text-foreground">Verfügbare Apps</h2>
+      <h2 className="mb-4 text-foreground">{t('platform.availableApps')}</h2>
 
       {apps.length === 0 ? (
-        <p className="text-muted-foreground">Keine Apps verfügbar.</p>
+        <p className="text-muted-foreground">{t('platform.noApps')}</p>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-4">
           {apps.map((app) => (

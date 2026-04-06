@@ -30,6 +30,9 @@ python-json-logger==2.0.7
 # PDF Export
 reportlab==4.0.9
 
+# Image Processing (Avatar Resize)
+Pillow==10.2.0
+
 # Docker
 docker==7.0.0
 

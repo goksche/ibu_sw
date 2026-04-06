@@ -7,10 +7,11 @@ interface AuthContextType {
   user: UserWithPermissions | null;
   loading: boolean;
   isAuthenticated: boolean;
+  isPowerAdmin: boolean;
   isAdmin: boolean;
   isUser: boolean;
   isViewer: boolean;
-  canEdit: boolean; // USER or ADMIN can edit
+  canEdit: boolean;
   refreshUser: () => Promise<void>;
   logout: () => void;
 }
@@ -64,10 +65,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isAuthenticated = !!user;
-  const isAdmin = user?.role === 'admin';
+  const isPowerAdmin = user?.role === 'power_admin';
+  const isAdmin = user?.role === 'admin' || isPowerAdmin;
   const isUser = user?.role === 'user';
   const isViewer = user?.role === 'viewer';
-  const canEdit = isAdmin || isUser; // USER or ADMIN can edit
+  const canEdit = isAdmin || isUser;
 
   return (
     <AuthContext.Provider
@@ -75,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         isAuthenticated,
+        isPowerAdmin,
         isAdmin,
         isUser,
         isViewer,

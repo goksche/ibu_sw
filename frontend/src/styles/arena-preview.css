@@ -1,0 +1,130 @@
+.arena-grid {
+  margin-top: 1.75rem;
+  display: grid;
+  grid-template-columns: 340px 1fr 380px;
+  gap: 1.75rem;
+  align-items: start;
+}
+
+.arena-col {
+  display: grid;
+  gap: 1rem;
+}
+
+.arena-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.arena-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.arena-brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.arena-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.arena-card-pad {
+  padding: 1.25rem;
+}
+
+.arena-stat-grid {
+  margin-top: 0.875rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.arena-row-between {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.arena-hero-title {
+  margin-top: 0.625rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.arena-hero-score {
+  font-size: 2.125rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.arena-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.arena-list {
+  margin-top: 0.875rem;
+  display: grid;
+  gap: 0.625rem;
+}
+
+.arena-table-head {
+  display: grid;
+  grid-template-columns: 52px 1fr 50px 50px 50px 60px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.arena-table-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 50px 50px 50px 60px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.arena-table-team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.arena-team-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.arena-footer-note {
+  margin-top: 1.25rem;
+  font-size: 12px;
+}
+
+.arena-center {
+  text-align: center;
+}
+
+.arena-right {
+  text-align: right;
+}

@@ -103,6 +103,33 @@ export const tournamentService = {
     return response.data;
   },
 
+  /**
+   * Turnierdaten als JSON-Datei herunterladen (Snapshot für Backup/Transfer).
+   */
+  async exportSnapshot(id: number, displayName: string): Promise<void> {
+    const tournament = await this.getById(id);
+    const payload = {
+      exported_at: new Date().toISOString(),
+      format_version: 1,
+      tournament,
+    };
+    const text = JSON.stringify(payload, null, 2);
+    const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safe =
+      displayName
+        .replace(/[<>:"/\\|?*]/g, '_')
+        .replace(/\s+/g, '_')
+        .slice(0, 64) || 'turnier';
+    a.href = url;
+    a.download = `${safe}_${id}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
   // Set tournament as template
   async setAsTemplate(id: number, isTemplate: boolean): Promise<Tournament> {
     const response = await api.post<Tournament>(`/tournaments/${id}/set-template`, null, {
@@ -165,6 +192,67 @@ export const tournamentService = {
       pairings?: Array<{match_no: number; player1_id: number | null; player2_id: number | null}>;
     }>(`/tournaments/${id}/draw-next-round`);
     return response.data;
+  },
+
+  // Admin: simulate results for group or KO phase
+  async simulatePhase(
+    id: number,
+    payload: {
+      phase: 'group' | 'ko';
+      min_score: number;
+      max_score: number;
+      allow_draws: boolean;
+      overwrite_existing?: boolean;
+      group_id?: number;
+    }
+  ): Promise<{ status: string; phase: 'group' | 'ko'; updated_matches: number; skipped_matches: number }> {
+    type SimResponse = { status: string; phase: 'group' | 'ko'; updated_matches: number; skipped_matches: number };
+    const relativeCandidates = [
+      `/tournaments/${id}/simulate-phase`,
+      `/tournaments/${id}/simulate_phase`,
+    ];
+
+    for (const url of relativeCandidates) {
+      try {
+        const response = await api.post<SimResponse>(url, payload);
+        return response.data;
+      } catch (err: any) {
+        if (err?.response?.status !== 404) {
+          throw err;
+        }
+      }
+    }
+
+    // Compatibility fallback for backends mounted under /api without /v1.
+    const token = localStorage.getItem('token');
+    const lang = localStorage.getItem('i18nextLng') || 'de';
+    const absoluteCandidates = [
+      `/api/v1/tournaments/${id}/simulate-phase`,
+      `/api/v1/tournaments/${id}/simulate_phase`,
+      `/api/tournaments/${id}/simulate-phase`,
+      `/api/tournaments/${id}/simulate_phase`,
+    ];
+
+    for (const url of absoluteCandidates) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Accept-Language': lang,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (response.ok) {
+        return (await response.json()) as SimResponse;
+      }
+      if (response.status !== 404) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Simulation fehlgeschlagen');
+      }
+    }
+
+    throw new Error('Simulation-Endpunkt nicht gefunden (404)');
   },
 };
 

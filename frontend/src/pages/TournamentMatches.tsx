@@ -1,5 +1,6 @@
 // Tournament Matches Page - Display and Manage Group Matches
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { authService } from '../services/authService';
 import { tournamentService } from '../services/tournamentService';
 import { groupService, GroupWithParticipants } from '../services/groupService';
@@ -12,6 +13,7 @@ export default function TournamentMatches() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const tournamentId = id ? parseInt(id) : 0;
+  const { t } = useTranslation();
 
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [groups, setGroups] = useState<GroupWithParticipants[]>([]);
@@ -90,7 +92,7 @@ export default function TournamentMatches() {
       loadMatches();
     } catch (err) {
       console.error('Failed to save match:', err);
-      alert('Fehler beim Speichern des Ergebnisses');
+      alert(t('tournament.matches.saveError'));
     }
   };
 
@@ -107,8 +109,8 @@ export default function TournamentMatches() {
     return participant ? `${participant.first_name} ${participant.last_name}` : '-';
   };
 
-  if (loading) return <div className="p-8">Wird geladen...</div>;
-  if (!tournament) return <div className="p-8">Turnier nicht gefunden.</div>;
+  if (loading) return <div className="p-8">{t('common.loading')}</div>;
+  if (!tournament) return <div className="p-8">{t('tournament.detail.notFound')}</div>;
 
   const selectedGroup = groups.find(g => g.id === selectedGroupId);
 
@@ -117,46 +119,46 @@ export default function TournamentMatches() {
       <div className="flex justify-between mb-8">
         <div>
           <h1>{tournament.name}</h1>
-          <p className="text-muted-foreground mt-2">Spiele und Ergebnisse</p>
+          <p className="text-muted-foreground mt-2">{t('tournament.matches.title')}</p>
         </div>
         <div className="flex gap-4">
           <Button variant="outline" onClick={() => navigate(`/tournaments/${tournamentId}/groups`)}>
-            Gruppen
+            {t('tournament.detail.tabs.groups')}
           </Button>
           <Button variant="outline" onClick={() => navigate('/dashboard')}>
-            Dashboard
+            {t('sidebar.dashboard')}
           </Button>
         </div>
       </div>
 
       {!tournament.has_group_phase && (
         <div className="p-4 bg-warning/10 border border-warning rounded-lg mb-8">
-          ⚠️ Dieses Turnier hat keine Gruppenphase konfiguriert.
+          ⚠️ {t('tournament.groups.noGroupPhase')}
         </div>
       )}
 
       {groups.length === 0 ? (
         <Card className="p-8 text-center">
-          <p>Noch keine Gruppen vorhanden.</p>
+          <p>{t('tournament.matches.noGroups')}</p>
           <Button
             className="mt-4"
             onClick={() => navigate(`/tournaments/${tournamentId}/groups`)}
           >
-            Gruppen erstellen
+            {t('tournament.matches.createGroups')}
           </Button>
         </Card>
       ) : (
         <>
           <div className="mb-8">
             <Select
-              label="Gruppe auswählen"
+              label={t('tournament.matches.selectGroup')}
               value={selectedGroupId || ''}
               onChange={(e) => setSelectedGroupId(parseInt(e.target.value))}
               className="max-w-[300px]"
             >
               {groups.map(group => (
                 <option key={group.id} value={group.id}>
-                  {group.name} ({group.participants.length} Teilnehmer)
+                  {`${group.name} (${t('tournament.matches.participantCount', { count: group.participants.length })})`}
                 </option>
               ))}
             </Select>
@@ -164,26 +166,26 @@ export default function TournamentMatches() {
 
           {selectedGroup && (
             <>
-              <h2>Gruppe: {selectedGroup.name}</h2>
+              <h2>{t('tournament.matches.groupLabel', { name: selectedGroup.name })}</h2>
               <div className="mb-4 text-muted-foreground">
-                {selectedGroup.participants.length} Teilnehmer
+                {t('tournament.matches.participantCount', { count: selectedGroup.participants.length })}
               </div>
 
               {matches.length === 0 ? (
                 <Card className="p-8 text-center">
-                  <p>Noch keine Spiele vorhanden.</p>
+                  <p>{t('tournament.matches.noMatches')}</p>
                 </Card>
               ) : (
                 <div className="bg-muted border border-border rounded-lg overflow-hidden">
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="bg-info text-info-foreground">
-                        <th className="p-3 text-left">Runde</th>
-                        <th className="p-3 text-left">Spiel</th>
-                        <th className="p-3 text-left">Spieler 1</th>
-                        <th className="p-3 text-left">Spieler 2</th>
-                        <th className="p-3 text-center">Ergebnis</th>
-                        <th className="p-3 text-center">Aktion</th>
+                        <th className="p-3 text-left">{t('tournament.matches.round')}</th>
+                        <th className="p-3 text-left">{t('common.match')}</th>
+                        <th className="p-3 text-left">{t('tournament.matches.player1')}</th>
+                        <th className="p-3 text-left">{t('tournament.matches.player2')}</th>
+                        <th className="p-3 text-center">{t('common.result')}</th>
+                        <th className="p-3 text-center">{t('tournament.matches.action')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -191,8 +193,8 @@ export default function TournamentMatches() {
                         .sort((a, b) => (a.round - b.round) || (a.match_no - b.match_no))
                         .map((match) => (
                         <tr key={match.id} className="border-b border-border">
-                          <td className="p-3">Runde {match.round}</td>
-                          <td className="p-3">Spiel {match.match_no}</td>
+                          <td className="p-3">{t('tournament.matches.round')} {match.round}</td>
+                          <td className="p-3">{t('common.match')} {match.match_no}</td>
                           <td className="p-3">{getParticipantName(match.player1_id)}</td>
                           <td className="p-3">{getParticipantName(match.player2_id)}</td>
                           <td className="p-3 text-center">
@@ -247,7 +249,7 @@ export default function TournamentMatches() {
                                 size="sm"
                                 onClick={() => handleEdit(match)}
                               >
-                                Ergebnis
+                                {t('common.result')}
                               </Button>
                             )}
                           </td>

@@ -5,6 +5,7 @@ from datetime import date, timedelta
 
 from app.core.database import get_db
 from app.core.dependencies import require_user_or_admin, require_viewer_or_above
+from app.services.visibility import get_accessible_league as _get_accessible_league, get_visible_leagues_query
 from app.models.league import League
 from app.models.participant import Participant
 from app.models.tournament import Tournament, TournamentMode, TournamentStatus
@@ -73,7 +74,7 @@ def get_leagues(
     current_user=Depends(require_viewer_or_above),
     db: Session = Depends(get_db)
 ):
-    leagues = db.query(League).all()
+    leagues = get_visible_leagues_query(db, current_user).all()
     return [_build_league_response(league) for league in leagues]
 
 
@@ -83,9 +84,7 @@ def get_league(
     current_user=Depends(require_viewer_or_above),
     db: Session = Depends(get_db)
 ):
-    league = db.query(League).filter(League.id == league_id).first()
-    if not league:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="League not found")
+    league = _get_accessible_league(db, league_id, current_user)
     return _build_league_response(league)
 
 
@@ -95,9 +94,7 @@ def get_league_standings(
     current_user=Depends(require_viewer_or_above),
     db: Session = Depends(get_db)
 ):
-    league = db.query(League).filter(League.id == league_id).first()
-    if not league:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="League not found")
+    league = _get_accessible_league(db, league_id, current_user)
 
     raw_standings = compute_league_standings(db, league)
     entries = [LeagueStandingEntry(**entry) for entry in raw_standings]

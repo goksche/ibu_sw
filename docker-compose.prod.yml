@@ -88,9 +88,14 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/landing:/var/www/landing:ro
       - nginx_logs:/var/log/nginx
       - certbot_certs:/etc/letsencrypt
       - certbot_www:/var/www/certbot
+    command: >
+      sh -c "rm -f /var/log/nginx/access.log /var/log/nginx/error.log &&
+             touch /var/log/nginx/access.log /var/log/nginx/error.log &&
+             exec nginx -g 'daemon off;'"
     depends_on:
       - frontend
       - backend

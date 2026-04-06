@@ -1,28 +1,66 @@
 // Edit Tournament Page
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { tournamentService } from '../services/tournamentService';
 import { authService } from '../services/authService';
-import { participantService } from '../services/participantService';
 import { qualificationService } from '../services/qualificationService';
 import { locationService } from '../services/locationService';
-import { Participant, LeagueVariant, KOStartRound, QualificationPlan, Location, KOStructure } from '../types';
+import { LeagueVariant, KOStartRound, QualificationPlan, Location, KOStructure, TournamentModeVariant, KOPairingVariant } from '../types';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Textarea } from '../components/ui';
 import { cn } from '@/lib/utils';
 import { ArrowLeft } from 'phosphor-react';
 import TournamentModeVisualization from '../components/tournament/TournamentModeVisualization';
+import { MODE_VARIANTS, PAIRING_VARIANTS } from '../domain/tournamentModeMatrix';
+import { koStructureIncludesThirdPlace } from '../domain/koThirdPlace';
 
 export default function EditTournament() {
   type KODrawModeValue = 'random_first_round' | 'random_each_round' | 'predefined_slots' | 'cross' | 'draw';
+  const getApiErrorMessage = (err: any, fallback: string): string => {
+    const detail = err?.response?.data?.detail;
+    const normalize = (msg: string): string => {
+      if (
+        msg.includes("league_scoring_system")
+        && msg.includes("Input should be 'points' or 'difference'")
+      ) {
+        return "Backend-Stand ist veraltet und unterstuetzt 'Siege' noch nicht. Bitte Backend neu starten/neu deployen.";
+      }
+      return msg;
+    };
+    if (typeof detail === 'string' && detail.trim()) return detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0];
+      if (typeof first === 'string') return normalize(first);
+      if (first && typeof first === 'object') {
+        const loc = Array.isArray(first.loc) ? first.loc.join(' > ') : '';
+        const msg = typeof first.msg === 'string' ? first.msg : 'Ungueltige Eingabe';
+        return normalize(loc ? `${loc}: ${msg}` : msg);
+      }
+    }
+    if (detail && typeof detail === 'object') {
+      if (typeof detail.message === 'string') return detail.message;
+      return 'Ungueltige Anfrage';
+    }
+    if (typeof err?.message === 'string' && err.message.trim()) return err.message;
+    return fallback;
+  };
+  const isWinsUnsupportedError = (err: any): boolean => {
+    const detail = err?.response?.data?.detail;
+    const text = typeof detail === 'string'
+      ? detail
+      : Array.isArray(detail)
+        ? detail.map((d: any) => (typeof d === 'string' ? d : d?.msg || '')).join(' ')
+        : '';
+    return text.includes("Input should be 'points' or 'difference'");
+  };
 
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const tournamentId = id ? parseInt(id) : 0;
   const [loading, setLoading] = useState(false);
   const [loadingTournament, setLoadingTournament] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
-  const [loadingParticipants, setLoadingParticipants] = useState(false);
   const [qualificationPlan, setQualificationPlan] = useState<QualificationPlan | null>(null);
   const [loadingQualificationPlan, setLoadingQualificationPlan] = useState(false);
   
@@ -32,28 +70,36 @@ export default function EditTournament() {
     start_date: '',
     end_date: '',
     mode: 'round_robin' as 'round_robin' | 'knockout' | 'combined',
+    mode_variant: 'L1' as TournamentModeVariant,
     has_group_phase: true,
     groups_count: 2,
     participants_per_group: null as number | null,
-    group_distribution: 'random' as 'random' | 'seeded',
+    group_distribution: 'random' as 'random' | 'seeded' | 'manual',
     has_ko_phase: false,
     ko_participants: 4,  // Legacy
     ko_first_round_size: 4,  // Legacy
     ko_start_round: null as KOStartRound | null,
     ko_fallback_qualifiers: null as Array<{position: number; count: number; selection: 'best'}> | null,
     ko_distribution: 'random_first_round' as KODrawModeValue,  // Deprecated, kept for backward compatibility
+    ko_pairing_mode: 'P1' as KOPairingVariant,
     ko_structure: null as KOStructure | null,
-    ko_draw_method: null as 'fixed_cross' | 'same_position_cross' | 'overall_seeding' | 'pot_system' | 'full_random' | 'bonus_draw_for_winners' | 'predefined_bracket' | 'manual' | null,
+    ko_draw_method: null as 'fixed_cross' | 'same_position_cross' | 'overall_seeding' | 'pot_system' | 'full_random' | 'random_each_round' | 'bonus_draw_for_winners' | 'predefined_bracket' | 'manual' | null,
     ko_third_place_match: false,
     ko_group_winner_advantage: false,
     ko_block_same_group: true,
     ko_block_same_position: false,
     ko_random_seed: null as number | null,
-    league_scoring_system: null as 'points' | 'difference' | null,
+    league_scoring_system: null as 'points' | 'difference' | 'wins' | null,
+    league_points_win: 3,
+    league_points_draw: 1,
+    league_points_loss: 0,
     tie_breaking_rules: [] as string[],
+    head_referee: '',
+    scorekeeper: '',
     league_variant: 'classic' as LeagueVariant,
     league_rounds_multiplier: 1,
     is_template: false,
+    visibility: 'public' as 'public' | 'shared' | 'private',
     seeded_participant_ids: [] as number[],
     location_id: null as number | null,
     spielfeld_assignment_mode: 'random' as 'random' | 'group_fixed' | 'group_random',
@@ -67,7 +113,7 @@ export default function EditTournament() {
     }
     if (!id || tournamentId <= 0) {
       setLoadingTournament(false);
-      setError('Ungültige Turnier-ID');
+      setError(t('tournament.edit.invalidId'));
       return;
     }
     loadTournament();
@@ -98,16 +144,18 @@ export default function EditTournament() {
         start_date: tournament.start_date,
         end_date: tournament.end_date || '',
         mode: tournament.mode,
+        mode_variant: (tournament.mode_variant === 'L2' || tournament.mode_variant === 'L3') ? 'L1' : (tournament.mode_variant || 'L1'),
         has_group_phase: tournament.has_group_phase,
         groups_count: tournament.groups_count || 2,
         participants_per_group: tournament.participants_per_group || null,
-        group_distribution: tournament.group_distribution as 'random' | 'seeded',
+        group_distribution: (tournament.group_distribution || 'random') as 'random' | 'seeded' | 'manual',
         has_ko_phase: tournament.has_ko_phase,
-        ko_participants: tournament.ko_participants || 4,  // Legacy
-        ko_first_round_size: tournament.ko_first_round_size || 4,  // Legacy
+        ko_participants: tournament.ko_participants || 4,
+        ko_first_round_size: tournament.ko_first_round_size || 4,
         ko_start_round: tournament.ko_start_round || null,
         ko_fallback_qualifiers: tournament.ko_fallback_qualifiers || null,
         ko_distribution: normalizeDrawMode(tournament.ko_distribution),
+        ko_pairing_mode: tournament.ko_pairing_mode || 'P1',
         ko_structure: tournament.ko_structure,
         ko_draw_method: tournament.ko_draw_method,
         ko_third_place_match: tournament.ko_third_place_match || false,
@@ -116,40 +164,31 @@ export default function EditTournament() {
         ko_block_same_position: tournament.ko_block_same_position || false,
         ko_random_seed: tournament.ko_random_seed,
         league_scoring_system: tournament.league_scoring_system,
+        league_points_win: (tournament as any).league_points_win ?? 3,
+        league_points_draw: (tournament as any).league_points_draw ?? 1,
+        league_points_loss: (tournament as any).league_points_loss ?? 0,
         tie_breaking_rules: tournament.tie_breaking_rules || [],
-        league_variant: tournament.league_variant || 'classic',
-        league_rounds_multiplier: tournament.league_rounds_multiplier || 1,
-        is_template: false, // Not editable
+        head_referee: (tournament as any).head_referee || '',
+        scorekeeper: (tournament as any).scorekeeper || '',
+        league_variant: (tournament.mode_variant === 'L2' || tournament.mode_variant === 'L3') ? 'classic' : (tournament.league_variant || 'classic'),
+        league_rounds_multiplier:
+          tournament.mode_variant === 'L2'
+            ? 2
+            : (tournament.league_rounds_multiplier || 1),
+        is_template: false,
+        visibility: (tournament as any).visibility || 'public',
         seeded_participant_ids: tournament.seeded_participant_ids || [],
         location_id: tournament.location_id ?? null,
         spielfeld_assignment_mode: (tournament.spielfeld_assignment_mode as 'random' | 'group_fixed' | 'group_random') || 'random',
       });
     } catch (err) {
       console.error('Failed to load tournament:', err);
-      setError('Fehler beim Laden des Turniers');
+      setError(t('tournament.edit.loadError'));
       navigate('/dashboard');
     } finally {
       setLoadingTournament(false);
     }
   };
-
-  // Load participants when seeded distribution is selected
-  useEffect(() => {
-    if (formData.group_distribution === 'seeded' && formData.groups_count > 1) {
-      const loadParticipants = async () => {
-        try {
-          setLoadingParticipants(true);
-          const participants = await participantService.getAll();
-          setAllParticipants(participants);
-        } catch (err) {
-          console.error('Failed to load participants:', err);
-        } finally {
-          setLoadingParticipants(false);
-        }
-      };
-      loadParticipants();
-    }
-  }, [formData.group_distribution, formData.groups_count]);
 
   // Auto-set has_group_phase and has_ko_phase based on mode
   useEffect(() => {
@@ -162,23 +201,12 @@ export default function EditTournament() {
     }
   }, [formData.mode]);
 
-  // Reset ko_draw_method if it's not allowed for current mode
-  useEffect(() => {
-    if (formData.ko_draw_method && formData.mode === 'knockout' && !formData.has_group_phase) {
-      const allowedMethods = getAllowedKODrawMethods(formData.mode, formData.has_group_phase);
-      if (!allowedMethods.find(m => m.value === formData.ko_draw_method)) {
-        setFormData(prev => ({ ...prev, ko_draw_method: null }));
-      }
-    }
-  }, [formData.mode, formData.has_group_phase]);
-
   // Handle exclusive logic: decision_match vs other rules
   useEffect(() => {
     const hasDecisionMatch = formData.tie_breaking_rules.includes('decision_match');
     const hasOtherRules = formData.tie_breaking_rules.some(r => r !== 'decision_match');
     
     if (hasDecisionMatch && hasOtherRules) {
-      // If decision_match is selected, remove all other rules
       setFormData(prev => ({
         ...prev,
         tie_breaking_rules: ['decision_match']
@@ -197,15 +225,16 @@ export default function EditTournament() {
             formData.ko_start_round!
           );
           setQualificationPlan(plan);
-          // Set ko_fallback_qualifiers in formData
           setFormData(prev => ({
             ...prev,
             ko_fallback_qualifiers: plan.fallback_rules.length > 0 ? plan.fallback_rules : null,
-            ko_participants: plan.required_participants,  // Set legacy field for backward compatibility
-            ko_first_round_size: plan.required_participants,  // Set legacy field
+            ko_participants: plan.required_participants,
+            ko_first_round_size: plan.required_participants,
           }));
         } catch (err) {
-          console.error('Failed to calculate qualification plan:', err);
+          if ((err as any)?.response?.status !== 422) {
+            console.error('Failed to calculate qualification plan:', err);
+          }
           setQualificationPlan(null);
         } finally {
           setLoadingQualificationPlan(false);
@@ -239,9 +268,9 @@ export default function EditTournament() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : (value === '' ? null : value)
+      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value === '' ? null : value,
     }));
   };
 
@@ -251,145 +280,158 @@ export default function EditTournament() {
     setLoading(true);
     setError(null);
 
-    // Validierung: Bei Liga/Kombiniert-Modus müssen Wertung und Gleichstandsregeln gesetzt sein (nur für Gruppenphase)
     if (formData.mode === 'round_robin' || (formData.mode === 'combined' && formData.has_group_phase)) {
       if (!formData.league_scoring_system) {
-        setError('Bitte wählen Sie ein Ligatabelle Wertungssystem aus.');
+        setError(t('tournament.create.validation.scoringRequired'));
         setLoading(false);
         return;
       }
       if (!formData.tie_breaking_rules || formData.tie_breaking_rules.length === 0) {
-        setError('Bitte wählen Sie mindestens eine Gleichstandsregel aus.');
+        setError(t('tournament.create.validation.tieBreakingRequired'));
         setLoading(false);
         return;
       }
     }
 
-    // Validierung: Bei 'multiple' Variante muss Multiplikator gesetzt sein
-    if (formData.mode === 'round_robin' && formData.league_variant === 'multiple') {
-      if (!formData.league_rounds_multiplier || formData.league_rounds_multiplier < 2 || formData.league_rounds_multiplier > 10) {
-        setError('Bitte geben Sie einen Multiplikator zwischen 2 und 10 ein.');
-        setLoading(false);
-        return;
-      }
-    }
-
-    // Validierung: Bei gesetzter Auslosung müssen gesetzte Spieler ausgewählt sein
-    if (formData.group_distribution === 'seeded' && formData.groups_count > 1) {
-      if (!formData.seeded_participant_ids || formData.seeded_participant_ids.length === 0) {
-        setError('Bitte wählen Sie mindestens einen gesetzten Spieler aus.');
+    if (formData.mode === 'round_robin') {
+      if (!formData.league_rounds_multiplier || formData.league_rounds_multiplier < 1 || formData.league_rounds_multiplier > 10) {
+        setError(t('tournament.create.validation.multiplierRange'));
         setLoading(false);
         return;
       }
     }
 
     try {
-      await tournamentService.update(tournamentId, {
+      const payload = {
         name: formData.name,
         description: formData.description || undefined,
         start_date: formData.start_date,
         end_date: formData.end_date || undefined,
         mode: formData.mode,
+        mode_variant: formData.mode_variant,
         has_group_phase: formData.has_group_phase,
         groups_count: formData.has_group_phase ? formData.groups_count : 0,
         participants_per_group: formData.has_group_phase ? formData.participants_per_group : undefined,
         group_distribution: formData.has_group_phase ? formData.group_distribution : 'random',
         has_ko_phase: formData.has_ko_phase,
-        ko_participants: (formData.has_ko_phase && formData.mode === 'combined') ? formData.ko_participants : 0,  // Legacy
-        ko_first_round_size: formData.has_ko_phase ? parseInt(formData.ko_first_round_size.toString()) : undefined,  // Legacy
+        ko_participants: (formData.has_ko_phase && formData.mode === 'combined') ? formData.ko_participants : 0,
+        ko_first_round_size: formData.has_ko_phase ? parseInt(formData.ko_first_round_size.toString()) : undefined,
         ko_start_round: formData.has_ko_phase && formData.mode === 'combined' ? (formData.ko_start_round as any) : undefined,
         ko_fallback_qualifiers: formData.has_ko_phase && formData.mode === 'combined' ? (formData.ko_fallback_qualifiers as any) : undefined,
-        ko_distribution: formData.has_ko_phase ? formData.ko_distribution : undefined,  // Deprecated
+        ko_distribution: formData.has_ko_phase ? formData.ko_distribution : undefined,
+        ko_pairing_mode: formData.has_ko_phase ? formData.ko_pairing_mode : undefined,
         ko_structure: formData.has_ko_phase ? formData.ko_structure : undefined,
         ko_draw_method: formData.has_ko_phase ? formData.ko_draw_method : undefined,
-        ko_third_place_match: formData.has_ko_phase ? formData.ko_third_place_match : false,
+        ko_third_place_match: formData.has_ko_phase
+          ? (formData.ko_structure === 'single_elimination_with_third' || formData.ko_third_place_match)
+          : false,
         ko_group_winner_advantage: formData.has_ko_phase ? formData.ko_group_winner_advantage : false,
         ko_block_same_group: formData.has_ko_phase ? formData.ko_block_same_group : true,
         ko_block_same_position: formData.has_ko_phase ? formData.ko_block_same_position : false,
         ko_random_seed: formData.has_ko_phase && formData.ko_random_seed ? formData.ko_random_seed : undefined,
         league_scoring_system: (formData.mode === 'round_robin' || formData.mode === 'combined') ? formData.league_scoring_system : undefined,
+        league_points_win: (formData.mode === 'round_robin' || formData.mode === 'combined') ? formData.league_points_win : undefined,
+        league_points_draw: (formData.mode === 'round_robin' || formData.mode === 'combined') ? formData.league_points_draw : undefined,
+        league_points_loss: (formData.mode === 'round_robin' || formData.mode === 'combined') ? formData.league_points_loss : undefined,
         tie_breaking_rules: (formData.mode === 'round_robin' || formData.mode === 'combined') && formData.tie_breaking_rules.length > 0 ? formData.tie_breaking_rules : undefined,
+        head_referee: formData.head_referee?.trim() ? formData.head_referee.trim() : undefined,
+        scorekeeper: formData.scorekeeper?.trim() ? formData.scorekeeper.trim() : undefined,
         league_variant: formData.mode === 'round_robin' ? formData.league_variant : undefined,
-        league_rounds_multiplier: formData.mode === 'round_robin' && formData.league_variant === 'multiple' ? formData.league_rounds_multiplier : undefined,
-        seeded_participant_ids: formData.group_distribution === 'seeded' && formData.seeded_participant_ids.length > 0 ? formData.seeded_participant_ids : undefined,
+        league_rounds_multiplier: formData.mode === 'round_robin' ? formData.league_rounds_multiplier : undefined,
+        visibility: formData.visibility,
         location_id: formData.location_id || undefined,
         spielfeld_assignment_mode: formData.location_id ? formData.spielfeld_assignment_mode : undefined,
-      });
+      };
+
+      try {
+        await tournamentService.update(tournamentId, payload);
+      } catch (err: any) {
+        const isWinsMode =
+          (payload.mode === 'round_robin' || payload.mode === 'combined')
+          && payload.league_scoring_system === 'wins';
+        if (isWinsMode && isWinsUnsupportedError(err)) {
+          await tournamentService.update(tournamentId, {
+            ...payload,
+            league_scoring_system: 'points',
+          });
+        } else {
+          throw err;
+        }
+      }
+
       navigate(`/tournaments/${tournamentId}`);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Fehler beim Aktualisieren des Turniers');
+      setError(getApiErrorMessage(err, t('tournament.edit.error')));
     } finally {
       setLoading(false);
     }
   };
 
-  // Modus-Erklärungen
   const modeExplanations = {
     round_robin: {
-      title: "Round Robin (Nur Gruppenphase)",
-      description: "Jeder spielt gegen jeden - KEINE KO-Phase.",
+      title: t('tournament.mode.roundRobinEdit.title'),
+      description: t('tournament.mode.roundRobinEdit.description'),
       features: [
-        "Alle Teilnehmer spielen gegeneinander",
-        "Gruppenphase mit vollständiger Round-Robin-Paarung",
-        "Rangliste basierend auf Punkten und Differenz",
-        "KEINE KO-Phase, KEIN Finale",
-        "Geeignet für Liga-Meisterschaften oder kleine Turniere"
+        t('tournament.mode.roundRobin.features.allPlay'),
+        t('tournament.mode.roundRobinEdit.features.groupPhase'),
+        t('tournament.mode.roundRobinEdit.features.ranking'),
+        t('tournament.mode.roundRobin.features.noKO'),
+        t('tournament.mode.roundRobinEdit.features.suitable'),
       ]
     },
     knockout: {
-      title: "KO-Phase (Ohne Gruppenphase)",
-      description: "Direkte Ausscheidungsrunde - KEINE Gruppenphase.",
+      title: t('tournament.mode.knockout.title'),
+      description: t('tournament.mode.knockout.description'),
       features: [
-        "Direkte Ausscheidungsrunde ohne Gruppenphase",
-        "Verlierer scheiden aus",
-        "Schnelles Turnier mit klarem Gewinner",
-        "Bronze-Match für Platz 3 verfügbar",
-        "Geeignet für 4, 8, 16 oder 32 Teilnehmer"
+        t('tournament.mode.knockout.features.direct'),
+        t('tournament.mode.knockout.features.losers'),
+        t('tournament.mode.knockout.features.quick'),
+        t('tournament.mode.knockout.features.bronze'),
+        t('tournament.mode.knockout.features.suitable'),
       ]
     },
     combined: {
-      title: "Kombiniert (Klassisches Turnier)",
-      description: "Gruppenphase + KO-Phase - wie WM, EM, etc.",
+      title: t('tournament.mode.combined.title'),
+      description: t('tournament.mode.combined.description'),
       features: [
-        "Phase 1: Gruppenphase mit Round-Robin",
-        "Top-Teams qualifizieren sich für KO-Phase",
-        "Phase 2: KO-Phase mit Finale",
-        "Bronze-Match für Platz 3 verfügbar",
-        "Geeignet für große Turniere mit vielen Teilnehmern"
+        t('tournament.mode.combined.features.phase1'),
+        t('tournament.mode.combined.features.qualify'),
+        t('tournament.mode.combined.features.phase2'),
+        t('tournament.mode.combined.features.bronze'),
+        t('tournament.mode.combined.features.suitable'),
       ]
     }
   };
 
-  const currentMode = modeExplanations[formData.mode];
+  const selectedVariantSpec = MODE_VARIANTS.find((variant) => variant.id === formData.mode_variant);
+  const currentMode = modeExplanations[selectedVariantSpec?.baseMode || formData.mode];
 
-  // Labels für Gleichstandsregeln
   const tieBreakingRuleLabels: Record<string, string> = {
-    'wins': 'Siege',
-    'diff': 'Differenz',
-    'goals_for': 'LF',
-    'direct_encounter': 'Direktbegegnung',
-    'decision_match': 'Entscheidungsspiel'
+    'wins': t('common.tieBreaking.wins'),
+    'diff': t('common.tieBreaking.diff'),
+    'goals_for': t('common.tieBreaking.goalsFor'),
+    'direct_encounter': t('common.tieBreaking.directEncounter'),
+    'decision_match': t('common.tieBreaking.decisionMatch'),
   };
 
   const koStartRoundLabels: Record<string, string> = {
-    round_of_32: 'Runde der 32',
-    round_of_16: 'Runde der 16',
-    quarterfinal: 'Viertelfinale',
-    semifinal: 'Halbfinale',
-    final: 'Finale'
+    round_of_32: t('common.koStartRound.roundOf32'),
+    round_of_16: t('common.koStartRound.roundOf16'),
+    quarterfinal: t('common.koStartRound.quarterfinal'),
+    semifinal: t('common.koStartRound.semifinal'),
+    final: t('common.koStartRound.final'),
   };
 
   const groupDistributionLabels: Record<string, string> = {
-    random: 'Zufällig',
-    seeded: 'Gesetzt'
+    random: t('common.groupDistribution.random'),
+    seeded: t('common.groupDistribution.seeded'),
+    manual: 'Manuell',
   };
 
-  // Verfügbare Gleichstandsregeln (abhängig von Wertungssystem)
   const getAvailableTieBreakingRules = () => {
     return ['wins', 'diff', 'goals_for', 'direct_encounter', 'decision_match'];
   };
 
-  // Hilfsfunktionen für Reihenfolge der Gleichstandsregeln
   const moveTieBreakingRule = (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === formData.tie_breaking_rules.length - 1) return;
@@ -411,184 +453,197 @@ export default function EditTournament() {
     return value as KODrawModeValue;
   };
 
-  // KO-Struktur-Optionen mit Beschreibungen
+  const deriveDrawMethodFromPairing = (pairing: KOPairingVariant) => {
+    if (pairing === 'P2') return 'overall_seeding';
+    if (pairing === 'P3') return 'fixed_cross';
+    if (pairing === 'P5') return 'pot_system';
+    if (pairing === 'P6') return 'manual';
+    if (pairing === 'P7') return 'random_each_round';
+    return 'full_random';
+  };
+
+  const variantToPreset = (variant: TournamentModeVariant) => {
+    const base = MODE_VARIANTS.find((item) => item.id === variant);
+    const mode = base?.baseMode ?? 'round_robin';
+    const presets: Partial<typeof formData> = {
+      mode,
+      has_group_phase: mode !== 'knockout',
+      has_ko_phase: mode !== 'round_robin',
+      league_variant: variant === 'L4' || variant === 'C2' ? 'multiple' : 'classic',
+      ko_structure:
+        variant === 'K2' || variant === 'C4' ? 'double_elimination' :
+        variant === 'K3' ? 'triple_elimination' :
+        variant === 'K4' || variant === 'C3' ? 'page_playoff' :
+        variant === 'K5' ? 'single_elimination_with_third' :
+        variant === 'K6' ? 'consolation_bracket' :
+        variant === 'C5' ? 'group_then_single_ko' :
+        mode === 'round_robin' ? null : 'single_elimination',
+      ko_third_place_match: variant === 'K5',
+    };
+    return presets;
+  };
+
   const koStructureOptions = [
     { 
       value: 'single_elimination', 
-      label: 'Einfach-KO (Single Elimination)', 
-      description: 'Prinzip: 1 Niederlage = ausgeschieden. Schnell und einfach. Verlierer jeder Partie scheidet sofort aus. Unterstützt Byes/Freilose wenn Teilnehmerzahl nicht Potenz von 2 ist. Spiel um Platz 3 optional konfigurierbar.' 
+      label: t('tournament.ko.structure.singleElimination'), 
+      description: t('tournament.ko.structure.singleEliminationDesc') 
     },
     { 
       value: 'single_elimination_with_third', 
-      label: 'Einfach-KO mit Spiel um Platz 3 (Bronze-Spiel)', 
-      description: 'Wie Einfach-KO, aber die Halbfinal-Verlierer spielen um Rang 3. Ideal wenn der 3. Platz wichtig ist (Preise, Punkte). Bronze-Spiel separat konfigurierbar (z.B. kürzeres Best-of als Finale).' 
+      label: t('tournament.ko.structure.singleEliminationWithThird'), 
+      description: t('tournament.ko.structure.singleEliminationWithThirdDesc') 
     },
     { 
       value: 'consolation_bracket', 
-      label: 'Trostturnier (Consolation Bracket) nach Einfach-KO', 
-      description: 'Wer verliert, fällt in ein zweites KO-Tableau (Trost), um dort weiterzuspielen. Es gibt dann Hauptsieger und Trostsieger. Mehr Spielzeit für alle, besser für Teilnehmerzufriedenheit. Konfigurierbar ab welcher Runde das Trostturnier startet.' 
+      label: t('tournament.ko.structure.consolationBracket'), 
+      description: t('tournament.ko.structure.consolationBracketDesc') 
     },
     { 
       value: 'double_elimination', 
-      label: 'Doppel-KO (Double Elimination)', 
-      description: 'Prinzip: 2 Niederlagen = ausgeschieden. Es gibt zwei Schienen: Winner Bracket (ungeschlagen) und Loser Bracket (nach erster Niederlage). Sehr fair, weil ein Ausrutscher nicht sofort rauswirft. Komplexer Plan, mehr Spiele. Finale mit optionalem Bracket Reset konfigurierbar.' 
+      label: t('tournament.ko.structure.doubleElimination'), 
+      description: t('tournament.ko.structure.doubleEliminationDesc') 
     },
     { 
       value: 'triple_elimination', 
-      label: 'Triple-KO (Three-Life / Triple Elimination)', 
-      description: 'Prinzip: 3 Niederlagen = ausgeschieden (drei Leben). In der Praxis selten, maximale Fairness. Nur sinnvoll wenn sehr viel Zeit vorhanden ist. Finale-Logik wie beim Doppel-KO, nur mit mehr Stufen.' 
+      label: t('tournament.ko.structure.tripleElimination'), 
+      description: t('tournament.ko.structure.tripleEliminationDesc') 
     },
     { 
       value: 'aggregate_ko', 
-      label: 'KO mit Hin- und Rückpiel (Aggregate KO)', 
-      description: 'Jede Runde besteht aus 2 Legs/2 Matches (Hin und Rück). Sieger wird über Summe/Aggregate Score bestimmt. Tie-Breaker bei Gleichstand: Decider-Leg, Sudden Death, oder drittes Match. Eher Fußball-inspiriert.' 
+      label: t('tournament.ko.structure.aggregateKo'), 
+      description: t('tournament.ko.structure.aggregateKoDesc') 
     },
     { 
       value: 'group_then_single_ko', 
-      label: 'Gruppenphase mit anschließendem Einfach-KO', 
-      description: 'Zuerst spielt jeder mehrere Gruppenspiele. Danach kommen die besten Spieler in eine klassische KO-Runde. Typisch für große Turniere (WM, EM).' 
+      label: t('tournament.ko.structure.groupThenSingleKo'), 
+      description: t('tournament.ko.structure.groupThenSingleKoDesc') 
     },
     { 
       value: 'group_then_double_ko', 
-      label: 'Gruppenphase mit anschließendem Doppel-KO', 
-      description: 'Nach der Gruppenphase darf man sich auch in der KO-Phase eine Niederlage erlauben. Kombiniert Gruppenphase mit doppeltem KO-System.' 
+      label: t('tournament.ko.structure.groupThenDoubleKo'), 
+      description: t('tournament.ko.structure.groupThenDoubleKoDesc') 
     },
     { 
       value: 'ko_with_group_winner_advantage', 
-      label: 'KO mit Vorteil für Gruppensieger', 
-      description: 'Wer seine Gruppe gewinnt, bekommt in der KO-Phase einen Bonus als Belohnung für gute Leistung in der Gruppenphase.' 
+      label: t('tournament.ko.structure.koWithGroupAdvantage'), 
+      description: t('tournament.ko.structure.koWithGroupAdvantageDesc') 
     },
     { 
       value: 'page_playoff', 
-      label: 'Page-Playoff-System', 
-      description: 'Die besten Teilnehmer haben einen Vorteil und dürfen sich eine Niederlage erlauben, die anderen nicht. Spezielles System für kleine Teilnehmerfelder.' 
+      label: t('tournament.ko.structure.pagePlayoff'), 
+      description: t('tournament.ko.structure.pagePlayoffDesc') 
     },
   ];
 
-  // Auslosungsmethode-Optionen für reinen KO-Modus (ohne Gruppenphase)
   const koOnlyDrawMethods = [
     { 
       value: 'full_random', 
-      label: 'Vollzufällige Auslosung', 
-      description: 'Alle Teilnehmer werden zufällig gepaart. Keine Vorsortierung oder Seeding-Regeln. Jeder kann gegen jeden treffen.' 
+      label: t('tournament.ko.draw.fullRandom'), 
+      description: t('tournament.ko.draw.fullRandomDesc') 
+    },
+    {
+      value: 'random_each_round',
+      label: t('tournament.ko.drawMode.randomEachRound'),
+      description: t('tournament.ko.drawMode.randomEachRoundDesc')
     },
     { 
       value: 'pot_system', 
-      label: 'Topf-System (Stärketöpfe)', 
-      description: 'Teilnehmer werden in Stärketöpfe eingeteilt (z.B. basierend auf Weltrangliste oder vorherigen Leistungen) und dann mit Regeln ausgelost. Stärkere Teilnehmer treffen später aufeinander.' 
+      label: t('tournament.ko.draw.potSystem'), 
+      description: t('tournament.ko.draw.potSystemDesc') 
     },
     { 
       value: 'manual', 
-      label: 'Manuelle Paarungen', 
-      description: 'Die Paarungen der ersten KO-Runde werden manuell festgelegt. Verfügbar im Turnier-Bereich nach dem Hinzufügen der Teilnehmer.' 
+      label: t('tournament.ko.draw.manual'), 
+      description: t('tournament.ko.draw.manualKODesc') 
     }
   ];
 
-  // Auslosungsmethode-Optionen für Kombiniert-Modus (mit Gruppenphase)
   const combinedDrawMethods = [
     { 
       value: 'fixed_cross', 
-      label: 'Feste Kreuzpaarung', 
-      description: 'Gruppenplätze bestimmen die Paarungen fest: A1 vs B2, B1 vs A2 (bei 2 Gruppen). Keine Auslosung nötig. Klassisches System bei Turnieren mit Gruppenphase.' 
+      label: t('tournament.ko.draw.fixedCross'), 
+      description: t('tournament.ko.draw.fixedCrossDesc') 
     },
     { 
       value: 'same_position_cross', 
-      label: 'Platzgleiches Kreuzen', 
-      description: 'Alle Gruppenersten spielen gegeneinander, alle Gruppenzweiten ebenfalls. Beispiel: A1, B1, C1, D1 in einem Halbfinal, A2, B2, C2, D2 im anderen.' 
+      label: t('tournament.ko.draw.samePositionCross'), 
+      description: t('tournament.ko.draw.samePositionCrossDesc') 
     },
     { 
       value: 'overall_seeding', 
-      label: 'Gesamt-Seeding (Nach Gruppenphase)', 
-      description: 'Nach der Gruppenphase werden Teilnehmer nach Gesamtleistung geseedet und dann gepaart (Bester vs. Schlechtester). Berücksichtigt Gruppenphase-Ergebnisse.' 
+      label: t('tournament.ko.draw.overallSeeding'), 
+      description: t('tournament.ko.draw.overallSeedingDesc') 
     },
     { 
       value: 'pot_system', 
-      label: 'Topf-System (Nach Gruppenphase)', 
-      description: 'Teilnehmer werden nach Gruppenphase-Leistung in Töpfe eingeteilt und dann ausgelost. Gruppenphase-Ergebnisse fließen in die Topf-Einteilung ein.' 
+      label: t('tournament.ko.draw.potSystem'), 
+      description: t('tournament.ko.draw.potSystemGroupDesc') 
     },
     { 
       value: 'full_random', 
-      label: 'Vollzufällige Auslosung', 
-      description: 'Alle qualifizierten Teilnehmer werden zufällig gepaart, unabhängig von Gruppenplatzierung oder Leistung in der Gruppenphase.' 
+      label: t('tournament.ko.draw.fullRandom'), 
+      description: t('tournament.ko.draw.fullRandomQualifiedDesc') 
     },
     { 
       value: 'bonus_draw_for_winners', 
-      label: 'Bonus-Auslosung für Gruppensieger', 
-      description: 'Gruppensieger bekommen in der ersten KO-Runde gezielt einen leichteren Gegner (z.B. Gruppensieger vs. Gruppenzweite/Dritte). Belohnung für Gruppenphase-Erfolg.' 
+      label: t('tournament.ko.draw.bonusDrawForWinners'), 
+      description: t('tournament.ko.draw.bonusDrawForWinnersDesc') 
     },
     { 
       value: 'predefined_bracket', 
-      label: 'Vorgegebener Turnierbaum', 
-      description: 'Der KO-Baum steht bereits fest. Die Gruppenphase bestimmt nur, welche Teilnehmer welche Positionen im Bracket einnehmen. Struktur ist vorab definiert.' 
+      label: t('tournament.ko.draw.predefinedBracket'), 
+      description: t('tournament.ko.draw.predefinedBracketDesc') 
     },
     { 
       value: 'manual', 
-      label: 'Manuelle Paarungen', 
-      description: 'Paarungen werden nach Abschluss der Gruppenphase mit den qualifizierten Teilnehmern festgelegt. Runde für Runde befüllbar (Runde 1 speichern, dann Runde 2, …).' 
+      label: t('tournament.ko.draw.manual'), 
+      description: t('tournament.ko.draw.manualCombinedDesc') 
     }
   ];
 
   const koDrawModeOptions = [
     {
       value: 'random_first_round',
-      label: 'a) Erste Runde zufällig, danach fester Turnierbaum',
-      description: 'Die erste KO-Runde wird ausgelost. Ab dann bleibt der Baum fest (klassischer Bracket-Flow).'
+      label: t('tournament.ko.drawMode.randomFirst'),
+      description: t('tournament.ko.drawMode.randomFirstDesc')
     },
     {
       value: 'random_each_round',
-      label: 'b) Jede Runde neu zufällig',
-      description: 'Nach jeder Runde werden die Sieger neu ausgelost. Finale ohne weitere Auslosung.'
+      label: t('tournament.ko.drawMode.randomEachRound'),
+      description: t('tournament.ko.drawMode.randomEachRoundDesc')
     },
     {
       value: 'predefined_slots',
-      label: 'c) Fester Turnierbaum mit Slot-Bezeichnungen',
-      description: 'Der Baum ist von Anfang an fix. Spätere Runden zeigen nur Slot-Bezeichnungen, bis die Qualifikanten feststehen.'
+      label: t('tournament.ko.drawMode.predefinedSlots'),
+      description: t('tournament.ko.drawMode.predefinedSlotsDesc')
     }
   ];
 
-  // Helper-Funktion für erlaubte KO-Strukturen basierend auf Modus
   const getAllowedKOStructures = (mode: string) => {
     if (mode === 'combined') {
-      // Bei Kombi-Modus nur einfache KO-Strukturen (ohne Gruppenphase-integrierte)
       return koStructureOptions.filter(option => 
         ['single_elimination', 'single_elimination_with_third', 'consolation_bracket', 'double_elimination', 'triple_elimination', 'aggregate_ko'].includes(option.value)
       );
     } else if (mode === 'knockout') {
-      // Bei reinem KO-Modus nur reine KO-Strukturen (ohne Gruppenphase-bezogene)
       return koStructureOptions.filter(option => 
         !['group_then_single_ko', 'group_then_double_ko', 'ko_with_group_winner_advantage'].includes(option.value)
       );
     }
-    // Bei Liga-Modus keine KO-Strukturen (sollte nicht vorkommen, aber zur Sicherheit)
     return [];
   };
 
-  // Helper-Funktion für erlaubte KO-Auslosungsmethoden basierend auf Modus
-  const getAllowedKODrawMethods = (mode: string, hasGroupPhase: boolean) => {
-    if (mode === 'knockout' && !hasGroupPhase) {
-      // Reiner KO-Modus: nur Methoden die ohne Gruppenphase funktionieren
-      return koOnlyDrawMethods;
-    } else if (mode === 'combined') {
-      // Kombiniert-Modus: nur Methoden die Gruppenplatzierungen berücksichtigen
-      return combinedDrawMethods;
-    }
-    // Fallback: sollte nicht vorkommen
-    return [];
-  };
-
-  // Helper-Funktionen für bedingte Anzeige
   const needsDrawMethod = (structure: string | null, _drawMethod: string | null) => {
-    // Wenn keine Struktur ausgewählt, keine Auslosung nötig
     if (!structure) return false;
-    // Bei manuellen Paarungen ist die Auslosung optional (wird später im Turnier-Bereich gemacht)
-    // Aber wir zeigen sie trotzdem an, damit der Benutzer "Manuelle Paarungen" auswählen kann
-    // Die Auslosung ist nur required, wenn nicht "manual" ausgewählt ist
     return true;
   };
 
+  const needsKoDistribution = (pairing: KOPairingVariant, drawMethod: string | null) => {
+    if (drawMethod === 'manual') return false;
+    return ['P1', 'P2', 'P5', 'P7'].includes(pairing);
+  };
+
   const needsGroupWinnerAdvantage = (_structure: string | null, _mode: string) => {
-    // Option entfernt für Kombi-Modus
-    // Nur relevant für spezifische gruppenphase-integrierte Strukturen (die nicht mehr verfügbar sind)
     return false;
   };
 
@@ -600,7 +655,7 @@ export default function EditTournament() {
 
   const getKoDrawMethodLabel = (value: string | null) => {
     if (!value) return null;
-    const list = formData.mode === 'combined' ? combinedDrawMethods : koOnlyDrawMethods;
+    const list = [...combinedDrawMethods, ...koOnlyDrawMethods];
     const found = list.find(o => o.value === value);
     return found ? found.label : value;
   };
@@ -612,20 +667,26 @@ export default function EditTournament() {
   const groupSettingsSummary: string[] = [];
   if (formData.has_group_phase) {
     if (formData.groups_count) {
-      groupSettingsSummary.push(`Gruppen: ${formData.groups_count}`);
+      groupSettingsSummary.push(t('tournament.overview.groups', { count: formData.groups_count }));
     }
     if (formData.participants_per_group) {
-      groupSettingsSummary.push(`Teilnehmer pro Gruppe: ${formData.participants_per_group}`);
+      groupSettingsSummary.push(t('tournament.overview.participantsPerGroup', { count: formData.participants_per_group }));
     }
     if (formData.group_distribution) {
       const label = groupDistributionLabels[formData.group_distribution] || formData.group_distribution;
-      groupSettingsSummary.push(`Verteilung: ${label}`);
+      groupSettingsSummary.push(t('tournament.overview.distribution', { label }));
     }
     if (formData.league_scoring_system) {
-      groupSettingsSummary.push(`Wertung: ${formData.league_scoring_system === 'points' ? 'Punkte' : 'Differenz'}`);
+      const scoringLabel =
+        formData.league_scoring_system === 'points'
+          ? t('common.scoring.points')
+          : formData.league_scoring_system === 'wins'
+            ? t('common.scoring.wins')
+            : t('common.scoring.difference');
+      groupSettingsSummary.push(t('tournament.overview.scoring', { system: scoringLabel }));
     }
     if (tieRulesLabel) {
-      groupSettingsSummary.push(`Gleichstandsregeln: ${tieRulesLabel}`);
+      groupSettingsSummary.push(t('tournament.overview.tieBreaking', { rules: tieRulesLabel }));
     }
   }
 
@@ -633,34 +694,36 @@ export default function EditTournament() {
   if (formData.has_ko_phase) {
     if (formData.ko_start_round) {
       const label = koStartRoundLabels[formData.ko_start_round] || formData.ko_start_round;
-      koSettingsSummary.push(`KO-Start: ${label}`);
+      koSettingsSummary.push(t('tournament.overview.koStart', { round: label }));
     } else if (formData.ko_first_round_size) {
-      koSettingsSummary.push(`KO-Startgroesse: ${formData.ko_first_round_size}`);
+      koSettingsSummary.push(t('tournament.overview.koSize', { size: formData.ko_first_round_size }));
     }
     const structureLabel = getKoStructureLabel(formData.ko_structure);
     if (structureLabel) {
-      koSettingsSummary.push(`Struktur: ${structureLabel}`);
+      koSettingsSummary.push(t('tournament.overview.structure', { label: structureLabel }));
     }
     const drawLabel = getKoDrawMethodLabel(formData.ko_draw_method);
     if (drawLabel) {
-      koSettingsSummary.push(`Auslosung: ${drawLabel}`);
+      koSettingsSummary.push(t('tournament.overview.draw', { label: drawLabel }));
     }
   }
+
+  const editGroupsCountNum = Math.max(0, Number(formData.groups_count) || 0);
 
   return (
     <div className="p-8 flex gap-8 max-w-[1400px] mx-auto bg-background min-h-screen">
       {/* Linke Seite - Formular */}
       <div className="flex-1">
         <div className="flex justify-between mb-8 items-center">
-          <h1 className="m-0 text-foreground">Turnier bearbeiten</h1>
+          <h1 className="m-0 text-foreground">{t('tournament.edit.title')}</h1>
           <Button variant="secondary" onClick={() => navigate(`/tournaments/${tournamentId}`)}>
             <ArrowLeft size={20} className="mr-2 align-middle" />
-            Zurück
+            {t('common.back')}
           </Button>
         </div>
 
         {loadingTournament && (
-          <div className="p-8 text-center text-muted-foreground">Turnier wird geladen...</div>
+          <div className="p-8 text-center text-muted-foreground">{t('tournament.edit.loading')}</div>
         )}
 
         {error && (
@@ -672,8 +735,7 @@ export default function EditTournament() {
         {!loadingTournament && (
           <div className="mb-6 p-4 bg-warning/20 rounded-lg border border-warning">
             <p className="m-0 text-sm text-warning">
-              <strong>Hinweis:</strong> Wenn Sie Konfigurationseinstellungen ändern (z.B. Modus, Anzahl Gruppen, KO-Struktur), werden alle vorhandenen Gruppen und Spiele gelöscht. 
-              Sie müssen diese nach dem Speichern neu generieren.
+              <strong>Hinweis:</strong> {t('tournament.edit.configWarning')}
             </p>
           </div>
         )}
@@ -683,7 +745,7 @@ export default function EditTournament() {
           <CardContent className="p-8">
         <form onSubmit={handleSubmit}>
           <Input
-            label="Turnier-Name *"
+            label={t('tournament.create.name')}
             type="text"
             name="name"
             value={formData.name}
@@ -692,7 +754,7 @@ export default function EditTournament() {
           />
 
           <Textarea
-            label="Beschreibung"
+            label={t('tournament.create.description')}
             name="description"
             value={formData.description}
             onChange={handleChange}
@@ -701,7 +763,7 @@ export default function EditTournament() {
 
           <div className="grid grid-cols-2 gap-4 mb-6">
             <Input
-              label="Startdatum *"
+              label={t('tournament.create.startDate')}
               type="date"
               name="start_date"
               value={formData.start_date}
@@ -709,7 +771,7 @@ export default function EditTournament() {
               required
             />
             <Input
-              label="Enddatum"
+              label={t('tournament.create.endDate')}
               type="date"
               name="end_date"
               value={formData.end_date}
@@ -719,7 +781,7 @@ export default function EditTournament() {
 
           <div className="mb-6">
             <label className="block mb-2 font-bold text-foreground">
-              Spielort (optional)
+              {t('tournament.create.location')}
             </label>
             <select
               name="location_id"
@@ -727,7 +789,7 @@ export default function EditTournament() {
               onChange={(e) => setFormData(prev => ({ ...prev, location_id: e.target.value === '' ? null : Number(e.target.value) }))}
               className="w-full p-3 text-base bg-muted text-foreground border border-border rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <option value="">— Kein Spielort —</option>
+              <option value="">{t('common.noLocation')}</option>
               {(locations ?? []).map(loc => (
                 <option key={loc.id} value={loc.id}>{loc.name}</option>
               ))}
@@ -735,7 +797,7 @@ export default function EditTournament() {
             {formData.location_id != null && (formData.mode === 'round_robin' || formData.mode === 'combined') && (
               <div className="mt-4">
                 <label className="block mb-2 font-bold text-foreground">
-                  Spielfeld-Zuweisung (Gruppenphase)
+                  {t('tournament.create.spielfeldAssignment')}
                 </label>
                 <select
                   name="spielfeld_assignment_mode"
@@ -743,9 +805,9 @@ export default function EditTournament() {
                   onChange={(e) => setFormData(prev => ({ ...prev, spielfeld_assignment_mode: e.target.value as 'random' | 'group_fixed' | 'group_random' }))}
                   className="w-full p-3 text-base bg-muted text-foreground border border-border rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <option value="random">Gesamtspielplan (fair) – rundenbasiert über alle Gruppen</option>
-                  <option value="group_fixed">Gruppen Zuweisung Fix – pro Gruppe ein Spielfeld (im Gruppen-Tab festlegen)</option>
-                  <option value="group_random">Gruppe Zufällig – jeder Gruppe zufällig ein Spielfeld</option>
+                  <option value="random">{t('common.spielfeldAssignment.random')}</option>
+                  <option value="group_fixed">{t('common.spielfeldAssignment.groupFixed')}</option>
+                  <option value="group_random">{t('common.spielfeldAssignment.groupRandom')}</option>
                 </select>
               </div>
             )}
@@ -753,27 +815,37 @@ export default function EditTournament() {
 
           <div className="mb-6">
             <label className="block mb-2 font-bold text-foreground">
-              Turnier-Modus *
+              Modusfamilie und Variante (L/K/C)
             </label>
             <select
-              name="mode"
-              value={formData.mode}
-              onChange={handleChange}
-              required
-              className="w-full p-3 text-base bg-muted text-foreground border border-border rounded-md outline-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              value={formData.mode_variant}
+              onChange={(e) => {
+                const nextVariant = e.target.value as TournamentModeVariant;
+                setFormData((prev) => ({
+                  ...prev,
+                  mode_variant: nextVariant,
+                  ...variantToPreset(nextVariant),
+                }));
+              }}
+              className="w-full p-3 mb-3 text-base bg-muted text-foreground border border-border rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <option value="round_robin">Liga</option>
-              <option value="knockout">KO-Phase</option>
-              <option value="combined">Kombiniert</option>
+              {MODE_VARIANTS.map((variant) => (
+                <option key={variant.id} value={variant.id}>
+                  {variant.title}
+                </option>
+              ))}
             </select>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Grundmodus wird automatisch aus der Variante abgeleitet: <strong>{formData.mode}</strong>
+            </p>
           </div>
 
         {(formData.mode === 'round_robin' || formData.mode === 'combined') && (
           <div className="mb-4 ml-0">
-            <h3 className="mb-2 font-bold text-foreground">Gruppenphase</h3>
+            <h3 className="mb-2 font-bold text-foreground">{t('tournament.create.groupPhase')}</h3>
             <div className="ml-8">
               <Input
-                label="Anzahl Gruppen"
+                label={t('tournament.create.groupsCount')}
                 type="number"
                 name="groups_count"
                 value={formData.groups_count}
@@ -781,10 +853,10 @@ export default function EditTournament() {
                 min={1}
               />
             
-            {formData.groups_count > 1 && (
+            {editGroupsCountNum >= 1 && (
               <>
                 <label className="block mt-4 mb-2 text-foreground">
-                  Auslosungsart
+                  {t('tournament.create.drawType')}
                 </label>
                 <select
                   name="group_distribution"
@@ -792,82 +864,27 @@ export default function EditTournament() {
                   onChange={handleChange}
                   className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <option value="random">Zufällig (Random)</option>
-                  <option value="seeded">Gesetzt (Seeded)</option>
+                  <option value="random">{t('common.groupDistribution.randomLabel')}</option>
+                  <option value="seeded">{t('common.groupDistribution.seededLabel')}</option>
+                  <option value="manual">Manuell (keine Auto-Verteilung)</option>
                 </select>
 
-                {formData.group_distribution === 'seeded' && (
-                  <div className="mt-4 p-4 bg-card rounded-lg border border-border">
-                    <label className="block mb-2 font-bold text-foreground">
-                      Gesetzte Spieler auswählen *
-                    </label>
-                    <p className="mb-3 text-sm text-muted-foreground">
-                      Wählen Sie die Spieler aus, die vor der Auslosung in Gruppen eingeteilt werden sollen. Die anderen Spieler werden dann zufällig zugeteilt.
-                    </p>
-                    {loadingParticipants ? (
-                      <div className="p-4 text-center text-muted-foreground">Lade Teilnehmer...</div>
-                    ) : allParticipants.length === 0 ? (
-                      <div className="p-4 text-center text-muted-foreground">
-                        Keine Teilnehmer verfügbar. Bitte erstellen Sie zuerst Teilnehmer in der Teilnehmer-Verwaltung.
-                      </div>
-                    ) : (
-                      <>
-                        <div className="max-h-[300px] overflow-y-auto border border-border rounded-lg p-2">
-                          {allParticipants.map(participant => {
-                            const isSelected = formData.seeded_participant_ids.includes(participant.id);
-                            return (
-                              <label
-                                key={participant.id}
-                                className={cn(
-                                  "flex items-center gap-2 p-2 cursor-pointer rounded-lg mb-1",
-                                  isSelected && "bg-primary/10"
-                                )}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setFormData(prev => ({
-                                        ...prev,
-                                        seeded_participant_ids: [...prev.seeded_participant_ids, participant.id]
-                                      }));
-                                    } else {
-                                      setFormData(prev => ({
-                                        ...prev,
-                                        seeded_participant_ids: prev.seeded_participant_ids.filter(id => id !== participant.id)
-                                      }));
-                                    }
-                                  }}
-                                />
-                                <span className="text-foreground">
-                                  {participant.first_name} {participant.last_name}
-                                  {participant.club && ` (${participant.club})`}
-                                  {participant.nickname && ` - "${participant.nickname}"`}
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                        <p className={cn(
-                          "mt-2 text-sm",
-                          formData.seeded_participant_ids.length === 0 ? "text-destructive" : "text-muted-foreground"
-                        )}>
-                          {formData.seeded_participant_ids.length === 0 
-                            ? 'Bitte wählen Sie mindestens einen gesetzten Spieler aus.'
-                            : `${formData.seeded_participant_ids.length} Spieler ausgewählt.`
-                          }
-                        </p>
-                      </>
-                    )}
+                {formData.group_distribution === 'manual' && (
+                  <div className="mt-4 rounded border border-warning bg-warning/15 p-3 text-sm text-warning">
+                    Teilnehmer werden nach Gruppenerstellung manuell den Gruppen zugewiesen.
                   </div>
                 )}
+
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Gesetzte Spieler werden nicht in den Basisdaten gewählt: erst nach Anlage des Turniers unter{' '}
+                  <strong>Turnier → Teilnehmer</strong> Spieler hinzufügen, danach optional unter <strong>Turnier → Gruppen</strong> vor der Gruppengenerierung.
+                </p>
               </>
             )}
 
             <div className="mt-6">
               <label className="block mb-2 font-bold text-foreground">
-                Ligatabelle Wertung *
+                {t('tournament.create.leagueScoring')}
               </label>
               <select
                 name="league_scoring_system"
@@ -876,57 +893,96 @@ export default function EditTournament() {
                 required
                 className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <option value="">-- Bitte wählen --</option>
-                <option value="points">Punkte</option>
-                <option value="difference">Differenz</option>
+                <option value="">{t('common.selectPlaceholder')}</option>
+                <option value="points">{t('common.scoring.points')}</option>
+                <option value="difference">{t('common.scoring.difference')}</option>
+                <option value="wins">{t('common.scoring.wins')}</option>
               </select>
               {formData.league_scoring_system === 'points' && (
-                <p className="mt-2 text-sm text-muted-foreground italic">
-                  Standard-Punkteverteilung: Sieg 3, Remis 1, Niederlage 0.
-                </p>
+                <div className="mt-3 grid grid-cols-3 gap-3">
+                  <Input
+                    label="Punkte Sieg"
+                    type="number"
+                    name="league_points_win"
+                    value={formData.league_points_win}
+                    onChange={(e) => setFormData(prev => ({ ...prev, league_points_win: Number(e.target.value) || 0 }))}
+                    min={0}
+                  />
+                  <Input
+                    label="Punkte Unentschieden"
+                    type="number"
+                    name="league_points_draw"
+                    value={formData.league_points_draw}
+                    onChange={(e) => setFormData(prev => ({ ...prev, league_points_draw: Number(e.target.value) || 0 }))}
+                    min={0}
+                  />
+                  <Input
+                    label="Punkte Niederlage"
+                    type="number"
+                    name="league_points_loss"
+                    value={formData.league_points_loss}
+                    onChange={(e) => setFormData(prev => ({ ...prev, league_points_loss: Number(e.target.value) || 0 }))}
+                    min={0}
+                  />
+                </div>
               )}
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-4">
+              <Input
+                label="Schiedsrichter (optional)"
+                type="text"
+                name="head_referee"
+                value={formData.head_referee}
+                onChange={handleChange}
+              />
+              <Input
+                label="Schreiber (optional)"
+                type="text"
+                name="scorekeeper"
+                value={formData.scorekeeper}
+                onChange={handleChange}
+              />
             </div>
 
             {formData.mode === 'round_robin' && (
               <>
                 <div className="mt-6">
                   <label className="block mb-2 font-bold text-foreground">
-                    Liga-Variante
+                    {t('tournament.create.leagueVariant')}
                   </label>
-                  <select
-                    name="league_variant"
-                    value={formData.league_variant}
-                    onChange={handleChange}
-                    className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <option value="classic">Klassische Liga (Round Robin)</option>
-                    <option value="double">Doppelte Liga</option>
-                    <option value="multiple">Mehrfache Liga</option>
-                  </select>
+                  <div className="w-full rounded border border-border bg-muted px-3 py-2 text-sm text-foreground">
+                    {formData.league_variant === 'classic' && t('common.leagueVariant.classic')}
+                    {formData.league_variant === 'double' && t('common.leagueVariant.double')}
+                    {formData.league_variant === 'multiple' && t('common.leagueVariant.multiple')}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground italic">
+                    {t('tournament.create.leagueVariantDerivedHint')}
+                  </p>
                   <p className="mt-2 text-sm text-muted-foreground italic">
-                    {formData.league_variant === 'classic' && 'Jeder gegen jeden einmal (Standard Round Robin)'}
-                    {formData.league_variant === 'double' && 'Jeder gegen jeden zweimal (2x Round Robin)'}
-                    {formData.league_variant === 'multiple' && 'Jeder gegen jeden mehrfach (konfigurierbarer Multiplikator)'}
+                    {formData.league_variant === 'classic' && t('common.leagueVariant.classicDesc')}
+                    {formData.league_variant === 'double' && t('common.leagueVariant.doubleDesc')}
+                    {formData.league_variant === 'multiple' && t('common.leagueVariant.multipleDesc')}
                   </p>
                 </div>
 
-                {formData.league_variant === 'multiple' && (
+                {formData.mode === 'round_robin' && (
                   <div className="mt-4">
                     <label className="block mb-2 font-bold text-foreground">
-                      Anzahl Runden (Multiplikator) *
+                      {t('tournament.create.roundsMultiplier')}
                     </label>
                     <input
                       type="number"
                       name="league_rounds_multiplier"
                       value={formData.league_rounds_multiplier}
                       onChange={(e) => setFormData(prev => ({ ...prev, league_rounds_multiplier: parseInt(e.target.value) || 1 }))}
-                      min={2}
+                      min={1}
                       max={10}
                       required
                       className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     />
                     <p className="mt-2 text-sm text-muted-foreground italic">
-                      Wie oft die komplette Round-Robin-Runde wiederholt wird (min: 2, max: 10)
+                      {t('tournament.create.roundsMultiplierHint')}
                     </p>
                   </div>
                 )}
@@ -935,12 +991,11 @@ export default function EditTournament() {
 
             <div className="mt-4">
               <label className="block mb-2 font-bold text-foreground">
-                Gleichstandsregeln *
+                {t('tournament.create.tieBreakingRules')}
               </label>
               
-              {/* Verfügbare Regeln (Checkboxen mit exklusiver Logik für Entscheidungsspiel) */}
               <div className="mb-4 p-3 bg-card rounded-lg border border-border">
-                <p className="m-0 mb-2 text-sm font-bold">Verfügbare Regeln:</p>
+                <p className="m-0 mb-2 text-sm font-bold">{t('tournament.create.availableRules')}</p>
                 <div className="flex flex-col gap-2">
                   {getAvailableTieBreakingRules().map(rule => {
                     const isDecisionMatch = rule === 'decision_match';
@@ -964,13 +1019,11 @@ export default function EditTournament() {
                           onChange={(e) => {
                             if (e.target.checked) {
                               if (isDecisionMatch) {
-                                // Wenn Entscheidungsspiel gewählt wird, nur diese Regel setzen
                                 setFormData(prev => ({
                                   ...prev,
                                   tie_breaking_rules: ['decision_match']
                                 }));
                               } else {
-                                // Wenn andere Regel gewählt wird, Entscheidungsspiel entfernen
                                 setFormData(prev => ({
                                   ...prev,
                                   tie_breaking_rules: prev.tie_breaking_rules.filter(r => r !== 'decision_match').concat(rule)
@@ -991,15 +1044,14 @@ export default function EditTournament() {
                 </div>
                 {formData.tie_breaking_rules.includes('decision_match') && (
                   <p className="mt-2 text-xs text-muted-foreground italic">
-                    Bei Gleichstand wird ein Entscheidungsspiel generiert.
+                    {t('tournament.create.decisionMatchHint')}
                   </p>
                 )}
               </div>
 
-              {/* Ausgewählte Regeln mit Reihenfolge (nur wenn kein Entscheidungsspiel) */}
               {formData.tie_breaking_rules.length > 0 && !formData.tie_breaking_rules.includes('decision_match') && (
                 <div className="p-3 bg-muted rounded-lg border border-border">
-                  <p className="m-0 mb-2 text-sm font-bold text-foreground">Reihenfolge (1. = höchste Priorität):</p>
+                  <p className="m-0 mb-2 text-sm font-bold text-foreground">{t('tournament.create.ruleOrder')}</p>
                   <div className="flex flex-col gap-2">
                     {formData.tie_breaking_rules.map((rule, index) => (
                       <div key={`${rule}-${index}`} className="flex items-center gap-2 p-2 bg-card rounded-lg border border-border">
@@ -1016,7 +1068,7 @@ export default function EditTournament() {
                                 ? "bg-muted-foreground/50 text-white cursor-not-allowed" 
                                 : "bg-success text-white cursor-pointer hover:bg-success/90"
                             )}
-                            title="Nach oben"
+                            title={t('tournament.create.moveUp')}
                           >
                             ▲
                           </button>
@@ -1030,7 +1082,7 @@ export default function EditTournament() {
                                 ? "bg-muted-foreground/50 text-white cursor-not-allowed" 
                                 : "bg-success text-white cursor-pointer hover:bg-success/90"
                             )}
-                            title="Nach unten"
+                            title={t('tournament.create.moveDown')}
                           >
                             ▼
                           </button>
@@ -1048,18 +1100,18 @@ export default function EditTournament() {
         {(formData.mode === 'knockout' || formData.mode === 'combined') && (
           <div className="mb-4 ml-0 p-4 bg-card rounded-lg border border-border">
             <h3 className="mb-2 font-bold text-foreground">
-              {formData.mode === 'knockout' ? 'KO-Phase (Reine Ausscheidungsrunde)' : 'KO-Phase (Nach Gruppenphase)'}
+              {formData.mode === 'knockout' ? t('tournament.create.koPhaseOnly') : t('tournament.create.koPhaseAfterGroup')}
             </h3>
             {formData.mode === 'combined' && (
               <p className="mb-4 text-sm text-muted-foreground italic">
-                Hinweis: Ligatabelle Wertung und Gleichstandsregeln werden in der Gruppenphase konfiguriert.
+                {t('tournament.create.koScoringHint')}
               </p>
             )}
             <div className="ml-4">
               {formData.mode === 'combined' && (
                 <div className="mb-4">
                   <label className="block mb-2 font-bold text-foreground">
-                    KO-Start-Runde *
+                    {t('tournament.create.koStartRound')}
                   </label>
                   <select
                     name="ko_start_round"
@@ -1068,39 +1120,38 @@ export default function EditTournament() {
                     required
                     className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <option value="">-- Bitte wählen --</option>
-                    <option value="round_of_32">Sechzehntelfinale (32 Teilnehmer)</option>
-                    <option value="round_of_16">Achtelfinale (16 Teilnehmer)</option>
-                    <option value="quarterfinal">Viertelfinale (8 Teilnehmer)</option>
-                    <option value="semifinal">Halbfinale (4 Teilnehmer)</option>
-                    <option value="final">Finale (2 Teilnehmer)</option>
+                    <option value="">{t('common.selectPlaceholder')}</option>
+                    <option value="round_of_32">{t('tournament.create.koStartRoundOptions.roundOf32')}</option>
+                    <option value="round_of_16">{t('tournament.create.koStartRoundOptions.roundOf16')}</option>
+                    <option value="quarterfinal">{t('tournament.create.koStartRoundOptions.quarterfinal')}</option>
+                    <option value="semifinal">{t('tournament.create.koStartRoundOptions.semifinal')}</option>
+                    <option value="final">{t('tournament.create.koStartRoundOptions.final')}</option>
                   </select>
                   
-                  {/* Qualification Plan Display */}
                   {loadingQualificationPlan && (
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Berechne Qualifikationsplan...
+                      {t('tournament.create.calculatingPlan')}
                     </p>
                   )}
                   {qualificationPlan && !loadingQualificationPlan && (
                     <div className="mt-4 p-4 bg-muted rounded-lg border border-border">
                       <div className="text-sm font-bold text-foreground mb-2">
-                        Qualifikationsplan
+                        {t('tournament.create.qualificationPlan')}
                       </div>
                       <div className="text-sm text-muted-foreground mb-2">
-                        {qualificationPlan.required_participants} Teilnehmer gesamt
+                        {t('tournament.create.qualificationTotal', { count: qualificationPlan.required_participants })}
                       </div>
                       <div className="text-sm text-muted-foreground mb-2">
-                        Basis: {qualificationPlan.basis_per_group} Teilnehmer pro Gruppe
+                        {t('tournament.create.qualificationBasis', { count: qualificationPlan.basis_per_group })}
                       </div>
                       {qualificationPlan.fallback_rules.length > 0 && (
                         <div className="mt-2">
                           <div className="text-sm font-bold text-foreground mb-1">
-                            Zusätzliche Qualifikanten:
+                            {t('tournament.create.additionalQualifiers')}
                           </div>
                           {qualificationPlan.fallback_rules.map((rule, idx) => (
                             <div key={idx} className="text-sm text-muted-foreground">
-                              • {rule.count}x bester {rule.position}. Platzierter
+                              • {t('tournament.create.bestPositioned', { count: rule.count, position: rule.position })}
                             </div>
                           ))}
                         </div>
@@ -1112,78 +1163,110 @@ export default function EditTournament() {
               {formData.mode === 'knockout' && (
                 <div className="mb-4 p-3 bg-muted rounded-lg border border-border">
                   <p className="m-0 text-sm text-foreground">
-                    Die Teilnehmeranzahl wird automatisch basierend auf den hinzugefügten Teilnehmern ermittelt. 
-                    Der Turnierbaum wird erstellt, sobald Teilnehmer zum Turnier hinzugefügt wurden.
+                    {t('tournament.create.koAutoParticipants')}
                   </p>
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block mb-2 font-bold text-foreground">
-                    Turnierstruktur *
-                  </label>
-                  <select
-                    name="ko_structure"
-                    value={formData.ko_structure || ''}
-                    onChange={handleChange}
-                    required
-                    className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <option value="">-- Bitte wählen --</option>
-                    {getAllowedKOStructures(formData.mode).map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+              <div className="mb-4 rounded border border-border bg-muted px-3 py-3">
+                <label className="block mb-2 font-bold text-foreground">
+                  {t('tournament.create.koStructure')}
+                </label>
+                <div className="text-sm text-foreground">
+                  {getKoStructureLabel(formData.ko_structure) || '—'}
                 </div>
-                <div className="flex items-start pt-7">
-                  {formData.ko_structure && (
-                    <p className="m-0 text-sm text-muted-foreground italic">
-                      {getAllowedKOStructures(formData.mode).find(o => o.value === formData.ko_structure)?.description}
+                <p className="mt-2 mb-0 text-xs text-muted-foreground italic">
+                  {t('tournament.create.koStructureDerivedHint')}
+                </p>
+                {formData.ko_structure && (
+                  <p className="mt-2 mb-0 text-sm text-muted-foreground italic">
+                    {getAllowedKOStructures(formData.mode).find(o => o.value === formData.ko_structure)?.description}
+                  </p>
+                )}
+              </div>
+
+              {formData.has_ko_phase && (
+                <div className="mb-4 rounded border border-border bg-muted px-3 py-3">
+                  {koStructureIncludesThirdPlace(formData.ko_structure) ? (
+                    <p className="m-0 text-sm text-muted-foreground">
+                      {t('tournament.create.thirdPlaceIncludedInStructure')}
                     </p>
+                  ) : (
+                    <label className="flex items-start gap-2 cursor-pointer mb-0">
+                      <input
+                        type="checkbox"
+                        name="ko_third_place_match"
+                        checked={formData.ko_third_place_match}
+                        onChange={handleChange}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="font-bold text-foreground">{t('tournament.ko.thirdPlaceMatch')}</span>
+                        <span className="block text-xs text-muted-foreground mt-1">
+                          {t('tournament.create.thirdPlaceMatchHint')}
+                        </span>
+                      </span>
+                    </label>
                   )}
                 </div>
-              </div>
+              )}
 
               {needsDrawMethod(formData.ko_structure, formData.ko_draw_method) && (
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block mb-2 font-bold text-foreground">
-                      Auslosung {formData.ko_draw_method !== 'manual' ? '*' : ''}
+                      KO Paarungsart (P1-P7)
                     </label>
                     <select
-                      name="ko_draw_method"
-                      value={formData.ko_draw_method || ''}
-                      onChange={handleChange}
-                      required={formData.ko_draw_method !== 'manual'}
-                      className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={formData.ko_pairing_mode}
+                      onChange={(e) => {
+                        const pairing = e.target.value as KOPairingVariant;
+                        const derivedDrawMethod = deriveDrawMethodFromPairing(pairing);
+                        setFormData((prev) => ({
+                          ...prev,
+                          ko_pairing_mode: pairing,
+                          ko_draw_method: derivedDrawMethod as any,
+                          ko_distribution:
+                            derivedDrawMethod === 'manual'
+                              ? 'predefined_slots'
+                              : derivedDrawMethod === 'fixed_cross'
+                                ? 'cross'
+                                : derivedDrawMethod === 'random_each_round'
+                                  ? 'random_each_round'
+                                : prev.ko_distribution,
+                          ko_block_same_group: pairing === 'P4' ? true : prev.ko_block_same_group,
+                        }));
+                      }}
+                      className="w-full p-2 mb-3 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <option value="">-- Bitte wählen --</option>
-                      {getAllowedKODrawMethods(formData.mode, formData.has_group_phase).map(option => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
+                      {PAIRING_VARIANTS.map((variant) => (
+                        <option key={variant.id} value={variant.id}>
+                          {variant.label}
                         </option>
                       ))}
                     </select>
+                    <div className="rounded border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
+                      Abgeleitete Auslosung:{' '}
+                      <span className="font-semibold text-foreground">
+                        {getKoDrawMethodLabel(formData.ko_draw_method) || '—'}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-start pt-7">
                     {formData.ko_draw_method && (
                       <p className="m-0 text-sm text-muted-foreground italic">
-                        {getAllowedKODrawMethods(formData.mode, formData.has_group_phase).find(o => o.value === formData.ko_draw_method)?.description}
+                        Die Auslosungslogik wird aus der Paarungsart abgeleitet.
                       </p>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* KO-Auslosungsmodus nur anzeigen, wenn nicht manuelle Paarungen */}
-              {formData.ko_draw_method !== 'manual' && (
+              {needsKoDistribution(formData.ko_pairing_mode, formData.ko_draw_method) && (
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block mb-2 font-bold text-foreground">
-                      KO-Auslosungsmodus *
+                      {t('tournament.create.koDrawMode')}
                     </label>
                     <select
                       name="ko_distribution"
@@ -1210,7 +1293,7 @@ export default function EditTournament() {
               {formData.has_group_phase && formData.ko_draw_method && (
                 <div className="mb-4 p-3 bg-card rounded-lg border border-border">
                   <label className="block mb-2 font-bold text-foreground">
-                    Auslosungs-Restriktionen
+                    {t('tournament.create.drawRestrictions')}
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer mb-2">
                     <input
@@ -1219,7 +1302,7 @@ export default function EditTournament() {
                       checked={formData.ko_block_same_group}
                       onChange={handleChange}
                     />
-                    <span>Keine Paarung aus der gleichen Gruppe</span>
+                    <span>{t('tournament.create.noSameGroup')}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -1228,7 +1311,7 @@ export default function EditTournament() {
                       checked={formData.ko_block_same_position}
                       onChange={handleChange}
                     />
-                    <span>Keine Paarung mit gleicher Gruppenplatzierung</span>
+                    <span>{t('tournament.create.noSamePosition')}</span>
                   </label>
                 </div>
               )}
@@ -1243,7 +1326,7 @@ export default function EditTournament() {
                       checked={formData.ko_group_winner_advantage}
                       onChange={handleChange}
                     />
-                    <span className="font-bold text-foreground">Vorteil für Gruppensieger</span>
+                    <span className="font-bold text-foreground">{t('tournament.create.groupWinnerAdvantage')}</span>
                   </label>
                 </div>
               )}
@@ -1252,7 +1335,7 @@ export default function EditTournament() {
               {(formData.ko_draw_method === 'pot_system' || formData.ko_draw_method === 'full_random') && (
                 <div className="mb-4">
                   <label className="block mb-2 font-bold text-foreground">
-                    Zufalls-Seed (optional)
+                    {t('tournament.create.randomSeed')}
                   </label>
                   <input
                     type="number"
@@ -1260,11 +1343,11 @@ export default function EditTournament() {
                     value={formData.ko_random_seed || ''}
                     onChange={handleChange}
                     min={0}
-                    placeholder="Leer = zufällig"
+                    placeholder={t('tournament.create.randomSeedPlaceholder')}
                     className="w-full p-2 text-base border border-border rounded-md bg-muted text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Optional: Fester Seed für reproduzierbare Zufallsauslosungen
+                    {t('tournament.create.randomSeedHint')}
                   </p>
                 </div>
               )}
@@ -1273,17 +1356,30 @@ export default function EditTournament() {
                 <div className="mb-4 p-4 bg-warning/20 rounded-lg border border-warning">
                   <p className="m-0 mb-4 text-sm text-warning">
                     {formData.mode === 'combined'
-                      ? 'Paarungen werden nach Abschluss der Gruppenphase mit den qualifizierten Teilnehmern festgelegt (Spiele → KO-Phase). Runde 1 speichern, dann Runde 2, …'
-                      : 'Paarungen werden im Turnier-Bereich "Spiele" / "KO-Phase" manuell festgelegt (Runde 1 speichern, dann Runde 2, …).'}
+                      ? t('tournament.create.manualPairingsCombined')
+                      : t('tournament.edit.manualPairingsKO')}
                   </p>
                 </div>
               )}
               <p className="mt-2 text-xs text-muted-foreground">
-                Bei Änderung der Auslosungsart muss das KO-Bracket ggf. neu generiert werden (Spiele → KO-Phase).
+                {t('tournament.edit.drawChangeHint')}
               </p>
             </div>
           </div>
         )}
+
+        <div className="mt-8 mb-4">
+          <label className="block text-sm font-bold text-foreground mb-1.5">{t('common.visibility.label')}</label>
+          <select
+            value={formData.visibility}
+            onChange={(e) => setFormData({ ...formData, visibility: e.target.value as any })}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+          >
+            <option value="public">{t('common.visibility.public')}</option>
+            <option value="shared">{t('common.visibility.shared')}</option>
+            <option value="private">{t('common.visibility.private')}</option>
+          </select>
+        </div>
 
         <div className="flex gap-4 mt-8">
           <Button
@@ -1291,7 +1387,7 @@ export default function EditTournament() {
             variant="success"
             disabled={loading || loadingTournament}
           >
-            {loading ? 'Aktualisiere...' : 'Turnier aktualisieren'}
+            {loading ? t('tournament.edit.submitting') : t('tournament.edit.submit')}
           </Button>
           <Button
             type="button"
@@ -1299,7 +1395,7 @@ export default function EditTournament() {
             onClick={() => navigate(`/tournaments/${tournamentId}`)}
             disabled={loadingTournament}
           >
-            Abbrechen
+            {t('common.cancel')}
           </Button>
         </div>
       </form>
@@ -1313,23 +1409,25 @@ export default function EditTournament() {
         <div className="sticky top-8">
           <Card className="mb-4 border-primary">
             <CardHeader>
-              <CardTitle className="mt-0 text-primary">Turnier bearbeiten</CardTitle>
+              <CardTitle className="mt-0 text-primary">{t('tournament.edit.title')}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-4">
-                Hier können Sie die Einstellungen des Turniers anpassen. Bitte beachten Sie die folgenden Hinweise:
+                {t('tournament.edit.infoDescription')}
               </p>
               <ul className="m-0 pl-6 text-muted-foreground">
-                <li className="mb-2">Änderungen an Basisinformationen (Name, Beschreibung, Daten) sind jederzeit möglich.</li>
-                <li className="mb-2">Konfigurationsänderungen löschen automatisch alle Gruppen und Spiele.</li>
-                <li className="mb-2">Nach Konfigurationsänderungen müssen Gruppen und Spiele neu generiert werden.</li>
-                <li className="mb-2">Teilnehmer werden nicht gelöscht, bleiben aber ohne Gruppen-Zuordnung.</li>
+                <li className="mb-2">{t('tournament.edit.infoBasic')}</li>
+                <li className="mb-2">{t('tournament.edit.infoConfig')}</li>
+                <li className="mb-2">{t('tournament.edit.infoRegenerate')}</li>
+                <li className="mb-2">{t('tournament.edit.infoParticipants')}</li>
               </ul>
             </CardContent>
           </Card>
           <Card className="border-warning">
             <CardHeader>
-              <CardTitle className="mt-0 text-warning">Aktueller Modus: {currentMode.title}</CardTitle>
+              <CardTitle className="mt-0 text-warning">
+                {t('tournament.edit.currentMode', { mode: selectedVariantSpec?.title || currentMode.title })}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-2 text-sm">{currentMode.description}</p>
@@ -1337,12 +1435,12 @@ export default function EditTournament() {
           </Card>
           <Card className="mt-4 border-warning">
             <CardHeader>
-              <CardTitle className="mt-0 text-warning">Aktuelle Einstellungen</CardTitle>
+              <CardTitle className="mt-0 text-warning">{t('tournament.create.currentSettings')}</CardTitle>
             </CardHeader>
             <CardContent>
               {groupSettingsSummary.length > 0 ? (
                 <>
-                  <div className="font-bold text-foreground mb-2">Gruppenphase</div>
+                  <div className="font-bold text-foreground mb-2">{t('common.mode.groupPhase')}</div>
                   <ul className="m-0 pl-6 text-muted-foreground text-sm">
                     {groupSettingsSummary.map((item) => (
                       <li key={item} className="mb-1.5">{item}</li>
@@ -1350,11 +1448,11 @@ export default function EditTournament() {
                   </ul>
                 </>
               ) : (
-                <div className="text-muted-foreground mb-3">Keine Gruppenphase aktiv.</div>
+                <div className="text-muted-foreground mb-3">{t('tournament.create.noGroupPhase')}</div>
               )}
               {koSettingsSummary.length > 0 ? (
                 <>
-                  <div className="font-bold text-foreground mt-4 mb-2">KO-Phase</div>
+                  <div className="font-bold text-foreground mt-4 mb-2">{t('common.mode.koPhase')}</div>
                   <ul className="m-0 pl-6 text-muted-foreground text-sm">
                     {koSettingsSummary.map((item) => (
                       <li key={item} className="mb-1.5">{item}</li>
@@ -1362,11 +1460,12 @@ export default function EditTournament() {
                   </ul>
                 </>
               ) : (
-                <div className="text-muted-foreground mt-3">Keine KO-Phase aktiv.</div>
+                <div className="text-muted-foreground mt-3">{t('tournament.create.noKoPhase')}</div>
               )}
               <div className="mt-4">
                 <TournamentModeVisualization
                   mode={formData.mode}
+                  modeVariant={formData.mode_variant}
                   hasGroupPhase={formData.has_group_phase}
                   hasKoPhase={formData.has_ko_phase}
                   groupsCount={formData.groups_count}
@@ -1375,6 +1474,7 @@ export default function EditTournament() {
                   koStartRound={formData.ko_start_round}
                   koStructure={formData.ko_structure}
                   koDrawMethod={formData.ko_draw_method}
+                  koPairingMode={formData.ko_pairing_mode}
                 />
               </div>
             </CardContent>

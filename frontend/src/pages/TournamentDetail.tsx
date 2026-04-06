@@ -1,5 +1,6 @@
 // Tournament Detail Page with Tabs
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { tournamentService } from '../services/tournamentService';
 import { locationService } from '../services/locationService';
@@ -22,7 +23,7 @@ import {
   DialogFooter,
 } from '../components/ui';
 import { cn } from '@/lib/utils';
-import { PencilSimple, Copy, Star, Trash, ArrowLeft, Television } from 'phosphor-react';
+import { PencilSimple, Copy, Star, Trash, ArrowLeft, Television, MagnifyingGlass } from 'phosphor-react';
 
 // Import tab content components
 import TournamentOverview from '../components/tournament/TournamentOverview';
@@ -31,6 +32,11 @@ import TournamentGroupsContent from '../components/tournament/TournamentGroupsCo
 import TournamentMatchesContent from '../components/tournament/TournamentMatchesContent';
 import TournamentTables from '../components/tournament/TournamentTables';
 import TournamentOverallScheduleContent from '../components/tournament/TournamentOverallScheduleContent';
+import TournamentSharingPanel from '../components/tournament/TournamentSharingPanel';
+import CommentSection from '../components/comments/CommentSection';
+import PageHeader from '../components/patterns/management/PageHeader';
+import MatchListPattern from '../components/patterns/tournament/MatchListPattern';
+import { getModeVariantInsight } from '../domain/tournamentModeInsights';
 
 type TabType = 'overview' | 'participants' | 'groups' | 'group_matches' | 'tables' | 'ko';
 
@@ -40,11 +46,13 @@ export default function TournamentDetail() {
   const [searchParams] = useSearchParams();
   const tournamentId = id ? parseInt(id) : 0;
   const { isAuthenticated, canEdit } = useAuth();
+  const { t } = useTranslation();
 
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [groupMatchesView, setGroupMatchesView] = useState<'group' | 'overall'>('group');
+  const [overallScheduleSearch, setOverallScheduleSearch] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletePassword, setDeletePassword] = useState('');
@@ -137,7 +145,7 @@ export default function TournamentDetail() {
       navigate(`/tournaments/${duplicated.id}`);
     } catch (err: any) {
       console.error('Failed to duplicate tournament:', err);
-      alert('Fehler beim Duplizieren des Turniers');
+      alert(t('tournament.detail.duplicateError'));
     }
   };
 
@@ -150,7 +158,7 @@ export default function TournamentDetail() {
       const updated = await tournamentService.update(tournament.id, { status: newStatus as 'planned' | 'running' | 'completed' });
       setTournament(updated);
     } catch (err: any) {
-      setStatusError(err?.response?.data?.detail || 'Status konnte nicht geändert werden.');
+      setStatusError(err?.response?.data?.detail || t('tournament.detail.statusChangeError'));
     } finally {
       setStatusUpdating(false);
     }
@@ -164,17 +172,17 @@ export default function TournamentDetail() {
       setTournament(updated);
     } catch (err: any) {
       console.error('Failed to toggle template:', err);
-      alert('Fehler beim Speichern als Vorlage');
+      alert(t('tournament.detail.templateError'));
     }
   };
 
   const handleDeleteConfirm = async () => {
     if (deleteConfirmText.trim().toLowerCase() !== 'ja') {
-      setDeleteError('Bitte geben Sie "Ja" ein, um das Löschen zu bestätigen');
+      setDeleteError(t('tournament.detail.deleteTypeError'));
       return;
     }
     if (tournament?.status === 'completed' && deletePassword.trim() !== '414141') {
-      setDeleteError('Passwort erforderlich oder falsch. Bitte Passwort 414141 eingeben.');
+      setDeleteError(t('tournament.detail.deletePasswordError'));
       return;
     }
 
@@ -189,7 +197,7 @@ export default function TournamentDetail() {
       setDeleting(false);
       navigate('/dashboard');
     } catch (err: any) {
-      setDeleteError(err.response?.data?.detail || 'Fehler beim Löschen des Turniers');
+      setDeleteError(err.response?.data?.detail || t('tournament.detail.deleteError'));
       setDeleting(false);
     }
   };
@@ -210,24 +218,82 @@ export default function TournamentDetail() {
     }
   };
 
-  if (loading) return <div className="p-8 text-foreground">Wird geladen...</div>;
-  if (!tournament) return <div className="p-8 text-foreground">Turnier nicht gefunden.</div>;
+  if (loading) return <div className="p-8 text-foreground">{t('common.loading')}</div>;
+  if (!tournament) return <div className="p-8 text-foreground">{t('tournament.detail.notFound')}</div>;
 
   const groupPhaseEnabled =
     tournament.has_group_phase || tournament.mode === 'round_robin' || tournament.mode === 'combined';
   const koPhaseEnabled = tournament.has_ko_phase || tournament.mode === 'knockout' || tournament.mode === 'combined';
   const showGroupMatchesTab = groupPhaseEnabled && tournament.show_matches;
   const showTablesTab = groupPhaseEnabled && tournament.show_tables;
+  const modeInsight = getModeVariantInsight(tournament.mode_variant);
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto bg-background min-h-screen">
-      {/* Header */}
-      <div className="flex justify-between mb-8 items-center">
-        <div>
-          <h1 className="m-0 text-foreground">{tournament.name}</h1>
-          <div className="flex gap-4 mt-2 items-center flex-wrap">
+    <div className="p-8 max-w-[1600px] mx-auto bg-background min-h-screen page-shell">
+      <div className="mb-8">
+        <PageHeader
+          title={tournament.name}
+          subtitle={[
+            tournament.start_date,
+            `${modeInsight.id} - ${modeInsight.title}`,
+          ]
+            .filter(Boolean)
+            .join(' • ')}
+          actions={
+            <>
+              {canEdit && (
+                <>
+                  <Button
+                    variant="primary"
+                    onClick={() => navigate(`/tournaments/${tournamentId}/edit`)}
+                  >
+                    <PencilSimple size={20} className="mr-2 align-middle" />
+                    {t('tournament.detail.edit')}
+                  </Button>
+                  <Button
+                    variant="info"
+                    onClick={handleDuplicate}
+                    disabled={tournament.status === 'completed'}
+                  >
+                    <Copy size={20} className="mr-2 align-middle" />
+                    {t('tournament.detail.duplicate')}
+                  </Button>
+                  <Button
+                    variant={tournament?.is_template ? 'success' : 'warning'}
+                    onClick={handleToggleTemplate}
+                  >
+                    <Star size={20} weight={tournament?.is_template ? 'fill' : 'regular'} className="mr-2 align-middle" />
+                    {tournament?.is_template ? t('tournament.detail.removeTemplate') : t('tournament.detail.saveAsTemplate')}
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={handleDeleteClick}
+                  >
+                    <Trash size={20} className="mr-2 align-middle" />
+                    {t('tournament.detail.delete')}
+                  </Button>
+                </>
+              )}
+              <Button
+                variant="secondary"
+                onClick={() => window.open(`/tournaments/${tournamentId}/ticker`, '_blank', 'noopener,noreferrer')}
+              >
+                <Television size={20} className="mr-2 align-middle" />
+                {t('tournament.detail.liveTicker')}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => navigate('/dashboard')}
+              >
+                <ArrowLeft size={20} className="mr-2 align-middle" />
+                {t('common.back')}
+              </Button>
+            </>
+          }
+        />
+        <div className="mt-2 flex gap-4 items-center flex-wrap">
             <Badge variant={getStatusBadgeVariant(tournament.status)}>
-              {tournament.status === 'running' ? 'Laufend' : tournament.status === 'completed' ? 'Abgeschlossen' : 'Geplant'}
+              {tournament.status === 'running' ? t('common.status.running') : tournament.status === 'completed' ? t('common.status.completed') : t('common.status.planned')}
             </Badge>
             {canEdit && tournament.status !== 'completed' && (
               <div className="inline-block min-w-[140px]">
@@ -238,66 +304,13 @@ export default function TournamentDetail() {
                   disabled={statusUpdating}
                   error={statusError || undefined}
                   options={[
-                    { value: 'planned', label: 'Geplant' },
-                    { value: 'running', label: 'Laufend' },
-                    { value: 'completed', label: 'Abgeschlossen' },
+                    { value: 'planned', label: t('common.status.planned') },
+                    { value: 'running', label: t('common.status.running') },
+                    { value: 'completed', label: t('common.status.completed') },
                   ]}
                 />
               </div>
             )}
-            <span className="text-muted-foreground text-sm">{tournament.start_date}</span>
-            <span className="text-muted-foreground text-sm">
-              {tournament.mode === 'round_robin' ? 'Round Robin' : tournament.mode === 'knockout' ? 'KO-Phase' : 'Kombiniert'}
-            </span>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {canEdit && (
-            <>
-              <Button
-                variant="primary"
-                onClick={() => navigate(`/tournaments/${tournamentId}/edit`)}
-              >
-                <PencilSimple size={20} className="mr-2 align-middle" />
-                Bearbeiten
-              </Button>
-              <Button
-                variant="info"
-                onClick={handleDuplicate}
-              >
-                <Copy size={20} className="mr-2 align-middle" />
-                Duplizieren
-              </Button>
-              <Button
-                variant={tournament?.is_template ? 'success' : 'warning'}
-                onClick={handleToggleTemplate}
-              >
-                <Star size={20} weight={tournament?.is_template ? 'fill' : 'regular'} className="mr-2 align-middle" />
-                {tournament?.is_template ? 'Vorlage entfernen' : 'Als Vorlage speichern'}
-              </Button>
-              <Button
-                variant="danger"
-                onClick={handleDeleteClick}
-              >
-                <Trash size={20} className="mr-2 align-middle" />
-                Löschen
-              </Button>
-            </>
-          )}
-          <Button
-            variant="secondary"
-            onClick={() => window.open(`/tournaments/${tournamentId}/ticker`, '_blank', 'noopener,noreferrer')}
-          >
-            <Television size={20} className="mr-2 align-middle" />
-            Live Ticker
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => navigate('/dashboard')}
-          >
-            <ArrowLeft size={20} className="mr-2 align-middle" />
-            Zurück
-          </Button>
         </div>
       </div>
 
@@ -308,20 +321,20 @@ export default function TournamentDetail() {
             value="overview"
             className="rounded-none border-b-2 border-transparent -mb-0.5 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:font-bold bg-transparent px-6 py-3 shadow-none"
           >
-            Übersicht
+            {t('tournament.detail.tabs.overview')}
           </TabsTrigger>
           <TabsTrigger
             value="participants"
             className="rounded-none border-b-2 border-transparent -mb-0.5 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:font-bold bg-transparent px-6 py-3 shadow-none"
           >
-            Teilnehmer
+            {t('tournament.detail.tabs.participants')}
           </TabsTrigger>
           {groupPhaseEnabled && (
             <TabsTrigger
               value="groups"
               className="rounded-none border-b-2 border-transparent -mb-0.5 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:font-bold bg-transparent px-6 py-3 shadow-none"
             >
-              Gruppen
+              {t('tournament.detail.tabs.groups')}
             </TabsTrigger>
           )}
           {showGroupMatchesTab && (
@@ -329,7 +342,7 @@ export default function TournamentDetail() {
               value="group_matches"
               className="rounded-none border-b-2 border-transparent -mb-0.5 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:font-bold bg-transparent px-6 py-3 shadow-none"
             >
-              Gruppenspiele
+              {t('tournament.detail.tabs.groupMatches')}
             </TabsTrigger>
           )}
           {showTablesTab && tournament.ko_structure !== 'consolation_bracket' && (
@@ -337,7 +350,7 @@ export default function TournamentDetail() {
               value="tables"
               className="rounded-none border-b-2 border-transparent -mb-0.5 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:font-bold bg-transparent px-6 py-3 shadow-none"
             >
-              Tabellen
+              {t('tournament.detail.tabs.tables')}
             </TabsTrigger>
           )}
           {koPhaseEnabled && (
@@ -345,7 +358,7 @@ export default function TournamentDetail() {
               value="ko"
               className="rounded-none border-b-2 border-transparent -mb-0.5 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:font-bold bg-transparent px-6 py-3 shadow-none"
             >
-              KO-Phase
+              {t('tournament.detail.tabs.ko')}
             </TabsTrigger>
           )}
         </TabsList>
@@ -354,40 +367,87 @@ export default function TournamentDetail() {
         <div>
           <TabsContent value="overview" className="mt-0">
             <TournamentOverview tournament={tournament} locationName={locationName} />
+            {canEdit && (
+              <div className="mt-6">
+                <TournamentSharingPanel
+                  entityType="tournament"
+                  entityId={tournament.id}
+                  currentVisibility={((tournament as any).visibility || 'public') as any}
+                  onVisibilityChange={(v) => setTournament({ ...tournament, visibility: v } as any)}
+                />
+              </div>
+            )}
+            <CommentSection tournamentId={tournament.id} context="standings" className="mt-8" />
           </TabsContent>
           <TabsContent value="participants" className="mt-0">
-            <TournamentParticipantsContent tournamentId={tournamentId} />
+            <TournamentParticipantsContent
+              tournamentId={tournamentId}
+              tournament={tournament}
+              tournamentRevision={tournament.updated_at}
+            />
           </TabsContent>
           <TabsContent value="groups" className="mt-0">
             {groupPhaseEnabled && (
               <TournamentGroupsContent tournamentId={tournamentId} tournament={tournament} />
             )}
+            <CommentSection tournamentId={tournament.id} context="groups" className="mt-8" />
           </TabsContent>
           <TabsContent value="group_matches" className="mt-0">
             {showGroupMatchesTab && (
-              <div>
-                <div className="flex gap-2 mb-6 flex-wrap">
-                  <Button
-                    variant={groupMatchesView === 'group' ? 'info' : 'secondary'}
-                    className={cn(groupMatchesView === 'group' && 'font-bold')}
-                    onClick={() => setGroupMatchesView('group')}
-                  >
-                    Spielplan pro Gruppe
-                  </Button>
-                  <Button
-                    variant={groupMatchesView === 'overall' ? 'info' : 'secondary'}
-                    className={cn(groupMatchesView === 'overall' && 'font-bold')}
-                    onClick={() => setGroupMatchesView('overall')}
-                  >
-                    Gesamtspielplan
-                  </Button>
+              <MatchListPattern
+                title={t('tournament.detail.tabs.groupMatches')}
+                toolbar={
+                <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                  <div className="flex gap-2 flex-wrap shrink-0">
+                    <Button
+                      variant={groupMatchesView === 'group' ? 'info' : 'secondary'}
+                      className={cn(groupMatchesView === 'group' && 'font-bold')}
+                      onClick={() => {
+                        setGroupMatchesView('group');
+                        setOverallScheduleSearch('');
+                      }}
+                    >
+                      {t('tournament.detail.matchViewGroup')}
+                    </Button>
+                    <Button
+                      variant={groupMatchesView === 'overall' ? 'info' : 'secondary'}
+                      className={cn(groupMatchesView === 'overall' && 'font-bold')}
+                      onClick={() => setGroupMatchesView('overall')}
+                    >
+                      {t('tournament.detail.matchViewOverall')}
+                    </Button>
+                  </div>
+                  {groupMatchesView === 'overall' && (
+                    <div className="flex min-h-[44px] w-full min-w-0 flex-1 items-center gap-2 rounded-lg border-2 border-primary/40 bg-muted px-3 py-2 sm:max-w-xl">
+                      <MagnifyingGlass className="h-5 w-5 shrink-0 text-primary" weight="bold" aria-hidden />
+                      <span className="text-sm font-semibold text-foreground shrink-0">
+                        {t('common.search')}
+                      </span>
+                      <Input
+                        type="search"
+                        value={overallScheduleSearch}
+                        onChange={(e) => setOverallScheduleSearch(e.target.value)}
+                        placeholder={t('tournament.detail.overallScheduleSearchPlaceholder')}
+                        aria-label={t('tournament.detail.overallScheduleSearchPlaceholder')}
+                        className="min-w-0 flex-1 border-border bg-background"
+                      />
+                    </div>
+                  )}
                 </div>
+                }
+              >
                 {groupMatchesView === 'group' ? (
                   <TournamentMatchesContent tournamentId={tournamentId} tournament={tournament} view="group" />
                 ) : (
-                  <TournamentOverallScheduleContent tournamentId={tournamentId} tournament={tournament} />
+                  <TournamentOverallScheduleContent
+                    tournamentId={tournamentId}
+                    tournament={tournament}
+                    scheduleSearch={overallScheduleSearch}
+                    onScheduleSearchChange={setOverallScheduleSearch}
+                  />
                 )}
-              </div>
+                <CommentSection tournamentId={tournament.id} context="schedule" className="mt-8" />
+              </MatchListPattern>
             )}
           </TabsContent>
           <TabsContent value="tables" className="mt-0">
@@ -399,6 +459,7 @@ export default function TournamentDetail() {
             {koPhaseEnabled && (
               <TournamentMatchesContent tournamentId={tournamentId} tournament={tournament} view="ko" />
             )}
+            <CommentSection tournamentId={tournament.id} context="ko" className="mt-8" />
           </TabsContent>
         </div>
       </Tabs>
@@ -407,13 +468,12 @@ export default function TournamentDetail() {
       <Dialog open={showDeleteDialog} onOpenChange={(open) => !open && handleDeleteCancel()}>
         <DialogContent className="max-w-[400px] w-[90%]">
           <DialogHeader>
-            <DialogTitle className="mt-0 mb-4 text-foreground">Turnier löschen</DialogTitle>
+            <DialogTitle className="mt-0 mb-4 text-foreground">{t('tournament.detail.deleteTitle')}</DialogTitle>
             <DialogDescription className="mb-4 text-muted-foreground">
-              Möchten Sie das Turnier "<strong className="text-foreground">{tournament.name}</strong>" wirklich löschen?
-              Diese Aktion kann nicht rückgängig gemacht werden.
+              {t('tournament.detail.deleteConfirm', { name: tournament.name })}
             </DialogDescription>
           </DialogHeader>
-          <p className="mb-2 font-bold text-foreground">Geben Sie "Ja" ein, um zu bestätigen:</p>
+          <p className="mb-2 font-bold text-foreground">{t('tournament.detail.deleteTypeYes')}</p>
           <Input
             type="text"
             value={deleteConfirmText}
@@ -428,7 +488,7 @@ export default function TournamentDetail() {
           />
           {tournament.status === 'completed' && (
             <>
-              <p className="mt-4 mb-2 font-bold text-foreground">Passwort für abgeschlossenes Turnier:</p>
+              <p className="mt-4 mb-2 font-bold text-foreground">{t('tournament.detail.deletePassword')}</p>
               <Input
                 type="password"
                 value={deletePassword}
@@ -454,14 +514,14 @@ export default function TournamentDetail() {
               onClick={handleDeleteCancel}
               disabled={deleting}
             >
-              Abbrechen
+              {t('common.cancel')}
             </Button>
             <Button
               variant="danger"
               onClick={handleDeleteConfirm}
               disabled={deleting || deleteConfirmText.trim().toLowerCase() !== 'ja'}
             >
-              {deleting ? 'Lösche...' : 'Löschen'}
+              {deleting ? t('tournament.detail.deleting') : t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

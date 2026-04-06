@@ -1,5 +1,6 @@
 // Participants Page
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { participantService } from '../services/participantService';
 import { Participant } from '../types';
@@ -8,28 +9,10 @@ import { Button, Card, Input } from '../components/ui';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Upload, Plus, PencilSimple, Trash, CheckCircle, XCircle } from 'phosphor-react';
 
-// BASE_PATH für Plattform-Integration
-function getBasePath(): string {
-  // Prüfe ob BASE_PATH bereits gesetzt ist (wird von der Plattform gesetzt)
-  if (typeof window !== 'undefined' && (window as any).BASE_PATH) {
-    return (window as any).BASE_PATH;
-  }
-
-  // Fallback: Extrahiere aus URL (z.B. /App-4/...)
-  if (typeof window !== 'undefined') {
-    const parts = window.location.pathname.split('/');
-    if (parts.length > 1 && parts[1].startsWith('App-')) {
-      return '/' + parts[1];
-    }
-  }
-
-  // Lokale Entwicklung ohne Prefix
-  return '';
-}
-
 export default function Participants() {
   const navigate = useNavigate();
   const { isAuthenticated, canEdit } = useAuth();
+  const { t } = useTranslation();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -87,7 +70,7 @@ export default function Participants() {
       loadParticipants();
     } catch (err) {
       console.error('Failed to save participant:', err);
-      alert('Fehler beim Speichern des Teilnehmers');
+      alert(t('participants.saveError'));
     }
   };
 
@@ -116,16 +99,24 @@ export default function Participants() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Möchten Sie diesen Teilnehmer wirklich löschen?')) {
+    if (!confirm(t('participants.deleteConfirm'))) {
       return;
     }
 
     try {
       await participantService.delete(id);
       loadParticipants();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to delete participant:', err);
-      alert('Fehler beim Löschen des Teilnehmers');
+      const detail =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+          : undefined;
+      const msg =
+        typeof detail === 'string' && detail.trim()
+          ? detail
+          : t('participants.deleteError');
+      alert(msg);
     }
   };
 
@@ -143,38 +134,20 @@ export default function Participants() {
     setImportResult(null);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      // BASE_PATH für Plattform-Integration
-      const basePath = getBasePath();
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const baseApiUrl = apiUrl.replace(/\/api\/v1\/?$/, '');
-
-      // Wenn BASE_PATH gesetzt ist (Plattform), verwende BASE_PATH für API-Requests
-      // Wenn BASE_PATH leer ist (lokale Entwicklung), verwende API_URL
-      const importUrl = basePath
-        ? `${basePath}/api/v1/participants/import`
-        : `${baseApiUrl}/api/v1/participants/import`;
-
-      const response = await fetch(importUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error('Import fehlgeschlagen');
-      }
-
-      const result = await response.json();
+      const result = await participantService.importCsv(file);
       setImportResult(result);
       loadParticipants();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to import participants:', err);
-      alert('Fehler beim Importieren der Teilnehmer');
+      const detail =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+          : undefined;
+      const msg =
+        typeof detail === 'string' && detail.trim()
+          ? detail
+          : t('participants.importError');
+      alert(msg);
     } finally {
       setImporting(false);
       // Reset file input
@@ -182,19 +155,19 @@ export default function Participants() {
     }
   };
 
-  if (loading) return <div className="p-8 text-foreground">Wird geladen...</div>;
+  if (loading) return <div className="p-8 text-foreground">{t('common.loading')}</div>;
 
   return (
-    <div className="p-8 max-w-[1200px] mx-auto bg-background min-h-screen">
+    <div className="p-8 max-w-[1200px] mx-auto bg-background">
       <div className="flex justify-between mb-8 items-center">
-        <h1 className="m-0 text-foreground">Teilnehmer-Verwaltung</h1>
+        <h1 className="m-0 text-foreground">{t('participants.title')}</h1>
         <div className="flex gap-2">
           <Button
             variant="secondary"
             onClick={() => navigate('/settings')}
           >
             <ArrowLeft size={20} className="mr-2 align-middle" />
-            Zurück
+            {t('common.back')}
           </Button>
           {canEdit && (
             <>
@@ -204,7 +177,7 @@ export default function Participants() {
                 disabled={importing}
               >
                 <Upload size={20} className="mr-2 align-middle" />
-                CSV Import
+                {t('participants.csvImport')}
               </Button>
               <Button
                 variant="success"
@@ -212,7 +185,7 @@ export default function Participants() {
                 disabled={showCreateForm}
               >
                 <Plus size={20} className="mr-2 align-middle" />
-                Neuer Teilnehmer
+                {t('participants.newParticipant')}
               </Button>
             </>
           )}
@@ -221,10 +194,10 @@ export default function Participants() {
 
       {showCreateForm && (
         <Card className="mb-8">
-          <h2 className="mt-0 text-foreground">{editingId ? 'Teilnehmer bearbeiten' : 'Neuer Teilnehmer'}</h2>
+          <h2 className="mt-0 text-foreground">{editingId ? t('participants.editParticipant') : t('participants.newParticipant')}</h2>
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
             <Input
-              label="Vorname *"
+              label={t('participants.firstName')}
               type="text"
               name="first_name"
               value={formData.first_name}
@@ -233,16 +206,15 @@ export default function Participants() {
             />
 
             <Input
-              label="Nachname *"
+              label={t('participants.lastName')}
               type="text"
               name="last_name"
               value={formData.last_name}
               onChange={handleChange}
-              required
             />
 
             <Input
-              label="Verein"
+              label={t('participants.club')}
               type="text"
               name="club"
               value={formData.club}
@@ -250,7 +222,7 @@ export default function Participants() {
             />
 
             <Input
-              label="Scolia ID"
+              label={t('participants.scoliaId')}
               type="text"
               name="scolia_id"
               value={formData.scolia_id}
@@ -258,7 +230,7 @@ export default function Participants() {
             />
 
             <Input
-              label="E-Mail"
+              label={t('participants.email')}
               type="email"
               name="email"
               value={formData.email}
@@ -266,7 +238,7 @@ export default function Participants() {
             />
 
             <Input
-              label="Nickname"
+              label={t('participants.nickname')}
               type="text"
               name="nickname"
               value={formData.nickname}
@@ -278,14 +250,14 @@ export default function Participants() {
                 type="submit"
                 variant="primary"
               >
-                {editingId ? 'Aktualisieren' : 'Erstellen'}
+                {editingId ? t('common.update') : t('common.create')}
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={handleCancel}
               >
-                Abbrechen
+                {t('common.cancel')}
               </Button>
             </div>
           </form>
@@ -294,9 +266,9 @@ export default function Participants() {
 
       {showImportForm && (
         <Card className="mb-8 border border-info">
-          <h2 className="mt-0 text-foreground">CSV Import</h2>
+          <h2 className="mt-0 text-foreground">{t('participants.csvImportTitle')}</h2>
           <p className="mb-4 text-muted-foreground">
-            Importieren Sie eine CSV-Datei mit Teilnehmerdaten. Erforderliche Felder: Vorname, Nachname. Optionale Felder: E-Mail, Spitzname.
+            {t('participants.csvImportDesc')}
           </p>
 
           <input
@@ -308,7 +280,7 @@ export default function Participants() {
 
           {importing && (
             <div className="p-4 bg-warning/10 border border-warning rounded-lg text-foreground">
-              Wird importiert...
+              {t('participants.importing')}
             </div>
           )}
 
@@ -319,9 +291,9 @@ export default function Participants() {
                 importResult.errors.length > 0 ? 'bg-warning/10 border border-warning' : 'bg-success/10 border border-success'
               )}
             >
-              <h3 className="mb-2 mt-0">Import abgeschlossen</h3>
-              <p><CheckCircle size={16} className="align-middle mr-2" /> Importiert: {importResult.imported} Teilnehmer</p>
-              <p><XCircle size={16} className="align-middle mr-2" /> Übersprungen: {importResult.skipped} (bereits vorhanden oder ungültig)</p>
+              <h3 className="mb-2 mt-0">{t('participants.importDone')}</h3>
+              <p><CheckCircle size={16} className="align-middle mr-2" /> {t('participants.imported', { count: importResult.imported })}</p>
+              <p><XCircle size={16} className="align-middle mr-2" /> {t('participants.skipped', { count: importResult.skipped })}</p>
 
               {importResult.skipped > 0 && importResult.skipped_items && (
                 <div className="mt-4">
@@ -330,7 +302,7 @@ export default function Participants() {
                     onClick={() => setShowSkippedItems(!showSkippedItems)}
                     className="py-2 px-4"
                   >
-                    {showSkippedItems ? '▼' : '▶'} Übersprungene Details anzeigen
+                    {showSkippedItems ? '▼' : '▶'} {t('participants.showSkippedDetails')}
                   </Button>
 
                   {showSkippedItems && (
@@ -338,10 +310,10 @@ export default function Participants() {
                       <table className="w-full border-collapse text-sm">
                         <thead>
                           <tr className="border-b border-border">
-                            <th className="p-2 text-left text-foreground">Zeile</th>
-                            <th className="p-2 text-left text-foreground">Name</th>
-                            <th className="p-2 text-left text-foreground">Scolia ID</th>
-                            <th className="p-2 text-left text-foreground">Grund</th>
+                            <th className="p-2 text-left text-foreground">{t('participants.skippedHeaders.row')}</th>
+                            <th className="p-2 text-left text-foreground">{t('participants.skippedHeaders.name')}</th>
+                            <th className="p-2 text-left text-foreground">{t('participants.skippedHeaders.scoliaId')}</th>
+                            <th className="p-2 text-left text-foreground">{t('participants.skippedHeaders.reason')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -362,7 +334,7 @@ export default function Participants() {
 
               {importResult.errors.length > 0 && (
                 <div className="mt-2">
-                  <strong className="text-destructive">Fehler ({importResult.errors.length}):</strong>
+                  <strong className="text-destructive">{t('participants.errors', { count: importResult.errors.length })}</strong>
                   <ul className="text-foreground">
                     {importResult.errors.map((error, idx) => (
                       <li key={idx}>{error}</li>
@@ -377,27 +349,27 @@ export default function Participants() {
             variant="secondary"
             onClick={() => { setShowImportForm(false); setImportResult(null); setShowSkippedItems(false); }}
           >
-            Schließen
+            {t('common.close')}
           </Button>
         </Card>
       )}
 
       <div>
-        <h2 className="text-foreground">Teilnehmer ({participants.length})</h2>
+        <h2 className="text-foreground">{t('participants.count', { count: participants.length })}</h2>
         {participants.length === 0 ? (
-          <p className="text-muted-foreground">Noch keine Teilnehmer vorhanden.</p>
+          <p className="text-muted-foreground">{t('participants.noParticipants')}</p>
         ) : (
           <Card className="p-0 overflow-hidden">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b-2 border-border bg-muted">
                   <th className="p-3 text-left text-foreground">ID</th>
-                  <th className="p-3 text-left text-foreground">Name</th>
-                  <th className="p-3 text-left text-foreground">Verein</th>
-                  <th className="p-3 text-left text-foreground">Scolia ID</th>
-                  <th className="p-3 text-left text-foreground">E-Mail</th>
-                  <th className="p-3 text-left text-foreground">Nickname</th>
-                  <th className="p-3 text-right text-foreground">Aktionen</th>
+                  <th className="p-3 text-left text-foreground">{t('common.name')}</th>
+                  <th className="p-3 text-left text-foreground">{t('participants.club')}</th>
+                  <th className="p-3 text-left text-foreground">{t('participants.scoliaId')}</th>
+                  <th className="p-3 text-left text-foreground">{t('participants.email')}</th>
+                  <th className="p-3 text-left text-foreground">{t('participants.nickname')}</th>
+                  <th className="p-3 text-right text-foreground">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -420,7 +392,7 @@ export default function Participants() {
                             className="mr-2 py-2 px-3 text-sm"
                           >
                             <PencilSimple size={16} className="mr-1 align-middle" />
-                            Bearbeiten
+                            {t('common.edit')}
                           </Button>
                           <Button
                             variant="danger"
@@ -428,7 +400,7 @@ export default function Participants() {
                             className="py-2 px-3 text-sm"
                           >
                             <Trash size={16} className="mr-1 align-middle" />
-                            Löschen
+                            {t('common.delete')}
                           </Button>
                         </>
                       )}

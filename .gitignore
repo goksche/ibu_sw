@@ -69,3 +69,6 @@ backups/
 # Build artifacts
 dist/
 build/
+
+*storybook.log
+storybook-static

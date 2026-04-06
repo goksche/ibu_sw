@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.dependencies import require_user_or_admin, require_viewer_or_above
 from app.models import GroupMatch, KnockoutMatch, Tournament, Group, Participant, User
 from app.models.tournament import TournamentStatus
+from app.services.visibility import get_accessible_tournament
 from app.schemas.match import (
     GroupMatchCreate, GroupMatchUpdate, GroupMatchResponse,
     KnockoutMatchCreate, KnockoutMatchUpdate, KnockoutMatchResponse
@@ -19,8 +20,10 @@ router = APIRouter()
 
 
 # Helper function to check tournament access
-def check_tournament_access(db: Session, tournament_id: int):
-    """Check if user has access to tournament"""
+def check_tournament_access(db: Session, tournament_id: int, current_user=None):
+    """Check if user has access to tournament (with visibility check)."""
+    if current_user:
+        return get_accessible_tournament(db, tournament_id, current_user)
     tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
     if not tournament:
         raise HTTPException(
@@ -30,9 +33,9 @@ def check_tournament_access(db: Session, tournament_id: int):
     return tournament
 
 
-def check_tournament_editable(db: Session, tournament_id: int):
-    """Check tournament exists and is not completed (for write operations)."""
-    tournament = check_tournament_access(db, tournament_id)
+def check_tournament_editable(db: Session, tournament_id: int, current_user=None):
+    """Check tournament exists, is accessible and not completed."""
+    tournament = check_tournament_access(db, tournament_id, current_user)
     if tournament.status == TournamentStatus.COMPLETED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

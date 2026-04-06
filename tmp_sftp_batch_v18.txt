@@ -1,0 +1,6 @@
+put c:/Cursor/ibu_sw/frontend/src/locales/it.json /opt/ibu_sw/frontend/src/locales/it.json
+put c:/Cursor/ibu_sw/frontend/src/locales/tr.json /opt/ibu_sw/frontend/src/locales/tr.json
+put c:/Cursor/ibu_sw/frontend/src/pages/Dashboard.tsx /opt/ibu_sw/frontend/src/pages/Dashboard.tsx
+put c:/Cursor/ibu_sw/frontend/package.json /opt/ibu_sw/frontend/package.json
+put c:/Cursor/ibu_sw/frontend/package-lock.json /opt/ibu_sw/frontend/package-lock.json
+put c:/Cursor/ibu_sw/docker-compose.yml /opt/ibu_sw/docker-compose.yml

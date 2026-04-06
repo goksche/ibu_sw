@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.dependencies import require_user_or_admin, require_viewer_or_above
 from app.models import Group, GroupParticipant, Tournament, Participant
 from app.models.tournament import TournamentStatus
+from app.services.visibility import get_accessible_tournament
 from app.schemas.group import (
     GroupCreate, GroupUpdate, GroupResponse, GroupWithParticipants,
     GroupParticipantAdd, GroupParticipantRemove
@@ -18,8 +19,10 @@ router = APIRouter()
 
 
 # Helper function to check tournament access
-def check_tournament_access(db: Session, tournament_id: int):
-    """Check if tournament exists"""
+def check_tournament_access(db: Session, tournament_id: int, current_user=None):
+    """Check if tournament exists and user has access (visibility check)."""
+    if current_user:
+        return get_accessible_tournament(db, tournament_id, current_user)
     tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
     if not tournament:
         raise HTTPException(
@@ -29,9 +32,9 @@ def check_tournament_access(db: Session, tournament_id: int):
     return tournament
 
 
-def check_tournament_editable(db: Session, tournament_id: int):
-    """Check tournament exists and is not completed (for write operations)."""
-    tournament = check_tournament_access(db, tournament_id)
+def check_tournament_editable(db: Session, tournament_id: int, current_user=None):
+    """Check tournament exists, is accessible and not completed."""
+    tournament = check_tournament_access(db, tournament_id, current_user)
     if tournament.status == TournamentStatus.COMPLETED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -98,9 +101,15 @@ def get_group(
     check_tournament_access(db, group.tournament_id)
     
     # Get participants
-    participants = db.query(Participant).join(
-        GroupParticipant
-    ).filter(GroupParticipant.group_id == group_id).all()
+    # Reihenfolge stabil halten: bei seeded-Generierung werden Gesetzte zuerst eingefügt
+    # und damit auch zuerst angezeigt.
+    participants = (
+        db.query(Participant)
+        .join(GroupParticipant)
+        .filter(GroupParticipant.group_id == group_id)
+        .order_by(GroupParticipant.id.asc())
+        .all()
+    )
     
     return GroupWithParticipants(
         **group.__dict__,
@@ -204,9 +213,13 @@ def add_participant_to_group(
     db.refresh(db_group)
     
     # Get updated participants
-    participants = db.query(Participant).join(
-        GroupParticipant
-    ).filter(GroupParticipant.group_id == group_id).all()
+    participants = (
+        db.query(Participant)
+        .join(GroupParticipant)
+        .filter(GroupParticipant.group_id == group_id)
+        .order_by(GroupParticipant.id.asc())
+        .all()
+    )
     
     return GroupWithParticipants(
         **db_group.__dict__,

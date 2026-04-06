@@ -1,20 +1,65 @@
 # Participant API Endpoints
 # v1.2.0-alpha.2
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from sqlalchemy.orm import Session
-from typing import List
 import csv
 import io
+import json
+import logging
+from typing import List, Any, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from sqlalchemy.orm import Session
+from sqlalchemy import delete, inspect
+from sqlalchemy.exc import IntegrityError
+from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.dependencies import require_user_or_admin, require_viewer_or_above
 from app.schemas.participant import ParticipantCreate, ParticipantUpdate, ParticipantResponse
 from app.models.participant import Participant, TournamentParticipant
 from app.models.tournament import Tournament, TournamentStatus
-from pydantic import BaseModel
+from app.models.group import GroupParticipant
+from app.models.match import GroupMatch, KnockoutMatch
+from app.models.league import league_participants
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/participants", tags=["Participants"])
+
+
+def _normalize_seeded_participant_ids(raw: Any) -> Optional[List[int]]:
+    """JSON-Spalte kann Liste, Tupel oder (selten) String sein."""
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            return None
+    if not isinstance(raw, (list, tuple)):
+        return None
+    out: List[int] = []
+    for x in raw:
+        try:
+            out.append(int(x))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _delete_league_participant_links_if_table_exists(db: Session, participant_id: int) -> None:
+    """Liga-Zuordnung entfernen, nur wenn Tabelle existiert (ältere DBs ohne Liga)."""
+    try:
+        bind = db.get_bind()
+        if bind is None:
+            return
+        names = inspect(bind).get_table_names()
+        if "league_participants" not in names:
+            return
+        db.execute(delete(league_participants).where(league_participants.c.participant_id == participant_id))
+    except Exception:
+        logger.exception("league_participants cleanup failed for participant_id=%s", participant_id)
+        raise
 
 
 @router.get("", response_model=List[ParticipantResponse])
@@ -79,8 +124,24 @@ async def import_participants_csv(
             decoded = contents.decode('latin-1')
         except UnicodeDecodeError:
             decoded = contents.decode('utf-8', errors='replace')
-    
-    csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=';')
+
+    # UTF-8-BOM (Excel) entfernen, sonst stimmt der erste Spaltenname nicht
+    if decoded.startswith("\ufeff"):
+        decoded = decoded[1:]
+
+    # Trennzeichen: Scolia/DE oft ";", EN/Excel-Export oft ","
+    first_line = decoded.splitlines()[0] if decoded.strip() else ""
+    sc = first_line.count(";")
+    cc = first_line.count(",")
+    tab = first_line.count("\t")
+    if tab > max(sc, cc):
+        delimiter = "\t"
+    elif sc >= cc and sc > 0:
+        delimiter = ";"
+    else:
+        delimiter = ","
+
+    csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=delimiter)
     
     imported_count = 0
     skipped_count = 0
@@ -194,16 +255,62 @@ async def delete_participant(
     current_user = Depends(require_user_or_admin),
     db: Session = Depends(get_db)
 ):
-    """Delete a participant"""
+    """Delete a participant (cleans up junction rows and match references first)."""
     participant = db.query(Participant).filter(Participant.id == participant_id).first()
     if not participant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Participant with ID {participant_id} not found"
         )
-    
-    db.delete(participant)
-    db.commit()
+
+    try:
+        db.query(GroupParticipant).filter(GroupParticipant.participant_id == participant_id).delete(
+            synchronize_session=False
+        )
+        db.query(TournamentParticipant).filter(TournamentParticipant.participant_id == participant_id).delete(
+            synchronize_session=False
+        )
+        _delete_league_participant_links_if_table_exists(db, participant_id)
+
+        db.query(GroupMatch).filter(GroupMatch.player1_id == participant_id).update(
+            {GroupMatch.player1_id: None}, synchronize_session=False
+        )
+        db.query(GroupMatch).filter(GroupMatch.player2_id == participant_id).update(
+            {GroupMatch.player2_id: None}, synchronize_session=False
+        )
+        db.query(KnockoutMatch).filter(KnockoutMatch.player1_id == participant_id).update(
+            {KnockoutMatch.player1_id: None}, synchronize_session=False
+        )
+        db.query(KnockoutMatch).filter(KnockoutMatch.player2_id == participant_id).update(
+            {KnockoutMatch.player2_id: None}, synchronize_session=False
+        )
+
+        for t in db.query(Tournament).filter(Tournament.seeded_participant_ids.isnot(None)).all():
+            ids = _normalize_seeded_participant_ids(t.seeded_participant_ids)
+            if ids and participant_id in ids:
+                t.seeded_participant_ids = [x for x in ids if x != participant_id]
+
+        db.delete(participant)
+        db.commit()
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Teilnehmer kann nicht gelöscht werden (noch referenziert). "
+                "Bitte zuerst aus allen Turnieren/Ligen entfernen oder Support prüfen."
+            ),
+        ) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("delete_participant failed participant_id=%s", participant_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Teilnehmer konnte nicht gelöscht werden (Serverfehler). Bitte später erneut versuchen.",
+        ) from e
+
     return None
 
 

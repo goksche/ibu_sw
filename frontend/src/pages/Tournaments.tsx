@@ -1,5 +1,6 @@
 // Tournaments Page - Turnierliste mit Suche, Filter und Verwaltung
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { tournamentService } from '../services/tournamentService';
 import { locationService } from '../services/locationService';
@@ -8,7 +9,6 @@ import { Tournament } from '../types';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Button,
-  Badge,
   Card,
   Input,
   Dialog,
@@ -19,12 +19,248 @@ import {
   DialogFooter,
 } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { Plus, Trash, ArrowSquareOut, Trophy, PlayCircle, CheckCircle, Calendar, MagnifyingGlass, Funnel, MapPin } from 'phosphor-react';
+import { Plus, ArrowSquareOut, Trophy, PlayCircle, CheckCircle, Calendar, MagnifyingGlass, MapPin, SquaresFour, Rows, CopySimple, DownloadSimple, Trash, CaretLeft, CaretRight, UsersFour } from 'phosphor-react';
+
+/** Echte Anmeldungen (API), sonst Fallback auf Planungsfelder ko_participants / Gruppenmatrix */
+function effectiveParticipantCount(t: Tournament): number {
+  const n = t.participant_count;
+  if (typeof n === 'number' && n > 0) return n;
+  return Math.max(t.ko_participants || 0, (t.groups_count || 0) * (t.participants_per_group || 0));
+}
+
+// ─── Mini Calendar ───────────────────────────────────────────────────────────
+const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+
+function MiniCalendar({ month, onPrev, onNext, tournamentDates }: {
+  month: Date;
+  onPrev: () => void;
+  onNext: () => void;
+  tournamentDates: Set<string>;
+}) {
+  const today = new Date();
+  const year = month.getFullYear();
+  const mon = month.getMonth();
+
+  const firstDay = new Date(year, mon, 1);
+  const lastDay = new Date(year, mon + 1, 0);
+  // Monday-based offset
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const totalCells = startOffset + lastDay.getDate();
+  const rows = Math.ceil(totalCells / 7);
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= lastDay.getDate(); d++) cells.push(d);
+  while (cells.length < rows * 7) cells.push(null);
+
+  const isToday = (d: number) =>
+    d === today.getDate() && mon === today.getMonth() && year === today.getFullYear();
+
+  const hasTournament = (d: number) => {
+    const key = `${year}-${String(mon + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    return tournamentDates.has(key);
+  };
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <button type="button" onClick={onPrev} className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+          <CaretLeft size={13} weight="bold" />
+        </button>
+        <span className="text-[0.8rem] font-semibold text-foreground">{MONTHS[mon]} {year}</span>
+        <button type="button" onClick={onNext} className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+          <CaretRight size={13} weight="bold" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-y-[2px]">
+        {WEEKDAYS.map(d => (
+          <div key={d} className="text-center text-[0.6rem] uppercase tracking-wider text-muted-foreground pb-1">{d}</div>
+        ))}
+        {cells.map((day, i) => (
+          <div key={i} className="flex items-center justify-center">
+            {day ? (
+              <div className={cn(
+                'relative flex h-[22px] w-[22px] items-center justify-center rounded-full text-[0.72rem] transition-colors cursor-default',
+                isToday(day) ? 'bg-primary text-primary-foreground font-bold' : 'text-foreground hover:bg-accent',
+              )}>
+                {day}
+                {hasTournament(day) && !isToday(day) && (
+                  <span className="absolute bottom-[1px] left-1/2 -translate-x-1/2 h-[3px] w-[3px] rounded-full bg-warning" />
+                )}
+              </div>
+            ) : <div className="h-[22px] w-[22px]" />}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Dashboard View ───────────────────────────────────────────────────────────
+interface DashboardViewProps {
+  filteredTournaments: Tournament[];
+  selectedTournament: Tournament | undefined;
+  setSelectedTournamentId: (id: number | null) => void;
+  upcomingTournaments: Tournament[];
+  locationNames: Record<number, string>;
+  stats: { total: number; running: number; completed: number; planned: number };
+  calendarMonth: Date;
+  setCalendarMonth: (d: Date) => void;
+  getNormalizedStatus: (s?: string) => string;
+  getProgress: (s?: string) => number;
+  getStatusVisual: (s?: string) => { chip: string; progress: string; cardTop: string; kpiBorder: string; kpiIcon: string };
+  navigate: (path: string) => void;
+}
+
+function DashboardView({
+  filteredTournaments, selectedTournament, setSelectedTournamentId,
+  upcomingTournaments, locationNames, stats, calendarMonth, setCalendarMonth,
+  getNormalizedStatus, getProgress, getStatusVisual, navigate,
+}: DashboardViewProps) {
+  const tournamentDates = useMemo(() => {
+    const s = new Set<string>();
+    filteredTournaments.forEach(t => { if (t.start_date) s.add(t.start_date.slice(0, 10)); });
+    return s;
+  }, [filteredTournaments]);
+
+  const prevMonth = () => {
+    const d = new Date(calendarMonth); d.setMonth(d.getMonth() - 1); setCalendarMonth(d);
+  };
+  const nextMonth = () => {
+    const d = new Date(calendarMonth); d.setMonth(d.getMonth() + 1); setCalendarMonth(d);
+  };
+
+  const totalParticipants = filteredTournaments.reduce((sum, t) => sum + effectiveParticipantCount(t), 0);
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1.55fr_1fr]">
+      {/* Left: compact tournament list */}
+      <Card className="overflow-hidden p-0">
+        {filteredTournaments.length === 0 ? (
+          <div className="p-6 text-sm text-muted-foreground">Keine Turniere gefunden</div>
+        ) : (
+          <div className="divide-y divide-border">
+            {filteredTournaments.map((tournament) => {
+              const sv = getStatusVisual(tournament.status);
+              const isSelected = tournament.id === selectedTournament?.id;
+              const participantCount = effectiveParticipantCount(tournament);
+              return (
+                <button
+                  type="button"
+                  key={tournament.id}
+                  onClick={() => { setSelectedTournamentId(tournament.id); navigate(`/tournaments/${tournament.id}`); }}
+                  className={cn(
+                    'w-full border-l-[3px] px-4 py-[10px] text-left transition-colors hover:bg-accent/30',
+                    isSelected ? 'border-l-primary' : 'border-l-transparent'
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3 mb-[5px]">
+                    <div className="flex items-center gap-[7px] min-w-0">
+                      <span className={cn('h-[7px] w-[7px] shrink-0 rounded-full', sv.progress)} />
+                      <span className="text-[0.85rem] font-semibold text-foreground truncate">{tournament.name}</span>
+                    </div>
+                    <span className={cn('shrink-0 rounded-full border px-[8px] py-[2px] text-[0.63rem] font-semibold', sv.chip)}>
+                      {tournament.status}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-[2px] text-[0.7rem] text-muted-foreground mb-[7px] pl-[15px]">
+                    <span className="inline-flex items-center gap-1"><Calendar size={10} />{tournament.start_date}</span>
+                    {tournament.location_id && locationNames[tournament.location_id] && (
+                      <span className="inline-flex items-center gap-1"><MapPin size={10} />{locationNames[tournament.location_id]}</span>
+                    )}
+                    {tournament.mode && <span className="opacity-70">{tournament.mode}</span>}
+                    {participantCount > 0 && (
+                      <span className="inline-flex items-center gap-1"><UsersFour size={10} />{participantCount}</span>
+                    )}
+                  </div>
+                  <div className="pl-[15px]">
+                    <div className="h-[3px] w-full overflow-hidden rounded-full bg-muted">
+                      <div className={cn('h-full rounded-full', sv.progress)} style={{ width: `${getProgress(tournament.status)}%` }} />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Right: Calendar + Upcoming + Stats */}
+      <div className="flex flex-col gap-4">
+        {/* Calendar */}
+        <Card className="p-4">
+          <MiniCalendar
+            month={calendarMonth}
+            onPrev={prevMonth}
+            onNext={nextMonth}
+            tournamentDates={tournamentDates}
+          />
+        </Card>
+
+        {/* Demnächst Turnier */}
+        <Card className="p-4">
+          <div className="mb-2 text-[0.63rem] uppercase tracking-[0.1em] text-muted-foreground">Demnächst Turnier</div>
+          {upcomingTournaments.length === 0 ? (
+            <div className="text-[0.8rem] text-muted-foreground">Keine geplanten Turniere</div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate(`/tournaments/${upcomingTournaments[0].id}`)}
+              className="w-full text-left rounded-lg border border-border/70 bg-primary/8 px-3 py-2 hover:bg-primary/15 transition-colors"
+            >
+              <div className="text-[0.85rem] font-semibold text-foreground">{upcomingTournaments[0].name}</div>
+              <div className="text-[0.72rem] text-muted-foreground mt-[3px] flex items-center gap-1">
+                <Calendar size={11} />{upcomingTournaments[0].start_date}
+              </div>
+            </button>
+          )}
+        </Card>
+
+        {/* Für Vollständigkeit */}
+        <Card className="p-4">
+          <div className="mb-2 text-[0.63rem] uppercase tracking-[0.1em] text-muted-foreground">Für Vollständigkeit</div>
+          <div className="divide-y divide-border">
+            {[
+              {
+                label: 'Gesamt Spiele',
+                value: totalParticipants > 0 ? totalParticipants : '—',
+              },
+              {
+                label: 'Aktive Turniere',
+                value: stats.running,
+              },
+              {
+                label: 'Letztes Turnier',
+                value: (() => {
+                  const completed = filteredTournaments
+                    .filter(t => getNormalizedStatus(t.status) === 'completed' && t.start_date)
+                    .sort((a, b) => b.start_date.localeCompare(a.start_date));
+                  return completed[0]?.start_date || '—';
+                })(),
+              },
+              {
+                label: 'Bevorstehendes Phase',
+                value: upcomingTournaments[0]?.mode || '—',
+              },
+            ].map(({ label, value }) => (
+              <div key={label} className="flex items-center justify-between py-[7px] text-[0.8rem]">
+                <span className="text-muted-foreground">{label}</span>
+                <span className="font-semibold text-foreground">{value}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
 
 export default function Tournaments() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { canEdit } = useAuth();
+  const { t } = useTranslation();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -39,6 +275,13 @@ export default function Tournaments() {
   const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') || 'all');
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'status'>(DEFAULT_APP_SETTINGS.dashboard.default_sort);
   const [locationNames, setLocationNames] = useState<Record<number, string>>({});
+  const [viewMode, setViewMode] = useState<'cards' | 'dashboard'>('cards');
+  const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
+    const d = new Date(); d.setDate(1); return d;
+  });
+  const [exportBusyId, setExportBusyId] = useState<number | null>(null);
+  const [duplicateBusyId, setDuplicateBusyId] = useState<number | null>(null);
 
   const loadSettings = async () => {
     try {
@@ -93,6 +336,42 @@ export default function Tournaments() {
     }
   };
 
+  const handleDuplicateClick = async (e: React.MouseEvent, tournament: Tournament) => {
+    e.stopPropagation();
+    if (!canEdit) return;
+    setDuplicateBusyId(tournament.id);
+    try {
+      const created = await tournamentService.duplicate(tournament.id);
+      await loadTournaments();
+      navigate(`/tournaments/${created.id}`);
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : null;
+      window.alert(msg || t('tournaments.duplicateError'));
+    } finally {
+      setDuplicateBusyId(null);
+    }
+  };
+
+  const handleExportClick = async (e: React.MouseEvent, tournament: Tournament) => {
+    e.stopPropagation();
+    if (exportBusyId !== null) return;
+    setExportBusyId(tournament.id);
+    try {
+      await tournamentService.exportSnapshot(tournament.id, tournament.name);
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : null;
+      window.alert(msg || t('tournaments.exportError'));
+    } finally {
+      setExportBusyId(null);
+    }
+  };
+
   const handleDeleteClick = (tournamentId: number, tournamentName: string, tournamentStatus: string) => {
     setDeleteTournamentId(tournamentId);
     setDeleteTournamentName(tournamentName);
@@ -118,11 +397,11 @@ export default function Tournaments() {
     if (!deleteTournamentId) return;
 
     if (deleteConfirmText.trim().toLowerCase() !== 'ja') {
-      setDeleteError('Bitte geben Sie "Ja" ein, um das Löschen zu bestätigen');
+      setDeleteError(t('tournaments.deleteTypeError'));
       return;
     }
     if (deleteTournamentStatus?.toLowerCase() === 'completed' && deletePassword.trim() !== '414141') {
-      setDeleteError('Passwort erforderlich oder falsch. Bitte Passwort 414141 eingeben.');
+      setDeleteError(t('tournaments.deletePasswordError'));
       return;
     }
 
@@ -143,78 +422,27 @@ export default function Tournaments() {
       setDeletePassword('');
       setDeleting(false);
     } catch (err: any) {
-      setDeleteError(err.response?.data?.detail || 'Fehler beim Löschen des Turniers');
+      setDeleteError(err.response?.data?.detail || t('tournaments.deleteError'));
       setDeleting(false);
     }
   };
 
-  const getStatusBadgeVariant = (status: string): 'success' | 'warning' | 'error' | 'info' | 'default' => {
-    switch (status.toLowerCase()) {
-      case 'geplant':
-      case 'planned':
-        return 'info';
-      case 'laufend':
-      case 'running':
-        return 'warning';
-      case 'abgeschlossen':
-      case 'completed':
-        return 'success';
-      default:
-        return 'default';
-    }
-  };
-
-  const getStatusCardClasses = (variant: 'success' | 'warning' | 'error' | 'info' | 'default') => {
-    const base = 'rounded-lg border-2 p-6 transition-all cursor-pointer flex flex-col h-full relative overflow-hidden shadow-sm hover:-translate-y-1 hover:shadow-lg';
-    const variants = {
-      info: 'border-info',
-      warning: 'border-warning',
-      success: 'border-success',
-      error: 'border-destructive',
-      default: 'border-border',
-    };
-    return cn(base, variants[variant] || variants.default);
-  };
-
-  const getStatusBarClasses = (variant: 'success' | 'warning' | 'error' | 'info' | 'default') => {
-    const base = 'absolute top-0 left-0 right-0 h-1';
-    const variants = {
-      info: 'bg-info',
-      warning: 'bg-warning',
-      success: 'bg-success',
-      error: 'bg-destructive',
-      default: 'bg-border',
-    };
-    return cn(base, variants[variant] || variants.default);
-  };
-
-  const getStatusInfoBoxClasses = (variant: 'success' | 'warning' | 'error' | 'info' | 'default') => {
-    const base = 'rounded-md p-3 min-h-[60px] flex flex-col justify-start mb-4';
-    const variants = {
-      info: 'bg-info/10',
-      warning: 'bg-warning/10',
-      success: 'bg-success/10',
-      error: 'bg-destructive/10',
-      default: 'bg-muted',
-    };
-    return cn(base, variants[variant] || variants.default);
-  };
 
   // Calculate statistics
   const stats = {
     total: tournaments.length,
-    running: tournaments.filter(t => t.status?.toLowerCase() === 'laufend' || t.status?.toLowerCase() === 'running').length,
-    completed: tournaments.filter(t => t.status?.toLowerCase() === 'abgeschlossen' || t.status?.toLowerCase() === 'completed').length,
-    planned: tournaments.filter(t => t.status?.toLowerCase() === 'geplant' || t.status?.toLowerCase() === 'planned').length,
+    running: tournaments.filter(tr => tr.status?.toLowerCase() === 'laufend' || tr.status?.toLowerCase() === 'running').length,
+    completed: tournaments.filter(tr => tr.status?.toLowerCase() === 'abgeschlossen' || tr.status?.toLowerCase() === 'completed').length,
+    planned: tournaments.filter(tr => tr.status?.toLowerCase() === 'geplant' || tr.status?.toLowerCase() === 'planned').length,
   };
 
   // Filter and sort tournaments
   const filteredTournaments = tournaments
-    .filter(t => {
-      const matchesSearch = !searchTerm || t.name.toLowerCase().includes(searchTerm.toLowerCase());
+    .filter(tr => {
+      const matchesSearch = !searchTerm || tr.name.toLowerCase().includes(searchTerm.toLowerCase());
       let matchesStatus = true;
       if (statusFilter !== 'all') {
-        const status = t.status?.toLowerCase() || '';
+        const status = tr.status?.toLowerCase() || '';
         const statusMap: Record<string, string[]> = {
           'geplant': ['planned', 'geplant'],
           'laufend': ['running', 'laufend'],
@@ -239,14 +467,73 @@ export default function Tournaments() {
       }
     });
 
-  if (loading) return <div className="p-8 text-foreground">Wird geladen...</div>;
+  const getNormalizedStatus = (status?: string) => {
+    const s = (status || '').toLowerCase();
+    if (s === 'laufend' || s === 'running') return 'running';
+    if (s === 'abgeschlossen' || s === 'completed') return 'completed';
+    return 'planned';
+  };
+
+  const getProgress = (status?: string) => {
+    const normalized = getNormalizedStatus(status);
+    if (normalized === 'completed') return 100;
+    if (normalized === 'running') return 55;
+    return 10;
+  };
+
+  const getStatusVisual = (status?: string) => {
+    const normalized = getNormalizedStatus(status);
+    if (normalized === 'completed') {
+      return {
+        kpiBorder: 'border-success/45',
+        kpiIcon: 'bg-success/15 text-success',
+        chip: 'bg-success/15 border-success/40 text-success',
+        cardTop: 'bg-success',
+        progress: 'bg-success',
+      };
+    }
+    if (normalized === 'running') {
+      return {
+        kpiBorder: 'border-warning/45',
+        kpiIcon: 'bg-warning/15 text-warning',
+        chip: 'bg-warning/15 border-warning/40 text-warning',
+        cardTop: 'bg-warning',
+        progress: 'bg-warning',
+      };
+    }
+    return {
+      kpiBorder: 'border-info/45',
+      kpiIcon: 'bg-info/15 text-info',
+      chip: 'bg-info/15 border-info/40 text-info',
+      cardTop: 'bg-info',
+      progress: 'bg-info',
+    };
+  };
+
+  useEffect(() => {
+    if (filteredTournaments.length === 0) {
+      setSelectedTournamentId(null);
+      return;
+    }
+    const exists = filteredTournaments.some((item) => item.id === selectedTournamentId);
+    if (!exists) {
+      setSelectedTournamentId(filteredTournaments[0].id);
+    }
+  }, [filteredTournaments, selectedTournamentId]);
+
+  const selectedTournament = filteredTournaments.find((item) => item.id === selectedTournamentId) || filteredTournaments[0];
+  const upcomingTournaments = filteredTournaments
+    .filter((item) => getNormalizedStatus(item.status) === 'planned')
+    .slice(0, 4);
+
+  if (loading) return <div className="p-8 text-foreground">{t('common.loading')}</div>;
 
   return (
-    <div>
+    <div className="page-shell mx-auto max-w-[1420px]">
       {/* Page Title + New Tournament Button */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h2 className="m-0 text-foreground text-2xl font-semibold">
-          Turniere
+          {t('tournaments.title')}
         </h2>
         {canEdit && (
           <Button
@@ -254,115 +541,152 @@ export default function Tournaments() {
             onClick={() => navigate('/tournaments/create')}
           >
             <Plus size={20} weight="bold" className="mr-2 align-middle" />
-            Neues Turnier
+            {t('tournaments.newTournament')}
           </Button>
         )}
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-8">
+      <div className="mb-6 grid grid-cols-[repeat(auto-fit,minmax(155px,1fr))] gap-3">
         <Card
           className={cn(
-            'p-6 cursor-pointer transition-all bg-card',
-            statusFilter === 'all' ? 'border-2 border-primary shadow-md' : 'border border-border hover:border-primary hover:shadow-md'
+            'relative cursor-pointer overflow-hidden border bg-card px-4 py-3 transition-all hover:bg-accent/30',
+            statusFilter === 'all' ? 'border-primary shadow-md' : 'border-border'
           )}
           onClick={() => setStatusFilter('all')}
         >
-          <div className="flex items-center gap-4">
-            <Trophy size={32} weight="fill" className="text-primary shrink-0" />
+          <div className="absolute inset-x-0 top-0 h-[2px] bg-primary" />
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
+              <Trophy size={17} weight="fill" />
+            </div>
             <div>
-              <div className="text-sm text-muted-foreground mb-2">Gesamt</div>
-              <div className="text-3xl font-bold text-foreground">{stats.total}</div>
+              <div className="text-[0.65rem] uppercase tracking-[0.08em] text-muted-foreground">{t('tournaments.count.total')}</div>
+              <div className="text-[1.5rem] font-bold leading-tight text-foreground">{stats.total}</div>
             </div>
           </div>
         </Card>
 
         <Card
           className={cn(
-            'p-6 cursor-pointer transition-all bg-card',
-            statusFilter === 'laufend' ? 'border-2 border-primary shadow-md' : 'border border-border hover:border-primary hover:shadow-md'
+            'relative cursor-pointer overflow-hidden border bg-card px-4 py-3 transition-all hover:bg-accent/30',
+            statusFilter === 'laufend' ? 'border-warning shadow-md' : 'border-border'
           )}
           onClick={() => setStatusFilter('laufend')}
         >
-          <div className="flex items-center gap-4">
-            <PlayCircle size={32} weight="fill" className="text-primary shrink-0" />
+          <div className="absolute inset-x-0 top-0 h-[2px] bg-warning" />
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-warning/15 text-warning">
+              <PlayCircle size={17} weight="fill" />
+            </div>
             <div>
-              <div className="text-sm text-muted-foreground mb-2">Laufend</div>
-              <div className="text-3xl font-bold text-foreground">{stats.running}</div>
+              <div className="text-[0.65rem] uppercase tracking-[0.08em] text-muted-foreground">{t('tournaments.count.running')}</div>
+              <div className="text-[1.5rem] font-bold leading-tight text-foreground">{stats.running}</div>
             </div>
           </div>
         </Card>
 
         <Card
           className={cn(
-            'p-6 cursor-pointer transition-all bg-card',
-            statusFilter === 'abgeschlossen' ? 'border-2 border-primary shadow-md' : 'border border-border hover:border-primary hover:shadow-md'
+            'relative cursor-pointer overflow-hidden border bg-card px-4 py-3 transition-all hover:bg-accent/30',
+            statusFilter === 'abgeschlossen' ? 'border-success shadow-md' : 'border-border'
           )}
           onClick={() => setStatusFilter('abgeschlossen')}
         >
-          <div className="flex items-center gap-4">
-            <CheckCircle size={32} weight="fill" className="text-primary shrink-0" />
+          <div className="absolute inset-x-0 top-0 h-[2px] bg-success" />
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-success/15 text-success">
+              <CheckCircle size={17} weight="fill" />
+            </div>
             <div>
-              <div className="text-sm text-muted-foreground mb-2">Abgeschlossen</div>
-              <div className="text-3xl font-bold text-foreground">{stats.completed}</div>
+              <div className="text-[0.65rem] uppercase tracking-[0.08em] text-muted-foreground">{t('tournaments.count.completed')}</div>
+              <div className="text-[1.5rem] font-bold leading-tight text-foreground">{stats.completed}</div>
             </div>
           </div>
         </Card>
 
         <Card
           className={cn(
-            'p-6 cursor-pointer transition-all bg-card',
-            statusFilter === 'geplant' ? 'border-2 border-primary shadow-md' : 'border border-border hover:border-primary hover:shadow-md'
+            'relative cursor-pointer overflow-hidden border bg-card px-4 py-3 transition-all hover:bg-accent/30',
+            statusFilter === 'geplant' ? 'border-info shadow-md' : 'border-border'
           )}
           onClick={() => setStatusFilter('geplant')}
         >
-          <div className="flex items-center gap-4">
-            <Calendar size={32} weight="fill" className="text-primary shrink-0" />
+          <div className="absolute inset-x-0 top-0 h-[2px] bg-info" />
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-info/15 text-info">
+              <Calendar size={17} weight="fill" />
+            </div>
             <div>
-              <div className="text-sm text-muted-foreground mb-2">Geplant</div>
-              <div className="text-3xl font-bold text-foreground">{stats.planned}</div>
+              <div className="text-[0.65rem] uppercase tracking-[0.08em] text-muted-foreground">{t('tournaments.count.planned')}</div>
+              <div className="text-[1.5rem] font-bold leading-tight text-foreground">{stats.planned}</div>
             </div>
           </div>
         </Card>
       </div>
 
-      {/* Search and Filter */}
-      <div className="flex gap-4 mb-8 flex-wrap items-center">
-        <div className="flex-1 min-w-[250px] relative">
-          <MagnifyingGlass
-            size={20}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-          />
-          <Input
-            type="text"
-            placeholder="Turniere suchen..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 w-full"
-          />
-        </div>
-        <div className="flex gap-2 items-center">
-          <Funnel size={20} className="text-muted-foreground shrink-0" />
+      {/* Toolbar: Cards zeigt Filter-Chips + Suche; Dashboard zeigt Suche + Alle-Dropdown */}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+
+        {/* Suche + Filter-Dropdown – gleich in beiden Modi */}
+        <div className="flex flex-1 items-center overflow-hidden rounded-md border border-border bg-card">
+          <div className="relative flex-1">
+            <MagnifyingGlass
+              size={15}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+            />
+            <input
+              type="text"
+              placeholder={t('tournaments.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="h-9 w-full bg-transparent pl-9 pr-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none"
+            />
+          </div>
+          <div className="h-5 w-px bg-border shrink-0" />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="h-9 shrink-0 bg-transparent px-3 pr-7 text-sm text-foreground focus:outline-none appearance-none cursor-pointer"
           >
-            <option value="all">Alle Status</option>
-            <option value="geplant">Geplant</option>
-            <option value="laufend">Laufend</option>
-            <option value="abgeschlossen">Abgeschlossen</option>
+            <option value="all">{t('common.all')}</option>
+            <option value="laufend">{t('common.status.running')}</option>
+            <option value="geplant">{t('common.status.planned')}</option>
+            <option value="abgeschlossen">{t('common.status.completed')}</option>
           </select>
         </div>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as 'name' | 'date' | 'status')}
-          className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          <option value="date">Sortieren nach: Datum</option>
-          <option value="name">Sortieren nach: Name</option>
-          <option value="status">Sortieren nach: Status</option>
-        </select>
+
+        {/* View toggle – immer sichtbar, gleiches Aussehen in beiden Modi */}
+        <div className="flex h-9 shrink-0 items-center gap-[3px] rounded-lg border border-border bg-card p-[3px]">
+          <button
+            type="button"
+            onClick={() => setViewMode('cards')}
+            className={cn(
+              'inline-flex items-center gap-[6px] rounded-md px-3 h-full text-xs font-medium transition-all',
+              viewMode === 'cards'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+            )}
+            title="Kartenansicht"
+          >
+            <SquaresFour size={14} weight={viewMode === 'cards' ? 'fill' : 'regular'} />
+            Karten
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('dashboard')}
+            className={cn(
+              'inline-flex items-center gap-[6px] rounded-md px-3 h-full text-xs font-medium transition-all',
+              viewMode === 'dashboard'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+            )}
+            title="Dashboardansicht"
+          >
+            <Rows size={14} weight={viewMode === 'dashboard' ? 'fill' : 'regular'} />
+            Dashboard
+          </button>
+        </div>
       </div>
 
       {/* Result count */}
@@ -377,7 +701,7 @@ export default function Tournaments() {
         <Card className="p-12 text-center bg-card border-2 border-dashed border-border">
           <Trophy size={64} className="text-muted-foreground mb-4 opacity-50 mx-auto" />
           <p className="text-muted-foreground text-lg mb-4">
-            Noch keine Turniere vorhanden.
+            {t('tournaments.noTournaments')}
           </p>
           {canEdit && (
             <Button
@@ -385,7 +709,7 @@ export default function Tournaments() {
               onClick={() => navigate('/tournaments/create')}
             >
               <Plus size={20} weight="bold" className="mr-2 align-middle" />
-              Erstes Turnier erstellen
+              {t('tournaments.newTournament')}
             </Button>
           )}
         </Card>
@@ -393,93 +717,176 @@ export default function Tournaments() {
         <Card className="p-12 text-center bg-card">
           <MagnifyingGlass size={64} className="text-muted-foreground mb-4 opacity-50 mx-auto" />
           <p className="text-muted-foreground text-lg">
-            Keine Turniere gefunden, die den Filterkriterien entsprechen.
+            {t('tournaments.noTournaments')}
           </p>
         </Card>
-      ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+      ) : viewMode === 'cards' ? (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-5">
           {filteredTournaments.map((tournament) => {
-            const statusVariant = getStatusBadgeVariant(tournament.status);
-
+            const cardPc = effectiveParticipantCount(tournament);
             return (
               <Card
                 key={tournament.id}
-                className={getStatusCardClasses(statusVariant)}
+                className="relative flex h-full cursor-pointer flex-col overflow-hidden rounded-xl border border-border bg-card p-0 shadow-sm transition-all hover:-translate-y-1 hover:border-primary/45 hover:shadow-lg"
                 onClick={() => navigate(`/tournaments/${tournament.id}`)}
               >
                 {/* Status indicator bar */}
-                <div className={getStatusBarClasses(statusVariant)} />
+                <div className={cn('absolute inset-x-0 top-0 h-[3px]', getStatusVisual(tournament.status).cardTop)} />
 
                 {/* Header */}
-                <div className="mb-4 shrink-0">
-                  <div className="flex justify-between items-start mb-2 gap-2">
-                    <h3 className="m-0 text-foreground text-xl font-bold flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                <div className="shrink-0 px-[18px] pt-[16px] pb-[10px]">
+                  <div className="flex items-start justify-between gap-2 mb-[6px]">
+                    <h3 className="m-0 text-foreground text-[1rem] font-bold flex-1 min-w-0 truncate leading-tight">
                       {tournament.name}
                     </h3>
-                    <Badge variant={statusVariant} className="shrink-0">
+                    <span className={cn(
+                      'shrink-0 inline-flex items-center gap-[5px] rounded-full border px-[9px] py-[3px] text-[0.68rem] font-semibold',
+                      getStatusVisual(tournament.status).chip
+                    )}>
+                      <span className={cn('h-[5px] w-[5px] rounded-full', getStatusVisual(tournament.status).progress)} />
                       {tournament.status}
-                    </Badge>
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                    <Calendar size={16} className="shrink-0" />
-                    <span>{tournament.start_date}</span>
+                  <div className="flex items-center gap-3 text-[0.75rem] text-muted-foreground">
+                    <span className="inline-flex items-center gap-[5px]">
+                      <Calendar size={13} className="shrink-0" />
+                      {tournament.start_date}
+                    </span>
+                    {tournament.location_id && locationNames[tournament.location_id] && (
+                      <span className="inline-flex items-center gap-[5px]">
+                        <MapPin size={13} className="shrink-0" />
+                        {locationNames[tournament.location_id]}
+                      </span>
+                    )}
+                    {(!tournament.location_id || !locationNames[tournament.location_id]) && (
+                      <span className="inline-flex items-center gap-[5px]">
+                        <MapPin size={13} className="shrink-0" />
+                        —
+                      </span>
+                    )}
                   </div>
-                  {tournament.location_id && locationNames[tournament.location_id] && (
-                    <div className="flex items-center gap-2 text-muted-foreground text-sm mt-1">
-                      <MapPin size={16} className="shrink-0" />
-                      <span>{locationNames[tournament.location_id]}</span>
-                    </div>
-                  )}
                 </div>
 
-                {/* Info */}
-                <div className={getStatusInfoBoxClasses(statusVariant)}>
-                  <div className="text-muted-foreground text-sm leading-5">
-                    Modus: <strong className="text-foreground">{tournament.mode}</strong>
+                {/* 2×2 Info Grid */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-[10px] px-[18px] pb-[10px]">
+                  <div>
+                    <div className="text-[0.62rem] uppercase tracking-[0.1em] text-muted-foreground mb-[3px]">Modus</div>
+                    <div className="text-[0.82rem] font-semibold text-foreground">{tournament.mode}</div>
                   </div>
-                  {tournament.has_group_phase && tournament.has_ko_phase ? (
-                    <div className="text-muted-foreground text-sm mt-1 leading-5">
-                      Gruppenphase + KO-Phase
+                  <div>
+                    <div className="text-[0.62rem] uppercase tracking-[0.1em] text-muted-foreground mb-[3px]">Teilnehmer</div>
+                    <div className="text-[0.82rem] font-semibold text-foreground">
+                      {cardPc > 0 ? `${cardPc} Spieler` : '—'}
                     </div>
-                  ) : (
-                    <div className="h-5 mt-1" />
-                  )}
+                  </div>
+                  <div>
+                    <div className="text-[0.62rem] uppercase tracking-[0.1em] text-muted-foreground mb-[3px]">Gruppen</div>
+                    <div className="text-[0.82rem] font-semibold text-foreground">
+                      {tournament.groups_count > 0 ? `${tournament.groups_count} Gruppe${tournament.groups_count !== 1 ? 'n' : ''}` : '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[0.62rem] uppercase tracking-[0.1em] text-muted-foreground mb-[3px]">
+                      {getNormalizedStatus(tournament.status) === 'completed' ? 'Sieger' : 'Phase'}
+                    </div>
+                    <div className={cn('text-[0.82rem] font-semibold', getNormalizedStatus(tournament.status) === 'completed' ? 'text-success' : 'text-foreground')}>
+                      {getNormalizedStatus(tournament.status) === 'completed'
+                        ? (
+                            tournament.winner_name
+                              ? <span className="inline-flex items-center gap-1 truncate" title={tournament.winner_name}>🏆 {tournament.winner_name}</span>
+                              : <span className="inline-flex items-center gap-1 text-muted-foreground">🏆 —</span>
+                          )
+                        : (tournament.has_group_phase && tournament.has_ko_phase
+                            ? `${t('common.mode.groupPhase')} + ${t('common.mode.koPhase')}`
+                            : tournament.has_group_phase
+                              ? t('common.mode.groupPhase')
+                              : tournament.has_ko_phase
+                                ? t('common.mode.koPhase')
+                                : '—')}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress */}
+                <div className="px-[18px] pb-[12px]">
+                  <div className="h-[4px] w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn('h-full rounded-full transition-all', getStatusVisual(tournament.status).progress)}
+                      style={{ width: `${getProgress(tournament.status)}%` }}
+                    />
+                  </div>
+                  <div className="mt-[5px] flex justify-between text-[0.7rem] text-muted-foreground">
+                    <span>Spiele</span>
+                    <span>{getProgress(tournament.status) === 100 ? '—' : '—'}</span>
+                  </div>
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2 items-stretch h-[42px] mt-auto shrink-0">
+                <div className="mt-auto flex items-center gap-[6px] border-t border-border bg-background/40 px-[18px] py-[10px]">
                   <Button
                     variant="primary"
-                    size="lg"
-                    className="flex-1 h-[42px] min-h-[42px] max-h-[42px] font-semibold text-base"
+                    size="sm"
+                    className="flex-1 h-[34px] text-[0.8rem] font-semibold"
                     onClick={(e) => {
                       e.stopPropagation();
                       navigate(`/tournaments/${tournament.id}`);
                     }}
                   >
-                    <span className="inline-flex items-center justify-center px-4 h-full">
-                      <ArrowSquareOut size={18} className="mr-2 shrink-0" />
-                      Öffnen
-                    </span>
+                    <ArrowSquareOut size={15} weight="bold" className="mr-[6px] shrink-0" />
+                    Bearbeiten
                   </Button>
-                  {canEdit && (
-                    <Button
-                      variant="danger"
-                      size="icon"
-                      className="h-[42px] min-h-[42px] w-[42px] shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
+                  <button
+                    type="button"
+                    disabled={!canEdit || duplicateBusyId === tournament.id}
+                    className="h-[34px] w-[34px] shrink-0 flex items-center justify-center rounded-lg border border-border bg-background/60 text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-primary/10 transition-all disabled:opacity-40"
+                    onClick={(e) => { void handleDuplicateClick(e, tournament); }}
+                    title={t('tournaments.duplicate')}
+                  >
+                    <CopySimple size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={exportBusyId === tournament.id}
+                    className="h-[34px] w-[34px] shrink-0 flex items-center justify-center rounded-lg border border-border bg-background/60 text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-primary/10 transition-all disabled:opacity-40"
+                    onClick={(e) => { void handleExportClick(e, tournament); }}
+                    title={t('tournaments.export')}
+                  >
+                    <DownloadSimple size={15} weight="bold" />
+                  </button>
+                  <button
+                    type="button"
+                    className="h-[34px] w-[34px] shrink-0 flex items-center justify-center rounded-lg border border-border bg-background/60 text-muted-foreground hover:text-destructive hover:border-destructive/45 hover:bg-destructive/10 transition-all"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (canEdit) {
                         handleDeleteClick(tournament.id, tournament.name, tournament.status);
-                      }}
-                    >
-                      <Trash size={18} className="shrink-0" />
-                    </Button>
-                  )}
+                      }
+                    }}
+                    disabled={!canEdit}
+                    title={t('common.delete')}
+                  >
+                    <Trash size={17} weight="bold" />
+                  </button>
                 </div>
               </Card>
             );
           })}
         </div>
+      ) : (
+        <DashboardView
+          filteredTournaments={filteredTournaments}
+          selectedTournament={selectedTournament}
+          setSelectedTournamentId={setSelectedTournamentId}
+          upcomingTournaments={upcomingTournaments}
+          locationNames={locationNames}
+          stats={stats}
+          calendarMonth={calendarMonth}
+          setCalendarMonth={setCalendarMonth}
+          getNormalizedStatus={getNormalizedStatus}
+          getProgress={getProgress}
+          getStatusVisual={getStatusVisual}
+          navigate={navigate}
+        />
       )}
 
       {/* Delete Confirmation Dialog */}
@@ -491,14 +898,13 @@ export default function Tournaments() {
       >
         <DialogContent className="max-w-[400px] w-[90%]">
           <DialogHeader>
-            <DialogTitle className="text-foreground">Turnier löschen</DialogTitle>
+            <DialogTitle className="text-foreground">{t('tournament.detail.deleteTitle')}</DialogTitle>
           </DialogHeader>
           <DialogDescription className="mb-4 text-muted-foreground">
-            Möchten Sie das Turnier "<strong className="text-foreground">{deleteTournamentName}</strong>" wirklich löschen?
-            Diese Aktion kann nicht rückgängig gemacht werden.
+            {t('tournaments.deleteConfirm', { name: deleteTournamentName })}
           </DialogDescription>
           <p className="mb-2 font-bold text-foreground">
-            Geben Sie "Ja" ein, um zu bestätigen:
+            {t('tournaments.deleteTypeYes')}
           </p>
           <Input
             type="text"
@@ -516,7 +922,7 @@ export default function Tournaments() {
           {deleteTournamentStatus?.toLowerCase() === 'completed' && (
             <>
               <p className="mt-4 mb-2 font-bold text-foreground">
-                Passwort für abgeschlossenes Turnier:
+                {t('tournaments.deletePassword')}
               </p>
               <Input
                 type="password"
@@ -544,14 +950,14 @@ export default function Tournaments() {
               onClick={handleDeleteCancel}
               disabled={deleting}
             >
-              Abbrechen
+              {t('common.cancel')}
             </Button>
             <Button
               variant="danger"
               onClick={handleDeleteConfirm}
               disabled={deleting || deleteConfirmText.trim().toLowerCase() !== 'ja'}
             >
-              {deleting ? 'Lösche...' : 'Löschen'}
+              {deleting ? t('tournaments.deleting') : t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

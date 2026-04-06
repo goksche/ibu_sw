@@ -1,6 +1,7 @@
 // Live Ticker Page
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { tournamentService } from '../services/tournamentService';
 import { participantService } from '../services/participantService';
@@ -12,7 +13,12 @@ import { locationService } from '../services/locationService';
 import { settingsService, DEFAULT_APP_SETTINGS } from '../services/settingsService';
 import { AppSettings, Participant, Tournament } from '../types';
 import { cn } from '@/lib/utils';
-import KOBracket from '../components/tournament/KOBracket';
+import {
+  LiveTickerSlideGroups,
+  LiveTickerSlideKO,
+  LiveTickerSlideQualification,
+  LiveTickerSlideTitle,
+} from '../components/patterns/presentation/LiveTickerSlides';
 
 type Slide =
   | { type: 'title' }
@@ -24,6 +30,7 @@ export default function LiveTicker() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const { t } = useTranslation();
   const tournamentId = id ? parseInt(id) : 0;
 
   const [tournament, setTournament] = useState<Tournament | null>(null);
@@ -227,19 +234,19 @@ export default function LiveTicker() {
 
     return (
       <div>
-        {renderHeader(`Spielplan - ${group.name}`, `${ordered.length} Spiele`)}
+        {renderHeader(t('liveTicker.schedule', { name: group.name }), t('liveTicker.matchCount', { count: ordered.length }))}
         <div className="bg-card rounded-lg overflow-hidden border border-border">
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-muted">
-                <th className="p-3 text-left">Spiel</th>
+                <th className="p-3 text-left">{t('liveTicker.match')}</th>
                 {options.showSpielfeld && (
-                  <th className="p-3 text-left">Spielfeld</th>
+                  <th className="p-3 text-left">{t('liveTicker.spielfeld')}</th>
                 )}
-                <th className="p-3 text-left">Spieler 1</th>
-                <th className="p-3 text-left">Spieler 2</th>
+                <th className="p-3 text-left">{t('liveTicker.player1')}</th>
+                <th className="p-3 text-left">{t('liveTicker.player2')}</th>
                 {options.showResults && (
-                  <th className="p-3 text-center">Ergebnis</th>
+                  <th className="p-3 text-center">{t('liveTicker.result')}</th>
                 )}
               </tr>
             </thead>
@@ -247,7 +254,7 @@ export default function LiveTicker() {
               {ordered.map((match, idx) => (
                 <tr key={match.id} className={cn(idx % 2 === 0 ? 'bg-card' : 'bg-muted')}>
                   <td className="p-3">
-                    Spiel {match.match_no}{options.markDecisionMatches && match.is_decision_match ? ' (Entsch.)' : ''}
+                    {t('liveTicker.match')} {match.match_no}{options.markDecisionMatches && match.is_decision_match ? ` (${t('liveTicker.decisionMatch')})` : ''}
                   </td>
                   {options.showSpielfeld && (
                     <td className="p-3">
@@ -281,17 +288,17 @@ export default function LiveTicker() {
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-muted">
-                <th className="p-3 text-center border-b-2 border-border text-foreground">Rang</th>
-                <th className="p-3 text-left border-b-2 border-border text-foreground">Spieler</th>
-                <th className="p-3 text-center border-b-2 border-border text-foreground">Sp</th>
-                <th className="p-3 text-center border-b-2 border-border text-foreground">S</th>
-                <th className="p-3 text-center border-b-2 border-border text-foreground">U</th>
-                <th className="p-3 text-center border-b-2 border-border text-foreground">N</th>
-                <th className="p-3 text-center border-b-2 border-border text-foreground">LF</th>
-                <th className="p-3 text-center border-b-2 border-border text-foreground">LA</th>
-                <th className="p-3 text-center border-b-2 border-border font-bold text-foreground">Diff</th>
+                <th className="p-3 text-center border-b-2 border-border text-foreground">{t('common.rank')}</th>
+                <th className="p-3 text-left border-b-2 border-border text-foreground">{t('common.table.player')}</th>
+                <th className="p-3 text-center border-b-2 border-border text-foreground">{t('common.table.games')}</th>
+                <th className="p-3 text-center border-b-2 border-border text-foreground">{t('common.table.wins')}</th>
+                <th className="p-3 text-center border-b-2 border-border text-foreground">{t('common.table.draws')}</th>
+                <th className="p-3 text-center border-b-2 border-border text-foreground">{t('common.table.losses')}</th>
+                <th className="p-3 text-center border-b-2 border-border text-foreground">{t('common.table.goalsFor')}</th>
+                <th className="p-3 text-center border-b-2 border-border text-foreground">{t('common.table.goalsAgainst')}</th>
+                <th className="p-3 text-center border-b-2 border-border font-bold text-foreground">{t('common.table.diff')}</th>
                 {usePoints && (
-                  <th className="p-3 text-center border-b-2 border-border font-bold text-foreground">Pkt</th>
+                  <th className="p-3 text-center border-b-2 border-border font-bold text-foreground">{t('common.table.pts')}</th>
                 )}
               </tr>
             </thead>
@@ -302,10 +309,10 @@ export default function LiveTicker() {
                   <td className="p-3 text-left text-foreground">
                     {row.name}
                     {row.won_decision_match === true && (
-                      <span className="text-success font-bold ml-1" title="Gewinner des Entscheidungsspiels">*</span>
+                      <span className="text-success font-bold ml-1" title={t('liveTicker.decisionMatchWinner')}>*</span>
                     )}
                     {row.is_in_tie_group && row.tie_group_size && (
-                      <span className="text-xs text-muted-foreground ml-1" title={`Gleichstand mit ${row.tie_group_size} Teilnehmern`}>
+                      <span className="text-xs text-muted-foreground ml-1" title={t('liveTicker.tieGroupSize', { count: row.tie_group_size })}>
                         ({row.tie_group_size})
                       </span>
                     )}
@@ -332,25 +339,25 @@ export default function LiveTicker() {
             {table.tie_break_mini_tables.map((tieTable: TieBreakMiniTable, tableIndex: number) => (
               <div key={tableIndex} className="mt-4 bg-card border border-border rounded-lg overflow-hidden">
                 <div className="px-4 py-3 bg-muted border-b border-border text-sm font-bold text-foreground">
-                  Direktbegegnungen (Minitabelle) - Gleichstand mit {tieTable.participant_ids.length} Teilnehmern
+                  {t('liveTicker.tieBreakMini', { count: tieTable.participant_ids.length })}
                   {tieTable.is_completely_tied && (
-                    <span className="text-xs text-destructive font-normal ml-2"> - Komplett identisch!</span>
+                    <span className="text-xs text-destructive font-normal ml-2"> - {t('liveTicker.completelyTied')}</span>
                   )}
                 </div>
                 <div className="p-4">
                   <table className="w-full border-collapse text-sm">
                     <thead>
                       <tr className="bg-muted">
-                        <th className="p-2 text-left border-b border-border text-foreground">Spieler</th>
-                        <th className="p-2 text-center border-b border-border text-foreground">Sp</th>
-                        <th className="p-2 text-center border-b border-border text-foreground">S</th>
-                        <th className="p-2 text-center border-b border-border text-foreground">U</th>
-                        <th className="p-2 text-center border-b border-border text-foreground">N</th>
-                        <th className="p-2 text-center border-b border-border text-foreground">LF</th>
-                        <th className="p-2 text-center border-b border-border text-foreground">LA</th>
-                        <th className="p-2 text-center border-b border-border font-bold text-foreground">Diff</th>
+                        <th className="p-2 text-left border-b border-border text-foreground">{t('common.table.player')}</th>
+                        <th className="p-2 text-center border-b border-border text-foreground">{t('common.table.games')}</th>
+                        <th className="p-2 text-center border-b border-border text-foreground">{t('common.table.wins')}</th>
+                        <th className="p-2 text-center border-b border-border text-foreground">{t('common.table.draws')}</th>
+                        <th className="p-2 text-center border-b border-border text-foreground">{t('common.table.losses')}</th>
+                        <th className="p-2 text-center border-b border-border text-foreground">{t('common.table.goalsFor')}</th>
+                        <th className="p-2 text-center border-b border-border text-foreground">{t('common.table.goalsAgainst')}</th>
+                        <th className="p-2 text-center border-b border-border font-bold text-foreground">{t('common.table.diff')}</th>
                         {usePoints && (
-                          <th className="p-2 text-center border-b border-border font-bold text-foreground">Pkt</th>
+                          <th className="p-2 text-center border-b border-border font-bold text-foreground">{t('common.table.pts')}</th>
                         )}
                       </tr>
                     </thead>
@@ -411,21 +418,20 @@ export default function LiveTicker() {
       <div>
         <div className="bg-card border border-border rounded-lg p-6">
           <h3 className="mt-0 mb-4 text-foreground border-b-2 border-warning pb-2">
-            {'Qualifikationsübersicht'}
+            {t('liveTicker.qualificationOverview')}
           </h3>
           <div className="mb-6 text-muted-foreground text-sm">
-            <div><strong>Qualifikationsplan:</strong></div>
-            <div>Basis pro Gruppe: {table.basis_per_group}</div>
-            <div>Gesamt qualifiziert: {table.qualified_count}</div>
+            <div><strong>{t('liveTicker.qualificationPlan')}</strong></div>
+            <div>{t('liveTicker.basisPerGroup', { count: table.basis_per_group })}</div>
+            <div>{t('liveTicker.qualifiedTotal', { count: table.qualified_count })}</div>
             {table.qualification_plan.remainder > 0 && (
               <div className="text-warning mt-2">
-                Es qualifizieren sich zusätzlich die besten {table.qualification_plan.remainder} Teilnehmer
-                aus Position {table.basis_per_group + 1}
+                {t('liveTicker.additionalQualify', { count: table.qualification_plan.remainder, position: table.basis_per_group + 1 })}
               </div>
             )}
           </div>
           <div className="mb-8">
-            <h4 className="text-foreground mb-4">Qualifizierte Teilnehmer (Basis)</h4>
+            <h4 className="text-foreground mb-4">{t('liveTicker.qualifiedParticipantsBasis')}</h4>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4">
               {table.group_qualifiers.map((groupQual) => (
                 <div key={groupQual.group_id} className="bg-muted border border-border rounded-lg p-4">
@@ -446,12 +452,12 @@ export default function LiveTicker() {
                           <span className="text-foreground">{qualifier.name}</span>
                           {qualifier.qualified && (
                             <span className="text-success font-bold ml-2">
-                              Qualifiziert
+                              {t('liveTicker.qualified')}
                             </span>
                           )}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Diff: {qualifier.stats.diff > 0 ? '+' : ''}{qualifier.stats.diff}
+                          {t('common.table.diff')}: {qualifier.stats.diff > 0 ? '+' : ''}{qualifier.stats.diff}
                         </div>
                       </div>
                     ))}
@@ -463,25 +469,25 @@ export default function LiveTicker() {
           {table.fallback_candidates.length > 0 && (
             <div>
               <h4 className="text-foreground mb-4">
-                {'Zusätzliche Qualifikanten (Fallback-Regeln)'}
+                {t('liveTicker.additionalQualifiers')}
               </h4>
               {table.fallback_candidates.map((rule, ruleIdx) => (
                 <div key={ruleIdx} className="bg-warning/10 border border-warning/40 rounded-lg p-4 mb-4">
                   <div className="font-bold text-foreground mb-3 text-sm">
-                    Komplette Rangliste aller {rule.position}. Platzierten (Besten {rule.count} qualifizieren sich)
+                    {t('liveTicker.fullRankingOfPosition', { position: rule.position, count: rule.count })}
                   </div>
                   <table className="w-full border-collapse text-sm">
                     <thead>
                       <tr className="bg-muted">
-                        <th className="p-2 text-left border-b border-border text-foreground">Rang</th>
-                        <th className="p-2 text-left border-b border-border text-foreground">Status</th>
-                        <th className="p-2 text-left border-b border-border text-foreground">Spieler</th>
-                        <th className="p-2 text-left border-b border-border text-foreground">Gruppe</th>
-                        <th className="p-2 text-center border-b border-border text-foreground">Diff</th>
-                        <th className="p-2 text-center border-b border-border text-foreground">LF</th>
-                        <th className="p-2 text-center border-b border-border text-foreground">LA</th>
+                        <th className="p-2 text-left border-b border-border text-foreground">{t('common.rank')}</th>
+                        <th className="p-2 text-left border-b border-border text-foreground">{t('common.status')}</th>
+                        <th className="p-2 text-left border-b border-border text-foreground">{t('common.table.player')}</th>
+                        <th className="p-2 text-left border-b border-border text-foreground">{t('tournament.tables.group')}</th>
+                        <th className="p-2 text-center border-b border-border text-foreground">{t('common.table.diff')}</th>
+                        <th className="p-2 text-center border-b border-border text-foreground">{t('common.table.goalsFor')}</th>
+                        <th className="p-2 text-center border-b border-border text-foreground">{t('common.table.goalsAgainst')}</th>
                         {usePoints && (
-                          <th className="p-2 text-center border-b border-border font-bold text-foreground">Pkt</th>
+                          <th className="p-2 text-center border-b border-border font-bold text-foreground">{t('common.table.pts')}</th>
                         )}
                       </tr>
                     </thead>
@@ -501,16 +507,16 @@ export default function LiveTicker() {
                             <td className="p-2 text-center">
                               {isQualified ? (
                                 <span className="text-success font-bold text-sm">
-                                  Qualifiziert
+                                  {t('liveTicker.qualified')}
                                 </span>
                               ) : isInQualificationRange ? (
-                                <span className="text-warning text-xs">Würde qualifizieren</span>
+                                <span className="text-warning text-xs">{t('liveTicker.wouldQualify')}</span>
                               ) : (
-                                <span className="text-muted-foreground text-xs">Nicht qualifiziert</span>
+                                <span className="text-muted-foreground text-xs">{t('liveTicker.notQualified')}</span>
                               )}
                             </td>
                             <td className={cn('p-2 text-foreground', isQualified && 'font-bold')}>{candidate.name}</td>
-                            <td className="p-2 text-muted-foreground">{candidate.group_name || `Gruppe ${candidate.group_id}`}</td>
+                            <td className="p-2 text-muted-foreground">{candidate.group_name || `${t('tournament.tables.group')} ${candidate.group_id}`}</td>
                             <td className={cn('p-2 text-center font-bold', candidate.stats.diff > 0 ? 'text-success' : candidate.stats.diff < 0 ? 'text-destructive' : 'text-foreground')}>
                               {candidate.stats.diff > 0 ? '+' : ''}{candidate.stats.diff}
                             </td>
@@ -530,7 +536,7 @@ export default function LiveTicker() {
           )}
           {table.fallback_candidates.length === 0 && (
             <div className="p-4 bg-muted rounded-lg text-muted-foreground text-sm">
-              Keine zusätzlichen Qualifikanten erforderlich.
+              {t('liveTicker.noAdditionalRequired')}
             </div>
           )}
         </div>
@@ -539,17 +545,17 @@ export default function LiveTicker() {
   };
 
   if (loading && slides.length === 0) {
-    return <div className="p-8 text-foreground">Lädt...</div>;
+    return <div className="p-8 text-foreground">{t('liveTicker.loading')}</div>;
   }
 
   if (!currentSlide) {
-    return <div className="p-8 text-foreground">Keine Daten verfügbar.</div>;
+    return <div className="p-8 text-foreground">{t('liveTicker.noData')}</div>;
   }
 
   return (
     <div
       className={cn(
-        'p-8 min-h-screen bg-background text-foreground',
+        'p-8 min-h-screen bg-background text-foreground page-shell',
         slides.length > 1 ? 'cursor-pointer' : 'cursor-default'
       )}
       onClick={slides.length > 1 ? goNext : undefined}
@@ -559,37 +565,43 @@ export default function LiveTicker() {
       aria-label={slides.length > 1 ? 'Klick für nächste Folie' : undefined}
     >
       {currentSlide.type === 'title' && (
-        <div className="flex flex-col justify-center items-center h-[80vh] text-center">
-          <div className="text-4xl font-bold mb-4">
-            {tournament?.name || 'Turnier'}
-          </div>
-          <div className="text-xl text-muted-foreground">Live Ticker</div>
-          <div className="mt-6 text-base text-muted-foreground">
-            Automatische Aktualisierung alle {refreshSeconds} Sekunden
-          </div>
-        </div>
+        <LiveTickerSlideTitle
+          tournamentName={tournament?.name || t('liveTicker.tournament')}
+          subtitle={t('liveTicker.title')}
+          refreshHint={t('liveTicker.autoRefresh', { seconds: refreshSeconds })}
+        />
       )}
       {currentSlide.type === 'group-batch' && (
-        <div>
+        <LiveTickerSlideGroups
+          title={t('liveTicker.schedule', { name: tournament?.name || t('liveTicker.tournament') })}
+          subtitle={t('liveTicker.matchCount', {
+            count: currentSlide.groups.reduce((acc, groupEntry) => acc + groupEntry.matches.length, 0),
+          })}
+        >
           {renderGroupBatch(currentSlide.groups)}
-        </div>
+        </LiveTickerSlideGroups>
       )}
       {currentSlide.type === 'ko-matches' && (
-        <div>
-          {renderHeader('KO-Phase', 'Turnierbaum')}
-          <KOBracket
-            matches={currentSlide.matches}
-            participants={participants}
-            tournamentId={tournamentId}
-            drawMode={tournament?.ko_draw_method ?? null}
-            koDistribution={tournament?.ko_distribution ?? null}
-            presentationMode
-          />
-        </div>
+        <LiveTickerSlideKO
+          title={t('liveTicker.koPhase')}
+          subtitle={t('liveTicker.koBracket')}
+          matches={currentSlide.matches}
+          participants={participants}
+          tournamentId={tournamentId}
+          drawMode={tournament?.ko_draw_method ?? null}
+          koDistribution={tournament?.ko_distribution ?? null}
+        />
       )}
-      {currentSlide.type === 'qualification' && renderQualification(currentSlide.table)}
+      {currentSlide.type === 'qualification' && (
+        <LiveTickerSlideQualification
+          title={t('liveTicker.qualificationOverview')}
+          subtitle={t('liveTicker.qualifiedTotal', { count: currentSlide.table.qualified_count })}
+        >
+          {renderQualification(currentSlide.table)}
+        </LiveTickerSlideQualification>
+      )}
 
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-card p-2 px-4 rounded-lg border border-border text-sm text-muted-foreground">
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-card p-2 px-4 rounded-lg border border-border text-sm text-muted-foreground arena-surface">
         <button
           type="button"
           onClick={e => { e.stopPropagation(); goPrev(); }}
@@ -600,9 +612,9 @@ export default function LiveTicker() {
           )}
           aria-label="Vorherige Folie"
         >
-          Zurück
+          {t('liveTicker.prev')}
         </button>
-        <span>Folie {currentIndex + 1} / {slides.length}</span>
+        <span>{t('liveTicker.slideCounter', { current: currentIndex + 1, total: slides.length })}</span>
         <button
           type="button"
           onClick={e => { e.stopPropagation(); goNext(); }}
@@ -613,7 +625,7 @@ export default function LiveTicker() {
           )}
           aria-label="Nächste Folie"
         >
-          Weiter
+          {t('liveTicker.next')}
         </button>
       </div>
     </div>

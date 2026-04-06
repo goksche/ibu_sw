@@ -24,6 +24,7 @@ class Participant(Base):
     scolia_id = Column(String(50), nullable=True, index=True)  # Renamed from license_number
     email = Column(String(200), nullable=True)
     nickname = Column(String(50), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

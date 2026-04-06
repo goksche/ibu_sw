@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils';
 
 interface TournamentModeVisualizationProps {
   mode: 'round_robin' | 'knockout' | 'combined';
+  modeVariant?: string | null;
   hasGroupPhase?: boolean;
   hasKoPhase?: boolean;
   groupsCount?: number;
@@ -10,6 +11,7 @@ interface TournamentModeVisualizationProps {
   koStartRound?: string | null;
   koStructure?: string | null;
   koDrawMethod?: string | null;
+  koPairingMode?: string | null;
 }
 
 const koStartRoundLabels: Record<string, string> = {
@@ -46,11 +48,13 @@ const koDrawMethodLabels: Record<string, string> = {
 
 const groupDistributionLabels: Record<string, string> = {
   random: 'Zufällig',
-  seeded: 'Gesetzt'
+  seeded: 'Gesetzt',
+  manual: 'Manuell'
 };
 
 export default function TournamentModeVisualization({
   mode,
+  modeVariant,
   hasGroupPhase,
   hasKoPhase,
   groupsCount,
@@ -58,79 +62,89 @@ export default function TournamentModeVisualization({
   groupDistribution,
   koStartRound,
   koStructure,
-  koDrawMethod
+  koDrawMethod,
+  koPairingMode
 }: TournamentModeVisualizationProps) {
   const showGroupPhase = hasGroupPhase ?? mode !== 'knockout';
   const showKoPhase = hasKoPhase ?? mode !== 'round_robin';
-
-  const groupDetails: string[] = [];
-  if (groupsCount && groupsCount > 0) {
-    groupDetails.push(`Gruppen: ${groupsCount}`);
-  }
-  if (participantsPerGroup) {
-    groupDetails.push(`Teilnehmer pro Gruppe: ${participantsPerGroup}`);
-  }
-  if (groupDistribution) {
-    const label = groupDistributionLabels[groupDistribution] || groupDistribution;
-    groupDetails.push(`Verteilung: ${label}`);
-  }
-
-  const koDetails: string[] = [];
-  if (koStartRound) {
-    const label = koStartRoundLabels[koStartRound] || koStartRound;
-    koDetails.push(`Start: ${label}`);
-  }
-  if (koStructure) {
-    const label = koStructureLabels[koStructure] || koStructure;
-    koDetails.push(`Struktur: ${label}`);
-  }
-  if (koDrawMethod) {
-    const label = koDrawMethodLabels[koDrawMethod] || koDrawMethod;
-    koDetails.push(`Auslosung: ${label}`);
-  }
+  const groupMeta = [
+    groupsCount && groupsCount > 0 ? `Gruppen ${groupsCount}` : null,
+    participantsPerGroup ? `${participantsPerGroup} pro Gruppe` : null,
+    groupDistribution ? groupDistributionLabels[groupDistribution] || groupDistribution : null,
+  ].filter(Boolean) as string[];
+  const koMeta = [
+    koStartRound ? koStartRoundLabels[koStartRound] || koStartRound : null,
+    koStructure ? koStructureLabels[koStructure] || koStructure : null,
+    koDrawMethod ? koDrawMethodLabels[koDrawMethod] || koDrawMethod : null,
+    koPairingMode ? `Pairing ${koPairingMode}` : null,
+  ].filter(Boolean) as string[];
+  const invalidPureKoPairing =
+    mode === 'knockout' &&
+    !showGroupPhase &&
+    (koPairingMode === 'P3' || koPairingMode === 'P4');
 
   return (
     <div className={cn('rounded-lg border border-border p-4')}>
       <div className="font-bold mb-3 text-foreground">
         Modus-Visualisierung
       </div>
-      <div className="flex items-stretch gap-3 flex-wrap">
-        {showGroupPhase && (
-          <div className="flex-1 min-w-[220px] rounded-lg border border-border p-3 bg-muted">
-            <div className="font-bold mb-2 text-foreground">
-              Gruppenphase
+      {modeVariant && (
+        <div className="mb-3 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-foreground">
+          Aktive Variante: <span className="font-semibold">{modeVariant}</span>
+        </div>
+      )}
+      <div className="rounded-lg border border-border bg-muted/60 p-3">
+        {mode === 'round_robin' && (
+          <div className="space-y-2">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Liga-Schema</div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="rounded border border-border bg-background p-2 text-center">Runde 1</div>
+              <div className="rounded border border-border bg-background p-2 text-center">Runde 2</div>
+              <div className="rounded border border-border bg-background p-2 text-center">Runde n</div>
             </div>
-            {groupDetails.length > 0 ? (
-              <ul className="m-0 pl-5 text-muted-foreground list-disc">
-                {groupDetails.map((detail) => (
-                  <li key={detail} className="mb-1">{detail}</li>
-                ))}
-              </ul>
-            ) : (
-              <div className="text-muted-foreground">Keine Details gesetzt.</div>
-            )}
           </div>
         )}
-        {showGroupPhase && showKoPhase && (
-          <div className="self-center text-muted-foreground font-bold">-&gt;</div>
-        )}
-        {showKoPhase && (
-          <div className="flex-1 min-w-[220px] rounded-lg border border-border p-3 bg-muted">
-            <div className="font-bold mb-2 text-foreground">
-              KO-Phase
+        {mode === 'knockout' && (
+          <div className="space-y-2">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">KO-Pfad</div>
+            <div className="grid grid-cols-4 gap-2 text-xs">
+              <div className="rounded border border-border bg-background p-2 text-center">1/8</div>
+              <div className="rounded border border-border bg-background p-2 text-center">1/4</div>
+              <div className="rounded border border-border bg-background p-2 text-center">1/2</div>
+              <div className="rounded border border-primary/50 bg-primary/10 p-2 text-center">Finale</div>
             </div>
-            {koDetails.length > 0 ? (
-              <ul className="m-0 pl-5 text-muted-foreground list-disc">
-                {koDetails.map((detail) => (
-                  <li key={detail} className="mb-1">{detail}</li>
-                ))}
-              </ul>
-            ) : (
-              <div className="text-muted-foreground">Keine Details gesetzt.</div>
-            )}
+          </div>
+        )}
+        {mode === 'combined' && (
+          <div className="space-y-2">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Kombi-Pfad</div>
+            <div className="flex items-center gap-2 text-xs">
+              <div className="rounded border border-border bg-background p-2 text-center flex-1">Vorphase</div>
+              <div className="text-muted-foreground">-&gt;</div>
+              <div className="rounded border border-border bg-background p-2 text-center flex-1">Qualifikation</div>
+              <div className="text-muted-foreground">-&gt;</div>
+              <div className="rounded border border-primary/50 bg-primary/10 p-2 text-center flex-1">KO-Finale</div>
+            </div>
           </div>
         )}
       </div>
+      <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+        {showGroupPhase && (
+          <div className="rounded border border-border bg-background px-3 py-2">
+            Gruppenphase: {groupMeta.length > 0 ? groupMeta.join(' • ') : 'Standard'}
+          </div>
+        )}
+        {showKoPhase && (
+          <div className="rounded border border-border bg-background px-3 py-2">
+            KO-Phase: {koMeta.length > 0 ? koMeta.join(' • ') : 'Standard'}
+          </div>
+        )}
+      </div>
+      {invalidPureKoPairing && (
+        <div className="mt-3 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          Hinweis: P3/P4 ist ohne Gruppenphase im reinen KO-Modus nicht gueltig.
+        </div>
+      )}
     </div>
   );
 }

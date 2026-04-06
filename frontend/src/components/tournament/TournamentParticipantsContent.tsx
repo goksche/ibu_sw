@@ -1,8 +1,12 @@
 // Tournament Participants Content (for Tab)
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { participantService } from '../../services/participantService';
-import { Participant } from '../../types';
+import { tournamentService } from '../../services/tournamentService';
+import { groupService } from '../../services/groupService';
+import { Participant, Tournament } from '../../types';
+import { getSeedingVisibility, isSeedingUiApplicable } from '../../domain/tournamentSeeding';
 import { cn } from '@/lib/utils';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
@@ -11,10 +15,21 @@ import { Label } from '../ui/label';
 
 interface TournamentParticipantsContentProps {
   tournamentId: number;
+  tournament: Tournament;
+  /** Bei Änderung (z. B. nach Bearbeiten) Turnier neu laden – verhindert veraltete Auslosungsart in der Tab-Ansicht */
+  tournamentRevision?: string;
 }
 
-export default function TournamentParticipantsContent({ tournamentId }: TournamentParticipantsContentProps) {
+export default function TournamentParticipantsContent({
+  tournamentId,
+  tournament,
+  tournamentRevision,
+}: TournamentParticipantsContentProps) {
+  const { t } = useTranslation();
   const { canEdit } = useAuth();
+  const tournamentPropRef = useRef(tournament);
+  tournamentPropRef.current = tournament;
+  const [resolvedTournament, setResolvedTournament] = useState<Tournament | null>(null);
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
   const [tournamentParticipants, setTournamentParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +39,9 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
   const [adding, setAdding] = useState(false);
   const [participantSearch, setParticipantSearch] = useState('');
   const [participantSortBy, setParticipantSortBy] = useState<'first_name' | 'last_name'>('last_name');
+  const [seededParticipantIds, setSeededParticipantIds] = useState<number[]>([]);
+  const [savingSeeds, setSavingSeeds] = useState(false);
+  const [groupsExist, setGroupsExist] = useState(false);
   const [manualFormData, setManualFormData] = useState({
     first_name: '',
     last_name: '',
@@ -33,24 +51,48 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
     nickname: ''
   });
 
-  useEffect(() => {
-    loadData();
-  }, [tournamentId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      const [allParticipantsData, tournamentParticipantsData] = await Promise.all([
+      let fresh: Tournament;
+      try {
+        fresh = await tournamentService.getById(tournamentId);
+      } catch (e) {
+        console.error('TournamentParticipantsContent: getById failed, fallback to parent state', e);
+        fresh = tournamentPropRef.current;
+      }
+      setResolvedTournament(fresh);
+
+      const [allParticipantsData, tournamentParticipantsData, groupsList] = await Promise.all([
         participantService.getAll(),
         participantService.getTournamentParticipants(tournamentId),
+        groupService.getGroups(tournamentId).catch(() => []),
       ]);
       setAllParticipants(allParticipantsData);
       setTournamentParticipants(tournamentParticipantsData);
+      setGroupsExist(Array.isArray(groupsList) && groupsList.length > 0);
+
+      if (isSeedingUiApplicable(fresh)) {
+        try {
+          const seededState = await tournamentService.getSeededParticipants(tournamentId);
+          setSeededParticipantIds(seededState.seeded_participant_ids || []);
+        } catch (err) {
+          console.error('Failed to load seeded participants:', err);
+          setSeededParticipantIds([]);
+        }
+      } else {
+        setSeededParticipantIds([]);
+      }
     } catch (err) {
       console.error('Failed to load data:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [tournamentId]);
+
+  useEffect(() => {
+    setLoading(true);
+    loadData();
+  }, [loadData, tournamentRevision]);
 
   const handleToggleParticipant = (participantId: number) => {
     setSelectedParticipantIds(prev => {
@@ -64,7 +106,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
 
   const handleAddParticipants = async () => {
     if (selectedParticipantIds.length === 0) {
-      alert('Bitte wählen Sie mindestens einen Teilnehmer aus.');
+      alert(t('tournament.participants.selectAtLeastOne'));
       return;
     }
 
@@ -72,13 +114,13 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
 
     try {
       const result = await participantService.addTournamentParticipants(tournamentId, selectedParticipantIds);
-      alert(`Teilnehmer hinzugefügt!\nHinzugefügt: ${result.added}\nÜbersprungen: ${result.skipped} (bereits vorhanden)`);
+      alert(t('tournament.participants.addedResult', { added: result.added, skipped: result.skipped }));
       setShowAddForm(false);
       setSelectedParticipantIds([]);
       loadData();
     } catch (err: any) {
       console.error('Failed to add participants:', err);
-      alert(err.response?.data?.detail || 'Fehler beim Hinzufügen der Teilnehmer');
+      alert(err.response?.data?.detail || t('tournament.participants.addError'));
     } finally {
       setAdding(false);
     }
@@ -93,7 +135,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
   };
 
   const handleRemoveParticipant = async (participantId: number) => {
-    if (!confirm('Möchten Sie diesen Teilnehmer wirklich aus dem Turnier entfernen?')) {
+    if (!confirm(t('tournament.participants.removeConfirm'))) {
       return;
     }
 
@@ -102,7 +144,30 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
       loadData();
     } catch (err: any) {
       console.error('Failed to remove participant:', err);
-      alert('Fehler beim Entfernen des Teilnehmers');
+      alert(t('tournament.participants.removeError'));
+    }
+  };
+
+  const handleToggleSeed = (participantId: number) => {
+    if (!canEdit || groupsExist) return;
+    setSeededParticipantIds((prev) =>
+      prev.includes(participantId) ? prev.filter((x) => x !== participantId) : [...prev, participantId]
+    );
+  };
+
+  const handleSaveSeeds = async () => {
+    if (!canEdit || groupsExist) return;
+    const tid = (resolvedTournament ?? tournament).id;
+    setSavingSeeds(true);
+    try {
+      await tournamentService.setSeededParticipants(tid, seededParticipantIds);
+      alert(t('tournament.participants.seedingSaveSuccess'));
+      await loadData();
+    } catch (err: unknown) {
+      const errObj = err as { response?: { data?: { detail?: string } } };
+      alert(errObj.response?.data?.detail || t('tournament.participants.seedingSaveError'));
+    } finally {
+      setSavingSeeds(false);
     }
   };
 
@@ -114,8 +179,8 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
   const handleAddManualParticipant = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!manualFormData.first_name.trim() || !manualFormData.last_name.trim()) {
-      alert('Bitte geben Sie mindestens Vor- und Nachname ein.');
+    if (!manualFormData.first_name.trim()) {
+      alert('Bitte geben Sie mindestens den Vornamen ein.');
       return;
     }
 
@@ -143,13 +208,24 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
       alert('Teilnehmer erfolgreich hinzugefügt!');
     } catch (err: any) {
       console.error('Failed to add manual participant:', err);
-      alert(err.response?.data?.detail || 'Fehler beim Hinzufügen des Teilnehmers');
+      alert(err.response?.data?.detail || t('tournament.participants.addError'));
     } finally {
       setAdding(false);
     }
   };
 
-  if (loading) return <div className="text-foreground">Wird geladen...</div>;
+  if (loading) return <div className="text-foreground">{t('common.loading')}</div>;
+
+  const tForUi = resolvedTournament ?? tournament;
+  const seedingVisibility = getSeedingVisibility(tForUi);
+  const seedingApplies = isSeedingUiApplicable(tForUi);
+  const labelDistribution = (gd: string) => {
+    const n = String(gd ?? '').trim().toLowerCase();
+    if (n === 'random') return t('common.groupDistribution.randomLabel');
+    if (n === 'seeded') return t('common.groupDistribution.seededLabel');
+    if (n === 'manual') return t('common.groupDistribution.manualLabel');
+    return gd || '—';
+  };
 
   // Get participants that are not yet in the tournament
   const availableParticipants = allParticipants.filter(
@@ -180,7 +256,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
   return (
     <div>
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-foreground">Turnier-Teilnehmer ({tournamentParticipants.length})</h2>
+        <h2 className="text-foreground">{t('tournament.participants.count', { count: tournamentParticipants.length })}</h2>
         {canEdit && !showAddForm && !showManualForm && (
           <div className="flex gap-2">
             <Button 
@@ -199,42 +275,59 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
         )}
       </div>
 
+      {seedingVisibility.kind === 'blocked' && seedingVisibility.reason === 'need_two_groups' && (
+        <Card className="mb-6 border-amber-500/50 bg-amber-950/20 dark:bg-amber-950/30">
+          <CardContent className="pt-6 text-sm text-foreground">
+            {t('tournament.participants.seedingBlockedNeedTwoGroups', { count: seedingVisibility.groupsCount })}
+          </CardContent>
+        </Card>
+      )}
+      {seedingVisibility.kind === 'hidden' && seedingVisibility.reason === 'not_seeded_distribution' && (
+        <Card className="mb-6 border-border bg-muted/50">
+          <CardContent className="pt-6 text-sm text-foreground">
+            {t('tournament.participants.seedingHiddenReasonDistribution', {
+              distribution: labelDistribution(seedingVisibility.distribution),
+            })}
+          </CardContent>
+        </Card>
+      )}
+
       {showAddForm && (
         <Card className="mb-8">
           <CardContent className="pt-6">
-            <h3 className="text-foreground mt-0 font-semibold">Teilnehmer hinzufügen</h3>
+            <h3 className="text-foreground mt-0 font-semibold">{t('tournament.participants.addTitle')}</h3>
             
             {availableParticipants.length === 0 ? (
-              <p className="text-muted-foreground">Alle Teilnehmer sind bereits für dieses Turnier registriert.</p>
+              <p className="text-muted-foreground">{t('tournament.participants.allRegistered')}</p>
             ) : (
               <>
                 <p className="mb-4 text-muted-foreground">
-                  Wählen Sie Teilnehmer aus ({selectedParticipantIds.length} ausgewählt):
+                  {t('tournament.participants.selectPrompt', { count: selectedParticipantIds.length })}
                 </p>
 
                 <div className="mb-4">
                   <Input
                     type="text"
-                    placeholder="Spieler suchen (Name, Verein, Spitzname)..."
+                    placeholder={t('tournament.participants.searchPlaceholder')}
                     value={participantSearch}
                     onChange={(e) => setParticipantSearch(e.target.value)}
                     className="mb-2"
                   />
                   <div className="flex gap-2 items-center flex-wrap">
-                    <span className="text-sm text-muted-foreground">Sortierung:</span>
+                    <span className="text-sm text-muted-foreground">{t('tournament.participants.sortBy')}</span>
                     <Button
                       variant={participantSortBy === 'last_name' ? 'primary' : 'secondary'}
                       onClick={() => setParticipantSortBy('last_name')}
                       className="py-1.5 px-2.5 text-sm"
                     >
-                      Nachname
+                      {t('tournament.participants.sortLastName')}
                     </Button>
                     <Button
                       variant={participantSortBy === 'first_name' ? 'primary' : 'secondary'}
                       onClick={() => setParticipantSortBy('first_name')}
                       className="py-1.5 px-2.5 text-sm"
                     >
-                      Vorname
+                      {t('tournament.participants.sortFirstName')}
                     </Button>
                   </div>
                 </div>
@@ -246,7 +339,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
                     disabled={availableParticipants.length === 0}
                     className="py-1.5 px-3 text-sm"
                   >
-                    Alle auswählen
+                    {t('tournament.participants.selectAll')}
                   </Button>
                   <Button
                     variant="danger"
@@ -254,7 +347,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
                     disabled={selectedParticipantIds.length === 0}
                     className="py-1.5 px-3 text-sm"
                   >
-                    Alle löschen
+                    {t('tournament.participants.clearAll')}
                   </Button>
                 </div>
                 
@@ -287,13 +380,13 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
                     onClick={handleAddParticipants}
                     disabled={adding || selectedParticipantIds.length === 0}
                   >
-                    {adding ? 'Hinzufügen...' : 'Ausgewählte hinzufügen'}
+                    {adding ? t('tournament.participants.adding') : t('tournament.participants.addSelected')}
                   </Button>
                   <Button
                     variant="secondary"
                     onClick={() => { setShowAddForm(false); setSelectedParticipantIds([]); }}
                   >
-                    Abbrechen
+                    {t('common.cancel')}
                   </Button>
                 </div>
               </>
@@ -314,7 +407,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                   <Label className="block mb-2 font-bold text-foreground">
-                    Vorname *
+                    {t('participants.firstName')}
                   </Label>
                   <Input
                     type="text"
@@ -327,14 +420,13 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
                 </div>
                 <div>
                   <Label className="block mb-2 font-bold text-foreground">
-                    Nachname *
+                    {t('participants.lastName')}
                   </Label>
                   <Input
                     type="text"
                     name="last_name"
                     value={manualFormData.last_name}
                     onChange={handleManualFormChange}
-                    required
                     className="w-full"
                   />
                 </div>
@@ -343,7 +435,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                   <Label className="block mb-2 text-foreground">
-                    Verein
+                    {t('participants.club')}
                   </Label>
                   <Input
                     type="text"
@@ -355,7 +447,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
                 </div>
                 <div>
                   <Label className="block mb-2 text-foreground">
-                    Scolia ID
+                    {t('participants.scoliaId')}
                   </Label>
                   <Input
                     type="text"
@@ -370,7 +462,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                   <Label className="block mb-2 text-foreground">
-                    E-Mail
+                    {t('participants.email')}
                   </Label>
                   <Input
                     type="email"
@@ -382,7 +474,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
                 </div>
                 <div>
                   <Label className="block mb-2 text-foreground">
-                    Spitzname
+                    {t('participants.nickname')}
                   </Label>
                   <Input
                     type="text"
@@ -400,7 +492,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
                   variant="info"
                   disabled={adding}
                 >
-                  {adding ? 'Hinzufügen...' : 'Teilnehmer hinzufügen'}
+                  {adding ? t('tournament.participants.adding') : t('tournament.participants.addTitle')}
                 </Button>
                 <Button
                   type="button"
@@ -418,7 +510,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
                   }}
                   disabled={adding}
                 >
-                  Abbrechen
+                  {t('common.cancel')}
                 </Button>
               </div>
             </form>
@@ -426,17 +518,54 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
         </Card>
       )}
 
+      {seedingApplies && (
+        <Card className="mb-8 border border-border bg-card">
+          <CardContent className="pt-6">
+            <h3 className="m-0 text-lg font-semibold text-foreground">{t('tournament.participants.seedingTitle')}</h3>
+            <p className="mt-2 mb-0 text-sm text-muted-foreground">{t('tournament.participants.seedingHint')}</p>
+            {tournamentParticipants.length === 0 && (
+              <p className="mt-2 mb-0 text-sm text-muted-foreground">{t('tournament.participants.seedingNoParticipants')}</p>
+            )}
+            {tournamentParticipants.length > 0 && canEdit && (
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                {groupsExist && (
+                  <p className="m-0 text-sm text-amber-600 dark:text-amber-500">{t('tournament.participants.seedingGroupsLocked')}</p>
+                )}
+                <Button
+                  type="button"
+                  onClick={handleSaveSeeds}
+                  disabled={savingSeeds || groupsExist}
+                  className={cn((savingSeeds || groupsExist) && 'opacity-60 cursor-not-allowed')}
+                >
+                  {savingSeeds ? t('tournament.participants.seedingSaving') : t('tournament.participants.seedingSave')}
+                </Button>
+              </div>
+            )}
+            {tournamentParticipants.length > 0 && (
+              <p className="mt-3 mb-0 text-sm text-muted-foreground">
+                {t('tournament.participants.seedingCount', { count: seededParticipantIds.length })}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {tournamentParticipants.length === 0 ? (
-        <p className="text-muted-foreground">Noch keine Teilnehmer für dieses Turnier registriert.</p>
+        <p className="text-muted-foreground">{t('tournament.participants.noParticipants')}</p>
       ) : (
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b-2 border-border bg-muted">
-                <th className="p-3 text-left text-foreground font-semibold">Name</th>
-                <th className="p-3 text-left text-foreground font-semibold">Verein</th>
-                <th className="p-3 text-left text-foreground font-semibold">Scolia ID</th>
-                <th className="p-3 text-right text-foreground font-semibold">Aktionen</th>
+                {seedingApplies && (
+                  <th className="p-3 text-left text-foreground font-semibold w-[100px]">
+                    {t('tournament.participants.seedingColumn')}
+                  </th>
+                )}
+                <th className="p-3 text-left text-foreground font-semibold">{t('common.name')}</th>
+                <th className="p-3 text-left text-foreground font-semibold">{t('participants.club')}</th>
+                <th className="p-3 text-left text-foreground font-semibold">{t('participants.scoliaId')}</th>
+                <th className="p-3 text-right text-foreground font-semibold">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -445,6 +574,18 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
                   key={participant.id} 
                   className="border-b border-border bg-card"
                 >
+                  {seedingApplies && (
+                    <td className="p-3 align-middle">
+                      <input
+                        type="checkbox"
+                        checked={seededParticipantIds.includes(participant.id)}
+                        disabled={!canEdit || groupsExist}
+                        onChange={() => handleToggleSeed(participant.id)}
+                        className="h-4 w-4 cursor-pointer disabled:cursor-not-allowed"
+                        title={groupsExist ? t('tournament.participants.seedingGroupsLocked') : undefined}
+                      />
+                    </td>
+                  )}
                   <td className="p-3 font-bold text-foreground">
                     {participant.first_name} {participant.last_name}
                   </td>
@@ -458,7 +599,7 @@ export default function TournamentParticipantsContent({ tournamentId }: Tourname
                         size="sm"
                         className="px-3 py-1 text-sm"
                       >
-                        Entfernen
+                        {t('common.remove')}
                       </Button>
                     )}
                   </td>

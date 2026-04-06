@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Read-Only Monitoring Center</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #121a2b;
+      --panel-2: #1a2640;
+      --text: #e7eefc;
+      --muted: #9fb1d8;
+      --ok: #36c275;
+      --warn: #f2b844;
+      --crit: #ef5350;
+      --line: #2a3a5f;
+      --btn: #2c4ea6;
+      --btn-hover: #3b63cf;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: linear-gradient(180deg, #090f1d 0%, #0f1729 100%);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.5rem;
+    }
+    .sub {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+    }
+    .server {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    .server:last-child { margin-bottom: 0; }
+    .server-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .badge {
+      font-size: 0.75rem;
+      border-radius: 999px;
+      padding: 2px 8px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .ok { color: var(--ok); border-color: #2b8f5b; }
+    .warn { color: var(--warn); border-color: #936e1c; }
+    .crit { color: var(--crit); border-color: #8c3232; }
+    .neutral { color: var(--muted); border-color: #42557f; }
+
+    label {
+      display: block;
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin: 8px 0 4px;
+    }
+    input, select, textarea {
+      width: 100%;
+      background: #0d1629;
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.9rem;
+    }
+    textarea {
+      min-height: 84px;
+      resize: vertical;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .row-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .btnbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: #fff;
+      background: var(--btn);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover { background: var(--btn-hover); }
+    button.secondary { background: #3a486d; }
+    button.secondary:hover { background: #4a5e91; }
+    .mono {
+      font-family: Consolas, "Courier New", monospace;
+      white-space: pre-wrap;
+      background: #0d1629;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      min-height: 120px;
+    }
+    .small { font-size: 0.8rem; color: var(--muted); }
+    .report {
+      min-height: 340px;
+      font-family: Consolas, "Courier New", monospace;
+    }
+    .statusline {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .checklist li { margin-bottom: 4px; }
+    .note {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Read-Only Monitoring Center</h1>
+    <p class="sub">Lokale Seite fuer Start, Datenerfassung und Berichterstellung. Keine Systemaenderungen.</p>
+
+    <div class="grid">
+      <section class="card">
+        <h2>1) Start & Laufmetadaten</h2>
+        <div class="row">
+          <div>
+            <label>Zeitzone</label>
+            <input id="timezone" value="Europe/Zurich" />
+          </div>
+          <div>
+            <label>Run-ID</label>
+            <input id="runId" placeholder="wird bei Start gesetzt" />
+          </div>
+        </div>
+        <label>Startzeit</label>
+        <input id="startTime" placeholder="noch nicht gestartet" />
+        <div class="btnbar">
+          <button id="btnStart">Monitoring starten</button>
+          <button id="btnReset" class="secondary">Zuruecksetzen</button>
+        </div>
+        <div id="statusLine" class="statusline">Status: bereit</div>
+        <p class="note">Hinweis: Browser kann SSH nicht direkt ausfuehren. Nutze die generierten Kommandos im Terminal und trage Ergebnisse hier ein.</p>
+      </section>
+
+      <section class="card">
+        <h2>2) Kommandos (kopieren & im Terminal ausfuehren)</h2>
+        <label>Server waehlen</label>
+        <select id="cmdServer">
+          <option value="A">Server A (Produktion) - root@144.91.103.103</option>
+          <option value="B">Server B (Test) - opsadmin@95.111.238.180</option>
+          <option value="C">Server C (Optional) - opsadmin@157.173.114.105</option>
+        </select>
+        <div id="commandBlock" class="mono"></div>
+        <div class="btnbar">
+          <button id="btnCopyCmd">Kommandos kopieren</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:14px;">
+      <h2>3) Kennzahlen eingeben (pro Server)</h2>
+
+      <div class="server">
+        <div class="server-head">
+          <strong>Server A</strong>
+          <span id="healthA" class="badge neutral">Unbewertet</span>
+        </div>
+        <div class="row-3">
+          <div><label>CPU Usage %</label><input id="a_cpu" type="number" step="0.1" placeholder="z.B. 6.0" /></div>
+          <div><label>Load 1m</label><input id="a_load1" type="number" step="0.01" placeholder="z.B. 0.24" /></div>
+          <div><label>Kerne</label><input id="a_cores" type="number" step="1" placeholder="z.B. 4" /></div>
+        </div>
+        <div class="row-3">
+          <div><label>RAM used %</label><input id="a_ram" type="number" step="0.1" placeholder="z.B. 13.4" /></div>
+          <div><label>Swap Trend</label>
+            <select id="a_swapTrend">
+              <option>stabil</option>
+              <option>leicht steigend</option>
+              <option>schnell steigend</option>
+            </select>
+          </div>
+          <div><label>Rx/Tx Eindruck</label>
+            <select id="a_net">
+              <option>normal</option>
+              <option>leicht erhoeht</option>
+              <option>ungewoehnlich hoch</option>
+            </select>
+          </div>
+        </div>
+        <label>Top 5 Prozesse nach CPU (eine Zeile pro Prozess)</label>
+        <textarea id="a_top5" placeholder="1) ...&#10;2) ...&#10;3) ...&#10;4) ...&#10;5) ..."></textarea>
+        <label>Auffaelligkeiten</label>
+        <textarea id="a_notes" placeholder="z.B. SSH root login fehlgeschlagen"></textarea>
+      </div>
+
+      <div class="server">
+        <div class="server-head">
+          <strong>Server B</strong>
+          <span id="healthB" class="badge neutral">Unbewertet</span>
+        </div>
+        <div class="row-3">
+          <div><label>CPU Usage %</label><input id="b_cpu" type="number" step="0.1" /></div>
+          <div><label>Load 1m</label><input id="b_load1" type="number" step="0.01" /></div>
+          <div><label>Kerne</label><input id="b_cores" type="number" step="1" /></div>
+        </div>
+        <div class="row-3">
+          <div><label>RAM used %</label><input id="b_ram" type="number" step="0.1" /></div>
+          <div><label>Swap Trend</label>
+            <select id="b_swapTrend">
+              <option>stabil</option>
+              <option>leicht steigend</option>
+              <option>schnell steigend</option>
+            </select>
+          </div>
+          <div><label>Rx/Tx Eindruck</label>
+            <select id="b_net">
+              <option>normal</option>
+              <option>leicht erhoeht</option>
+              <option>ungewoehnlich hoch</option>
+            </select>
+          </div>
+        </div>
+        <label>Top 5 Prozesse nach CPU</label>
+        <textarea id="b_top5"></textarea>
+        <label>Auffaelligkeiten</label>
+        <textarea id="b_notes"></textarea>
+      </div>
+
+      <div class="server">
+        <div class="server-head">
+          <strong>Server C (optional)</strong>
+          <span id="healthC" class="badge neutral">Unbewertet</span>
+        </div>
+        <div class="row-3">
+          <div><label>CPU Usage %</label><input id="c_cpu" type="number" step="0.1" /></div>
+          <div><label>Load 1m</label><input id="c_load1" type="number" step="0.01" /></div>
+          <div><label>Kerne</label><input id="c_cores" type="number" step="1" /></div>
+        </div>
+        <div class="row-3">
+          <div><label>RAM used %</label><input id="c_ram" type="number" step="0.1" /></div>
+          <div><label>Swap Trend</label>
+            <select id="c_swapTrend">
+              <option>stabil</option>
+              <option>leicht steigend</option>
+              <option>schnell steigend</option>
+            </select>
+          </div>
+          <div><label>Rx/Tx Eindruck</label>
+            <select id="c_net">
+              <option>normal</option>
+              <option>leicht erhoeht</option>
+              <option>ungewoehnlich hoch</option>
+            </select>
+          </div>
+        </div>
+        <label>Top 5 Prozesse nach CPU</label>
+        <textarea id="c_top5"></textarea>
+        <label>Auffaelligkeiten</label>
+        <textarea id="c_notes"></textarea>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:14px;">
+      <h2>4) Bericht erzeugen</h2>
+      <label>Empfohlene naechste Schritte (eine Zeile pro Schritt)</label>
+      <textarea id="recommendations" placeholder="1) ...&#10;2) ...&#10;3) ..."></textarea>
+
+      <label>Rohdaten-Auszug (wichtigste Outputs kurz einkopieren)</label>
+      <textarea id="rawData" placeholder="[Server A] uptime: ...&#10;[Server B] free -m: ..."></textarea>
+
+      <div class="btnbar">
+        <button id="btnBuildReport">Bericht erstellen</button>
+        <button id="btnCopyReport" class="secondary">Bericht kopieren</button>
+      </div>
+      <label>Bericht</label>
+      <textarea id="reportOut" class="report" placeholder="Hier erscheint der fertige Bericht..."></textarea>
+    </section>
+
+    <section class="card" style="margin-top:14px;">
+      <h2>5) Read-Only Checkliste</h2>
+      <ul class="checklist small">
+        <li>Keine Konfigurationsaenderung, kein Restart, kein Kill, keine Installation.</li>
+        <li>SSH/Sudo-Probleme nur dokumentieren.</li>
+        <li>Zeitstempel in Europe/Zurich verwenden.</li>
+        <li>Auffaelligkeiten + konkrete Empfehlungen berichten, aber nicht ausfuehren.</li>
+      </ul>
+    </section>
+  </div>
+
+  <script>
+    const serverMap = {
+      A: "root@144.91.103.103",
+      B: "opsadmin@95.111.238.180",
+      C: "opsadmin@157.173.114.105"
+    };
+
+    function nowZurich(timeZone) {
+      const fmt = new Intl.DateTimeFormat("de-CH", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false
+      });
+      return fmt.format(new Date()).replace(",", "");
+    }
+
+    function runId() {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      return `run-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    }
+
+    function commandTemplate(serverKey) {
+      const target = serverMap[serverKey];
+      return [
+        `# Ziel: ${target}`,
+        `ssh -o BatchMode=yes -o ConnectTimeout=12 ${target} "TZ=Europe/Zurich date '+%Y-%m-%d %H:%M:%S %Z'; hostname; uptime"`,
+        ``,
+        `# A) CPU / Load`,
+        `uptime`,
+        `nproc`,
+        `top -bn1 | sed -n '1,12p'`,
+        `ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%cpu | head -n 12`,
+        `cat /proc/loadavg`,
+        ``,
+        `# B) RAM / Swap`,
+        `free -m`,
+        `vmstat 1 5`,
+        ``,
+        `# C) Bandbreite / Netzwerk`,
+        `vnstat --oneline b`,
+        `cat /proc/net/dev`,
+        `ss -tulpen | head -n 60`,
+        `ss -s`,
+        ``,
+        `# D) Docker (falls vorhanden)`,
+        `docker ps --format 'table {{.Names}}\\t{{.Status}}'`,
+        `docker stats --no-stream`,
+        ``,
+        `# E) Security`,
+        `systemctl is-active fail2ban`,
+        `fail2ban-client status sshd`,
+        `journalctl -p 3 -n 50 --no-pager`
+      ].join("\n");
+    }
+
+    function parseNum(id) {
+      const v = document.getElementById(id).value.trim();
+      if (!v) return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function val(id) {
+      return document.getElementById(id).value.trim();
+    }
+
+    function classifyServer(prefix) {
+      const cpu = parseNum(`${prefix}_cpu`);
+      const load1 = parseNum(`${prefix}_load1`);
+      const cores = parseNum(`${prefix}_cores`);
+      const ram = parseNum(`${prefix}_ram`);
+      const swapTrend = val(`${prefix}_swapTrend`);
+      const net = val(`${prefix}_net`);
+
+      let score = 0;
+      if (cpu !== null && cpu > 85) score += 3;
+      if (load1 !== null && cores !== null && load1 > cores) score += 3;
+      if (ram !== null && ram > 90) score += 3;
+      if (swapTrend === "schnell steigend") score += 2;
+      if (net === "ungewoehnlich hoch") score += 2;
+      if (swapTrend === "leicht steigend" || net === "leicht erhoeht") score += 1;
+
+      if (score >= 4) return { level: "KRITISCH", cls: "crit" };
+      if (score >= 1) return { level: "WARNUNG", cls: "warn" };
+      return { level: "OK", cls: "ok" };
+    }
+
+    function updateBadge(prefix, badgeId) {
+      const b = document.getElementById(badgeId);
+      const c = classifyServer(prefix);
+      b.textContent = c.level;
+      b.className = `badge ${c.cls}`;
+      return c.level;
+    }
+
+    function overallStatus(levels) {
+      if (levels.includes("KRITISCH")) return "KRITISCH";
+      if (levels.includes("WARNUNG")) return "WARNUNG";
+      return "OK";
+    }
+
+    function serverSummary(label, prefix) {
+      const cpu = parseNum(`${prefix}_cpu`);
+      const load1 = parseNum(`${prefix}_load1`);
+      const cores = parseNum(`${prefix}_cores`);
+      const ram = parseNum(`${prefix}_ram`);
+      const swap = val(`${prefix}_swapTrend`) || "-";
+      const net = val(`${prefix}_net`) || "-";
+      const top5 = val(`${prefix}_top5`) || "(keine Angabe)";
+      const notes = val(`${prefix}_notes`) || "keine";
+
+      return {
+        metrics: [
+          `- ${label}:`,
+          `  CPU: ${cpu !== null ? cpu.toFixed(1) + "%" : "-"}`,
+          `  Load: ${load1 !== null ? load1.toFixed(2) : "-"} (Kerne: ${cores !== null ? cores : "-"})`,
+          `  RAM/Swap: ${ram !== null ? ram.toFixed(1) + "%" : "-"}, Swap-Trend: ${swap}`,
+          `  Rx/Tx: ${net}`
+        ].join("\n"),
+        top5: [
+          `- ${label}:`,
+          ...top5.split("\n").filter(Boolean).map((l) => `  ${l}`)
+        ].join("\n"),
+        notes: `- ${label}: ${notes}`
+      };
+    }
+
+    function buildReport() {
+      const tz = val("timezone") || "Europe/Zurich";
+      const start = val("startTime") || "-";
+      const rid = val("runId") || "-";
+
+      const a = serverSummary("Server A", "a");
+      const b = serverSummary("Server B", "b");
+      const c = serverSummary("Server C (optional)", "c");
+
+      const levels = [
+        updateBadge("a", "healthA"),
+        updateBadge("b", "healthB"),
+        updateBadge("c", "healthC")
+      ];
+      const global = overallStatus(levels);
+
+      const rec = val("recommendations") || "1) keine";
+      const raw = val("rawData") || "(keine Rohdaten eingefuegt)";
+
+      const text = [
+        `1) Kurzfazit (${global})`,
+        `- Gesamtstatus: ${global}`,
+        `- Run-ID: ${rid}`,
+        `- Zeitpunkt (Europe/Zurich): ${start}`,
+        ``,
+        `2) Kennzahlen pro Server (CPU, Load, RAM, Rx/Tx)`,
+        a.metrics,
+        b.metrics,
+        c.metrics,
+        ``,
+        `3) Top 5 Prozesse nach CPU`,
+        a.top5,
+        b.top5,
+        c.top5,
+        ``,
+        `4) Auffaelligkeiten`,
+        a.notes,
+        b.notes,
+        c.notes,
+        ``,
+        `5) Empfohlene naechste Schritte (nur Empfehlungen, nichts ausgefuehrt)`,
+        rec,
+        ``,
+        `6) Rohdaten-Abschnitt mit den wichtigsten Kommandos/Outputs`,
+        raw,
+        ``,
+        `Meta: Zeitzone=${tz}, Read-Only=true`
+      ].join("\n");
+
+      document.getElementById("reportOut").value = text;
+    }
+
+    function resetAll() {
+      document.querySelectorAll("input, textarea").forEach((el) => {
+        if (el.id === "timezone") return;
+        el.value = "";
+      });
+      document.querySelectorAll("select").forEach((el) => {
+        el.selectedIndex = 0;
+      });
+      document.getElementById("statusLine").textContent = "Status: bereit";
+      ["healthA", "healthB", "healthC"].forEach((id) => {
+        const el = document.getElementById(id);
+        el.textContent = "Unbewertet";
+        el.className = "badge neutral";
+      });
+      refreshCommand();
+    }
+
+    function refreshCommand() {
+      const key = document.getElementById("cmdServer").value;
+      document.getElementById("commandBlock").textContent = commandTemplate(key);
+    }
+
+    document.getElementById("btnStart").addEventListener("click", () => {
+      const tz = val("timezone") || "Europe/Zurich";
+      document.getElementById("runId").value = runId();
+      document.getElementById("startTime").value = `${nowZurich(tz)} (${tz})`;
+      document.getElementById("statusLine").textContent = "Status: Monitoring gestartet (read-only).";
+      refreshCommand();
+    });
+
+    document.getElementById("btnReset").addEventListener("click", resetAll);
+    document.getElementById("cmdServer").addEventListener("change", refreshCommand);
+
+    document.getElementById("btnCopyCmd").addEventListener("click", async () => {
+      const txt = document.getElementById("commandBlock").textContent;
+      try {
+        await navigator.clipboard.writeText(txt);
+        document.getElementById("statusLine").textContent = "Status: Kommandos in Zwischenablage kopiert.";
+      } catch (_) {
+        document.getElementById("statusLine").textContent = "Status: Kopieren fehlgeschlagen (Browserberechtigung).";
+      }
+    });
+
+    document.getElementById("btnBuildReport").addEventListener("click", buildReport);
+    document.getElementById("btnCopyReport").addEventListener("click", async () => {
+      const txt = document.getElementById("reportOut").value;
+      try {
+        await navigator.clipboard.writeText(txt);
+        document.getElementById("statusLine").textContent = "Status: Bericht in Zwischenablage kopiert.";
+      } catch (_) {
+        document.getElementById("statusLine").textContent = "Status: Bericht konnte nicht kopiert werden.";
+      }
+    });
+
+    ["a","b","c"].forEach((p) => {
+      ["cpu","load1","cores","ram","swapTrend","net"].forEach((field) => {
+        const el = document.getElementById(`${p}_${field}`);
+        el.addEventListener("input", () => {
+          updateBadge("a", "healthA");
+          updateBadge("b", "healthB");
+          updateBadge("c", "healthC");
+        });
+        el.addEventListener("change", () => {
+          updateBadge("a", "healthA");
+          updateBadge("b", "healthB");
+          updateBadge("c", "healthC");
+        });
+      });
+    });
+
+    refreshCommand();
+  </script>
+</body>
+</html>
+

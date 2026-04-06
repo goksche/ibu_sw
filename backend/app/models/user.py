@@ -9,7 +9,8 @@ from app.core.database import Base
 
 
 class UserRole(str, enum.Enum):
-    """User Roles Enum"""
+    """User Roles Enum – power_admin hat höchste Berechtigung"""
+    POWER_ADMIN = "power_admin"
     ADMIN = "admin"
     USER = "user"
     VIEWER = "viewer"

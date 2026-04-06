@@ -1,5 +1,6 @@
 // Tournament Groups Page
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { authService } from '../services/authService';
 import { tournamentService } from '../services/tournamentService';
 import { participantService } from '../services/participantService';
@@ -13,6 +14,7 @@ export default function TournamentGroups() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const tournamentId = id ? parseInt(id) : 0;
+  const { t } = useTranslation();
 
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [groups, setGroups] = useState<GroupWithParticipants[]>([]);
@@ -82,7 +84,7 @@ export default function TournamentGroups() {
       loadData();
     } catch (err) {
       console.error('Failed to create group:', err);
-      alert('Fehler beim Erstellen der Gruppe');
+      alert(t('tournament.groups.createError'));
     }
   };
 
@@ -96,31 +98,31 @@ export default function TournamentGroups() {
       loadData();
     } catch (err) {
       console.error('Failed to add participant:', err);
-      alert('Fehler beim Hinzufügen des Teilnehmers');
+      alert(t('tournament.groups.addError'));
     }
   };
 
   const handleRemoveParticipant = async (groupId: number, participantId: number) => {
-    if (!confirm('Möchten Sie diesen Teilnehmer aus der Gruppe entfernen?')) return;
+    if (!confirm(t('tournament.groups.removeConfirm'))) return;
 
     try {
       await groupService.removeParticipant(groupId, participantId);
       loadData();
     } catch (err) {
       console.error('Failed to remove participant:', err);
-      alert('Fehler beim Entfernen des Teilnehmers');
+      alert(t('tournament.groups.removeError'));
     }
   };
 
   const handleDeleteGroup = async (groupId: number) => {
-    if (!confirm('Möchten Sie diese Gruppe wirklich löschen?')) return;
+    if (!confirm(t('tournament.groups.deleteConfirm'))) return;
 
     try {
       await groupService.deleteGroup(groupId);
       loadData();
     } catch (err) {
       console.error('Failed to delete group:', err);
-      alert('Fehler beim Löschen der Gruppe');
+      alert(t('tournament.groups.deleteError'));
     }
   };
 
@@ -129,7 +131,7 @@ export default function TournamentGroups() {
   };
 
   const handleGenerateGroups = async () => {
-    if (!confirm('Möchten Sie wirklich die Gruppen neu generieren? Bestehende Gruppen und Spiele werden dabei gelöscht.')) {
+    if (!confirm(t('tournament.groups.generateConfirm'))) {
       return;
     }
 
@@ -139,19 +141,19 @@ export default function TournamentGroups() {
     try {
       const result = await tournamentService.generateGroups(tournamentId);
       setGenerateResult(result);
-      alert(`Gruppen erfolgreich generiert!\nGruppen: ${result.groups_created}\nTeilnehmer: ${result.participants_assigned}\nMethode: ${result.distribution_method}`);
+      alert(t('tournament.groups.generateSuccess', { groups: result.groups_created, participants: result.participants_assigned, method: result.distribution_method }));
       loadData();
     } catch (err: unknown) {
       const errObj = err as { response?: { data?: { detail?: string } } };
       console.error('Failed to generate groups:', err);
-      alert(errObj.response?.data?.detail || 'Fehler beim Generieren der Gruppen');
+      alert(errObj.response?.data?.detail || t('tournament.groups.generateError'));
     } finally {
       setGenerating(false);
     }
   };
 
   const handleGenerateRoundRobin = async () => {
-    if (!confirm('Möchten Sie wirklich alle Spiele für dieses Turnier generieren? Bestehende Spiele werden dabei überschrieben.')) {
+    if (!confirm(t('tournament.groups.roundRobinConfirm'))) {
       return;
     }
 
@@ -161,18 +163,18 @@ export default function TournamentGroups() {
     try {
       const result = await tournamentService.generateRoundRobin(tournamentId);
       setGenerateResult(result);
-      alert(`Round Robin erfolgreich generiert!\nGruppen: ${result.groups_processed}\nSpiele: ${result.matches_created}`);
+      alert(t('tournament.groups.roundRobinSuccess', { groups: result.groups_processed, matches: result.matches_created }));
     } catch (err: unknown) {
       const errObj = err as { response?: { data?: { detail?: string } } };
       console.error('Failed to generate round robin:', err);
-      alert(errObj.response?.data?.detail || 'Fehler beim Generieren der Spiele');
+      alert(errObj.response?.data?.detail || t('tournament.groups.roundRobinError'));
     } finally {
       setGenerating(false);
     }
   };
 
-  if (loading) return <div className="p-8">Wird geladen...</div>;
-  if (!tournament) return <div className="p-8">Turnier nicht gefunden.</div>;
+  if (loading) return <div className="p-8">{t('common.loading')}</div>;
+  if (!tournament) return <div className="p-8">{t('tournament.detail.notFound')}</div>;
 
   const assignedParticipantIds = new Set<number>();
   groups.forEach((group) => {
@@ -187,47 +189,63 @@ export default function TournamentGroups() {
       <div className="flex justify-between mb-8">
         <div>
           <h1>{tournament.name}</h1>
-          <p className="text-muted-foreground mt-2">Gruppenverwaltung</p>
+          <p className="text-muted-foreground mt-2">{t('tournament.groups.title')}</p>
         </div>
         <div className="flex gap-4">
           <Button onClick={() => navigate(`/tournaments/${tournamentId}/matches`)}>
-            Spiele
+            {t('tournament.groups.matches')}
           </Button>
           <Button variant="outline" onClick={() => navigate('/dashboard')}>
-            Zurück
+            {t('common.back')}
           </Button>
         </div>
       </div>
 
       {!tournament.has_group_phase && (
         <div className="p-4 bg-warning/10 border border-warning rounded-lg mb-8">
-          ⚠️ Dieses Turnier hat keine Gruppenphase konfiguriert.
+          ⚠️ {t('tournament.groups.noGroupPhase')}
         </div>
       )}
 
+      {tournament.has_group_phase &&
+        (tournament.groups_count ?? 0) > 1 &&
+        tournament.group_distribution === 'seeded' && (
+          <Card className="mb-8 p-4 border border-border bg-muted/40">
+            <p className="m-0 text-sm text-muted-foreground">{t('tournament.groups.seedingHint')}</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3"
+              onClick={() => navigate(`/tournaments/${tournamentId}/participants`)}
+            >
+              {t('tournament.groups.openParticipants')}
+            </Button>
+          </Card>
+        )}
+
       {showCreateForm && (
         <Card className="mb-8 p-6 bg-muted border border-border">
-          <h2>Neue Gruppe erstellen</h2>
+          <h2>{t('tournament.groups.createTitle')}</h2>
           <form onSubmit={handleSubmit}>
             <div className="mb-4">
               <Input
-                label="Gruppennamen *"
+                label={t('tournament.groups.groupName')}
                 type="text"
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
                 required
-                placeholder="z.B. Gruppe A"
+                placeholder={t('tournament.groups.groupNamePlaceholder')}
               />
             </div>
             <div className="flex gap-4">
-              <Button type="submit">Erstellen</Button>
+              <Button type="submit">{t('common.create')}</Button>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => { setShowCreateForm(false); setFormData({ name: '' }); }}
               >
-                Abbrechen
+                {t('common.cancel')}
               </Button>
             </div>
           </form>
@@ -235,7 +253,7 @@ export default function TournamentGroups() {
       )}
 
       <div className="flex justify-between items-center mb-8">
-        <h2>Gruppen ({groups.length})</h2>
+        <h2>{t('tournament.groups.count', { count: groups.length })}</h2>
         <div className="flex gap-2">
           {!showCreateForm && tournament.has_group_phase && (
             <Button
@@ -244,7 +262,7 @@ export default function TournamentGroups() {
               disabled={generating}
               className={cn(generating && 'opacity-60 cursor-not-allowed')}
             >
-              {generating ? '⏳ Generiere...' : '🎲 Gruppen generieren'}
+              {generating ? `⏳ ${t('tournament.groups.generating')}` : `🎲 ${t('tournament.groups.generateGroups')}`}
             </Button>
           )}
           {!showCreateForm && tournament.has_group_phase && groups.length > 0 && (
@@ -254,19 +272,19 @@ export default function TournamentGroups() {
               disabled={generating}
               className={cn(generating && 'opacity-60 cursor-not-allowed')}
             >
-              {generating ? '⏳ Generiere...' : '⚽ Spielplan generieren'}
+              {generating ? `⏳ ${t('tournament.groups.generating')}` : `⚽ ${t('tournament.groups.generateSchedule')}`}
             </Button>
           )}
           {!showCreateForm && tournament.has_group_phase && (
             <Button onClick={() => setShowCreateForm(true)}>
-              + Neue Gruppe
+              {t('tournament.groups.newGroup')}
             </Button>
           )}
         </div>
       </div>
 
       {groups.length === 0 ? (
-        <p>Noch keine Gruppen vorhanden.</p>
+        <p>{t('tournament.groups.noGroups')}</p>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(400px,1fr))] gap-6">
           {groups.map((group) => (
@@ -278,17 +296,17 @@ export default function TournamentGroups() {
                   size="sm"
                   onClick={() => handleDeleteGroup(group.id)}
                 >
-                  Löschen
+                  {t('common.delete')}
                 </Button>
               </div>
 
               <div className="p-4">
                 <h3 className="mb-2 text-sm text-muted-foreground">
-                  Teilnehmer ({group.participants.length})
+                  {t('tournament.groups.participantCount', { count: group.participants.length })}
                 </h3>
 
                 {group.participants.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">Keine Teilnehmer</p>
+                  <p className="text-muted-foreground text-sm">{t('tournament.groups.noParticipants')}</p>
                 ) : (
                   <ul className="list-none p-0 m-0 mb-4">
                     {group.participants.map((participant) => (
@@ -314,9 +332,9 @@ export default function TournamentGroups() {
                       onChange={(e) => setSelectedParticipantId(e.target.value)}
                       className="mb-2"
                     >
-                      <option value="">Teilnehmer auswählen...</option>
+                      <option value="">{t('tournament.groups.selectParticipant')}</option>
                       {availableParticipants.length === 0 ? (
-                        <option value="" disabled>Keine verfügbaren Teilnehmer</option>
+                        <option value="" disabled>{t('tournament.groups.noAvailable')}</option>
                       ) : (
                         availableParticipants.map(p => (
                           <option key={p.id} value={p.id}>
@@ -331,14 +349,14 @@ export default function TournamentGroups() {
                         onClick={() => handleAddParticipant(group.id)}
                         disabled={!selectedParticipantId}
                       >
-                        Hinzufügen
+                        {t('common.add')}
                       </Button>
                       <Button
                         variant="secondary"
                         className="flex-1"
                         onClick={() => { setShowAddParticipantForm(null); setSelectedParticipantId(''); }}
                       >
-                        Abbrechen
+                        {t('common.cancel')}
                       </Button>
                     </div>
                   </div>
@@ -348,7 +366,7 @@ export default function TournamentGroups() {
                     className="w-full text-sm"
                     onClick={() => setShowAddParticipantForm(group.id)}
                   >
-                    + Teilnehmer hinzufügen
+                    {t('tournament.groups.addParticipant')}
                   </Button>
                 )}
               </div>

@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def send_access_request_notification(name: str, email: str, sport: str, organisation: Optional[str], source: Optional[str]) -> bool:
     """E-Mail bei neuer Zugangs-Anfrage: von noreply@gsmartsol.ch an goksche23@gmail.com."""
-    if not settings.SMTP_HOST or not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD:
+    if not settings.SMTP_HOST:
         logger.warning("SMTP not configured - cannot send access request notification.")
         return False
     smtp_from = settings.ACCESS_REQUEST_FROM_EMAIL
@@ -45,7 +45,8 @@ Rückmeldung erfolgt persönlich.
         server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
         if settings.SMTP_USE_TLS:
             server.starttls()
-        server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+        if settings.SMTP_USERNAME and settings.SMTP_PASSWORD:
+            server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
         server.sendmail(smtp_from, [smtp_to], msg.as_string())
         server.quit()
         logger.info("Access request notification sent to %s", smtp_to)

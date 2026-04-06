@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { locationService } from '../services/locationService';
 import { Location } from '../types';
@@ -9,6 +10,7 @@ import { Plus, MagnifyingGlass, MapPin, ArrowLeft } from 'phosphor-react';
 export default function Locations() {
   const navigate = useNavigate();
   const { isAuthenticated, canEdit } = useAuth();
+  const { t } = useTranslation();
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,7 +40,7 @@ export default function Locations() {
   );
 
   if (loading) {
-    return <div className="p-8 text-foreground">Wird geladen...</div>;
+    return <div className="p-8 text-foreground">{t('common.loading')}</div>;
   }
 
   return (
@@ -47,17 +49,17 @@ export default function Locations() {
         <div className="flex items-center gap-3">
           <Button variant="secondary" onClick={() => navigate('/settings')}>
             <ArrowLeft size={18} className="mr-2 align-middle" />
-            Zurück
+            {t('common.back')}
           </Button>
           <MapPin size={28} className="text-primary" />
           <h1 className="m-0 text-foreground text-2xl font-semibold">
-            Spielorte / Locations
+            {t('locations.title')}
           </h1>
         </div>
         {canEdit && (
           <Button onClick={() => navigate('/locations/create')}>
             <Plus size={18} className="mr-2 align-middle" />
-            Neuer Spielort
+            {t('locations.newLocation')}
           </Button>
         )}
       </div>
@@ -71,7 +73,7 @@ export default function Locations() {
           <Input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Nach Name suchen..."
+            placeholder={t('common.searchByName')}
             className="pl-9"
           />
         </div>
@@ -80,7 +82,7 @@ export default function Locations() {
       {filteredLocations.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-center text-muted-foreground">
-            Keine Spielorte gefunden.
+            {t('locations.noLocations')}
           </CardContent>
         </Card>
       ) : (
@@ -93,7 +95,7 @@ export default function Locations() {
             >
               <h3 className="m-0 mb-2 text-foreground">{loc.name}</h3>
               <div className="text-muted-foreground text-sm">
-                {loc.spielfelder?.length ?? 0} Spielfelder
+                {t('locations.spielfelderCount', { count: loc.spielfelder?.length ?? 0 })}
               </div>
             </Card>
           ))}

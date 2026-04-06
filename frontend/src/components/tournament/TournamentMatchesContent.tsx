@@ -1,5 +1,6 @@
 // Tournament Matches Content (for Tab)
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { groupService, GroupWithParticipants } from '../../services/groupService';
 import { matchService, GroupMatch, KnockoutMatch } from '../../services/matchService';
@@ -19,6 +20,7 @@ interface TournamentMatchesContentProps {
 }
 
 export default function TournamentMatchesContent({ tournamentId, tournament, view = 'both' }: TournamentMatchesContentProps) {
+  const { t } = useTranslation();
   const { canEdit } = useAuth();
   const [groups, setGroups] = useState<GroupWithParticipants[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
@@ -35,6 +37,11 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
   });
   const [koViewMode, setKoViewMode] = useState<'table' | 'bracket'>('bracket');
   const [decisionMatchesLoading, setDecisionMatchesLoading] = useState(false);
+  const [simMinScore, setSimMinScore] = useState(0);
+  const [simMaxScore, setSimMaxScore] = useState(5);
+  const [simAllowDraws, setSimAllowDraws] = useState(true);
+  const [simOverwrite, setSimOverwrite] = useState(false);
+  const [simLoadingPhase, setSimLoadingPhase] = useState<'group' | 'ko' | null>(null);
   const [manualPairs, setManualPairs] = useState<Array<{ player1_id: number | null; player2_id: number | null }>>([]);
   const [manualError, setManualError] = useState<string | null>(null);
   const [manualSaving, setManualSaving] = useState(false);
@@ -130,7 +137,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
       );
     } catch (err) {
       console.error('Failed to update KO match spielfeld:', err);
-      alert('Fehler beim Speichern des Spielfelds');
+      alert(t('tournament.matchesContent.spielfeldSaveError'));
     }
   };
 
@@ -208,12 +215,16 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
   };
 
   const canEnterKoResult = (match: KnockoutMatch): boolean => {
+    return canEnterKoResultFrom(koMatches, match);
+  };
+
+  const canEnterKoResultFrom = (matches: KnockoutMatch[], match: KnockoutMatch): boolean => {
     if (match.player1_id == null && match.player2_id == null) return false;
     if (match.round === 1) return true;
     if (match.round === 99 || match.round >= 2000) return true;
     if (match.round < 1) return false;
-    const pred1 = koMatches.find((m) => m.round === match.round - 1 && m.match_no === 2 * match.match_no - 1);
-    const pred2 = koMatches.find((m) => m.round === match.round - 1 && m.match_no === 2 * match.match_no);
+    const pred1 = matches.find((m) => m.round === match.round - 1 && m.match_no === 2 * match.match_no - 1);
+    const pred2 = matches.find((m) => m.round === match.round - 1 && m.match_no === 2 * match.match_no);
     if (!pred1 || !pred2) return false;
     const complete = (p: KnockoutMatch) => {
       if (p.player1_id == null && p.player2_id == null) return false;
@@ -221,6 +232,84 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
       return p.score1 != null && p.score2 != null && p.score1 !== p.score2;
     };
     return complete(pred1) && complete(pred2);
+  };
+
+  const getRandomScorePair = (minScore: number, maxScore: number, allowDraws: boolean, forceWinner: boolean) => {
+    let score1 = Math.floor(Math.random() * (maxScore - minScore + 1)) + minScore;
+    let score2 = Math.floor(Math.random() * (maxScore - minScore + 1)) + minScore;
+    if ((!allowDraws || forceWinner) && score1 === score2) {
+      if (score2 < maxScore) score2 += 1;
+      else if (score1 > minScore) score1 -= 1;
+      else score2 = Math.min(maxScore, score2 + 1);
+    }
+    return { score1, score2 };
+  };
+
+  const shouldUseSimulationFallback = (err: any): boolean => {
+    const status = err?.response?.status;
+    const detail = typeof err?.response?.data?.detail === 'string' ? err.response.data.detail : '';
+    const message = typeof err?.message === 'string' ? err.message : '';
+    return status === 404 || detail.includes('Not Found') || message.includes('404') || message.includes('Endpunkt nicht gefunden');
+  };
+
+  const simulateGroupFallback = async () => {
+    if (!selectedGroupId) {
+      throw new Error('Keine Gruppe ausgewählt');
+    }
+    const matches = await matchService.getGroupMatches(tournamentId, selectedGroupId);
+    let updated = 0;
+    let skipped = 0;
+    for (const match of matches) {
+      if (match.player1_id == null || match.player2_id == null) {
+        skipped += 1;
+        continue;
+      }
+      const alreadyScored = match.score1 != null || match.score2 != null;
+      if (alreadyScored && !simOverwrite) {
+        skipped += 1;
+        continue;
+      }
+      const { score1, score2 } = getRandomScorePair(simMinScore, simMaxScore, simAllowDraws, false);
+      await matchService.updateGroupMatch(match.id, { score1, score2 });
+      updated += 1;
+    }
+    await loadGroupMatches();
+    return { updated_matches: updated, skipped_matches: skipped };
+  };
+
+  const simulateKoFallback = async () => {
+    let matches = await matchService.getKnockoutMatches(tournamentId);
+    let updated = 0;
+    let skipped = 0;
+    const mainRounds = Array.from(new Set(matches.filter(m => m.round >= 1 && m.round !== 99).map(m => m.round))).sort((a, b) => a - b);
+    const hasBronze = matches.some(m => m.round === 99);
+    const rounds = hasBronze ? [...mainRounds, 99] : mainRounds;
+
+    for (const roundNo of rounds) {
+      let roundMatches = matches.filter(m => m.round === roundNo).sort((a, b) => a.match_no - b.match_no);
+      for (const match of roundMatches) {
+        if (match.player1_id == null || match.player2_id == null) {
+          skipped += 1;
+          continue;
+        }
+        const alreadyScored = match.score1 != null || match.score2 != null;
+        if (alreadyScored && !simOverwrite) {
+          skipped += 1;
+          continue;
+        }
+        if (!canEnterKoResultFrom(matches, match)) {
+          skipped += 1;
+          continue;
+        }
+        const { score1, score2 } = getRandomScorePair(simMinScore, simMaxScore, simAllowDraws, true);
+        await matchService.updateKnockoutMatch(match.id, { score1, score2 });
+        updated += 1;
+        matches = await matchService.getKnockoutMatches(tournamentId);
+        roundMatches = matches.filter(m => m.round === roundNo).sort((a, b) => a.match_no - b.match_no);
+      }
+    }
+    setKoMatches(matches);
+    return { updated_matches: updated, skipped_matches: skipped };
   };
 
     const handleEdit = (match: GroupMatch | KnockoutMatch) => {
@@ -267,7 +356,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
       setScoreForm({ score1: '', score2: '' });
     } catch (err) {
       console.error('Failed to save match:', err);
-      alert('Fehler beim Speichern des Ergebnisses');
+      alert(t('tournament.matchesContent.resultSaveError'));
     }
   };
 
@@ -292,7 +381,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
 
   const handleDeleteDecisionMatches = async () => {
     if (!selectedGroupId) return;
-    if (!confirm('Alle Entscheidungsspiele dieser Gruppe wirklich löschen?')) {
+    if (!confirm(t('tournament.matchesContent.deleteDecisionConfirm'))) {
       return;
     }
     setDecisionMatchesLoading(true);
@@ -307,7 +396,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
   };
 
   const handleGenerateKOBracket = async () => {
-    if (!confirm('Möchten Sie wirklich das KO-Bracket generieren? Bestehende KO-Spiele werden dabei gelöscht.')) {
+    if (!confirm(t('tournament.matchesContent.generateKoBracket'))) {
       return;
     }
     try {
@@ -317,6 +406,57 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
       setKoMatches(koData);
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Fehler beim Generieren des KO-Brackets');
+    }
+  };
+
+  const handleSimulatePhase = async (phase: 'group' | 'ko') => {
+    if (!canEdit) return;
+    if (simMinScore < 0 || simMaxScore < 0 || simMinScore > simMaxScore) {
+      alert('Ungültiger Ergebnisbereich. Bitte Min/Max prüfen.');
+      return;
+    }
+    setSimLoadingPhase(phase);
+    try {
+      let result = await tournamentService.simulatePhase(tournamentId, {
+        phase,
+        min_score: simMinScore,
+        max_score: simMaxScore,
+        allow_draws: simAllowDraws,
+        overwrite_existing: simOverwrite,
+        group_id: phase === 'group' ? (selectedGroupId ?? undefined) : undefined,
+      });
+      if (!result && phase === 'group') {
+        result = { status: 'ok', phase, ...(await simulateGroupFallback()) };
+      }
+      if (phase === 'group') {
+        await loadGroupMatches();
+      } else {
+        await refreshKoMatches();
+      }
+      alert(
+        `Simulation (${phase === 'group' ? 'Gruppenspiele' : 'KO-Phase'}) abgeschlossen.\n` +
+        `Aktualisiert: ${result.updated_matches}\nÜbersprungen: ${result.skipped_matches}`
+      );
+    } catch (err: any) {
+      try {
+        if (shouldUseSimulationFallback(err)) {
+          const fallbackResult = phase === 'group'
+            ? await simulateGroupFallback()
+            : await simulateKoFallback();
+          alert(
+            `Simulation (${phase === 'group' ? 'Gruppenspiele' : 'KO-Phase'}) abgeschlossen.\n` +
+            `Aktualisiert: ${fallbackResult.updated_matches}\nÜbersprungen: ${fallbackResult.skipped_matches}\n` +
+            `(Fallback ohne Simulations-Endpoint)`
+          );
+          return;
+        }
+      } catch (fallbackErr: any) {
+        alert(fallbackErr?.response?.data?.detail || fallbackErr?.message || 'Simulation fehlgeschlagen');
+        return;
+      }
+      alert(err?.response?.data?.detail || err?.message || 'Simulation fehlgeschlagen');
+    } finally {
+      setSimLoadingPhase(null);
     }
   };
 
@@ -339,7 +479,8 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
     if (participantId) {
       return getParticipantNameById(participantId);
     }
-    if (tournament.ko_distribution === 'predefined_slots' && match.round > 1 && match.round !== 99) {
+    const usesManualSlots = tournament.ko_draw_method === 'manual' || tournament.ko_distribution === 'predefined_slots';
+    if (usesManualSlots && match.round > 1 && match.round !== 99) {
       const sourceMatchNo = (match.match_no - 1) * 2 + slot;
       return `Sieger Spiel ${sourceMatchNo}`;
     }
@@ -422,7 +563,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
     } catch (err: unknown) {
       const msg = err && typeof err === 'object' && 'response' in err && err.response && typeof (err.response as { data?: { detail?: string } }).data?.detail === 'string'
         ? (err.response as { data: { detail: string } }).data.detail
-        : 'Fehler beim Speichern der Paarungen.';
+        : t('tournament.matchesContent.pairingSaveError');
       alert(msg);
     } finally {
       setSavingRound(null);
@@ -445,40 +586,37 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
     ));
     const uniqueIds = new Set(selectedIds);
     if (uniqueIds.size !== selectedIds.length) {
-      setManualError('Teilnehmer dürfen nur einmal zugewiesen werden.');
+      setManualError(t('tournament.matchesContent.duplicateParticipant'));
       return;
     }
 
     const expectedIds = new Set(r1ParticipantIds);
     for (const id of uniqueIds) {
       if (!expectedIds.has(id)) {
-        setManualError('Es wurden ungültige Teilnehmer ausgewählt.');
+        setManualError(t('tournament.matchesContent.invalidParticipant'));
         return;
       }
     }
 
     if (uniqueIds.size !== expectedIds.size) {
-      setManualError(tournament.mode === 'combined'
-        ? 'Bitte alle qualifizierten Teilnehmer genau einmal zuweisen (Rest Bye).'
-        : 'Bitte alle Turnier-Teilnehmer genau einmal zuweisen.');
+      setManualError(t('tournament.matchesContent.assignAll'));
       return;
     }
 
     setManualSaving(true);
     try {
-      const pairsWithMatchNo = manualPairs.map((p, i) => ({ match_no: i + 1, player1_id: p.player1_id, player2_id: p.player2_id }));
-      await tournamentService.setKoRoundPairings(tournamentId, 1, pairsWithMatchNo);
+      await tournamentService.createManualKOBracket(tournamentId, manualPairs);
       const koData = await matchService.getKnockoutMatches(tournamentId);
       setKoMatches(koData);
       setManualError(null);
     } catch (err: any) {
-      setManualError(err.response?.data?.detail || 'Fehler beim Speichern der Paarungen.');
+      setManualError(err.response?.data?.detail || t('tournament.matchesContent.pairingSaveError'));
     } finally {
       setManualSaving(false);
     }
   };
 
-  if (loading) return <div className="text-muted-foreground">Wird geladen...</div>;
+  if (loading) return <div className="text-muted-foreground">{t('common.loading')}</div>;
 
   const selectedGroup = groups.find(g => g.id === selectedGroupId);
   const regularGroupMatches = groupMatches.filter(m => !m.is_decision_match);
@@ -501,14 +639,14 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
               variant={matchType === 'group' ? 'info' : 'secondary'}
               className={cn(matchType === 'group' && 'font-bold')}
             >
-              Gruppenphase
+              {t('tournament.matchesContent.groupPhase')}
             </Button>
             <Button
               onClick={() => setMatchType('ko')}
               variant={matchType === 'ko' ? 'danger' : 'secondary'}
               className={cn(matchType === 'ko' && 'font-bold')}
             >
-              KO-Phase
+              {t('common.mode.koPhase')}
             </Button>
           </div>
         </div>
@@ -519,8 +657,8 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
         <>
           {groups.length === 0 ? (
             <div className="p-8 text-center bg-card rounded-lg border border-border">
-              <p className="text-foreground">Noch keine Gruppen vorhanden.</p>
-              <p className="text-sm text-muted-foreground">Bitte erstellen Sie zuerst Gruppen im Tab "Gruppen".</p>
+              <p className="text-foreground">{t('tournament.matchesContent.noGroups')}</p>
+              <p className="text-sm text-muted-foreground">{t('tournament.matchesContent.createGroupsFirst')}</p>
             </div>
           ) : (
             <>
@@ -543,30 +681,80 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
 
               {selectedGroup && (
                 <>
-                  <h3 className="text-foreground">Gruppe: {selectedGroup.name}</h3>
+                  <h3 className="text-foreground">{t('tournament.matches.groupLabel', { name: selectedGroup.name })}</h3>
                   <div className="mb-4 text-muted-foreground">
-                    {selectedGroup.participants.length} Teilnehmer
+                    {t('tournament.matches.participantCount', { count: selectedGroup.participants.length })}
                   </div>
+                  {canEdit && (
+                    <div className="mb-4 rounded-lg border border-border bg-muted p-3">
+                      <div className="flex flex-wrap items-end gap-3">
+                        <label className="text-sm text-foreground">
+                          Min
+                          <input
+                            type="number"
+                            min={0}
+                            value={simMinScore}
+                            onChange={(e) => setSimMinScore(parseInt(e.target.value || '0', 10))}
+                            className="ml-2 w-20 rounded border border-border bg-background px-2 py-1 text-foreground"
+                          />
+                        </label>
+                        <label className="text-sm text-foreground">
+                          Max
+                          <input
+                            type="number"
+                            min={0}
+                            value={simMaxScore}
+                            onChange={(e) => setSimMaxScore(parseInt(e.target.value || '0', 10))}
+                            className="ml-2 w-20 rounded border border-border bg-background px-2 py-1 text-foreground"
+                          />
+                        </label>
+                        <label className="text-sm text-foreground flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={simAllowDraws}
+                            onChange={(e) => setSimAllowDraws(e.target.checked)}
+                          />
+                          Remis erlauben
+                        </label>
+                        <label className="text-sm text-foreground flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={simOverwrite}
+                            onChange={(e) => setSimOverwrite(e.target.checked)}
+                          />
+                          Bestehende Resultate überschreiben
+                        </label>
+                        <Button
+                          onClick={() => handleSimulatePhase('group')}
+                          variant="warning"
+                          disabled={simLoadingPhase === 'group'}
+                          className="text-sm"
+                        >
+                          {simLoadingPhase === 'group' ? 'Simulation läuft...' : 'Gruppenspiele simulieren'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   {regularGroupMatches.length === 0 ? (
                     <div className="p-8 text-center bg-card rounded-lg border border-border">
-                      <p className="text-foreground">Noch keine Spiele vorhanden.</p>
-                      <p className="text-sm text-muted-foreground">Bitte generieren Sie die Spiele im Tab "Gruppen".</p>
+                      <p className="text-foreground">{t('tournament.matches.noMatches')}</p>
+                      <p className="text-sm text-muted-foreground">{t('tournament.matchesContent.generateMatches')}</p>
                     </div>
                   ) : (
                     <div className="bg-card border border-border rounded-lg overflow-hidden">
                       <table className="w-full border-collapse">
                         <thead>
                           <tr className="bg-primary text-primary-foreground">
-                            <th className="p-3 text-left">Runde</th>
-                            <th className="p-3 text-left">Spiel</th>
+                            <th className="p-3 text-left">{t('common.round')}</th>
+                            <th className="p-3 text-left">{t('common.match')}</th>
                             {tournament.location_id && (
-                              <th className="p-3 text-left">Spielfeld</th>
+                              <th className="p-3 text-left">{t('liveTicker.spielfeld')}</th>
                             )}
-                            <th className="p-3 text-left">Spieler 1</th>
-                            <th className="p-3 text-left">Spieler 2</th>
-                            <th className="p-3 text-center">Ergebnis</th>
-                            <th className="p-3 text-center">Aktion</th>
+                            <th className="p-3 text-left">{t('tournament.matches.player1')}</th>
+                            <th className="p-3 text-left">{t('tournament.matches.player2')}</th>
+                            <th className="p-3 text-center">{t('common.result')}</th>
+                            <th className="p-3 text-center">{t('tournament.matches.action')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -574,8 +762,8 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                             .sort((a, b) => (a.round - b.round) || (a.match_no - b.match_no))
                             .map((match) => (
                             <tr key={match.id} className="border-b border-border bg-muted">
-                              <td className="p-3 text-foreground">Runde {match.round}</td>
-                              <td className="p-3 text-foreground">Spiel {match.match_no}</td>
+                              <td className="p-3 text-foreground">{t('common.round')} {match.round}</td>
+                              <td className="p-3 text-foreground">{t('common.match')} {match.match_no}</td>
                               {tournament.location_id && (
                                 <td className="p-3 text-muted-foreground text-sm">
                                   {match.spielfeld_id ? (spielfeldIdToName[match.spielfeld_id] ?? `#${match.spielfeld_id}`) : '–'}
@@ -635,7 +823,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                                     variant="info"
                                     className="py-1 px-3 text-sm"
                                   >
-                                    Ergebnis
+                                    {t('common.result')}
                                   </Button>
                                 ) : (
                                   <span className="text-muted-foreground">-</span>
@@ -684,15 +872,15 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                           <table className="w-full border-collapse">
                             <thead>
                               <tr className="bg-warning text-warning-foreground">
-                                <th className="p-3 text-left">Runde</th>
-                                <th className="p-3 text-left">Spiel</th>
+                                <th className="p-3 text-left">{t('common.round')}</th>
+                                <th className="p-3 text-left">{t('common.match')}</th>
                                 {tournament.location_id && (
-                                  <th className="p-3 text-left">Spielfeld</th>
+                                  <th className="p-3 text-left">{t('liveTicker.spielfeld')}</th>
                                 )}
-                                <th className="p-3 text-left">Spieler 1</th>
-                                <th className="p-3 text-left">Spieler 2</th>
-                                <th className="p-3 text-center">Ergebnis</th>
-                                <th className="p-3 text-center">Aktion</th>
+                                <th className="p-3 text-left">{t('tournament.matches.player1')}</th>
+                                <th className="p-3 text-left">{t('tournament.matches.player2')}</th>
+                                <th className="p-3 text-center">{t('common.result')}</th>
+                                <th className="p-3 text-center">{t('tournament.matches.action')}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -700,8 +888,8 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                                 .sort((a, b) => (a.round - b.round) || (a.match_no - b.match_no))
                                 .map((match) => (
                                   <tr key={match.id} className="border-b border-border bg-muted">
-                                    <td className="p-3 text-foreground">Runde {match.round}</td>
-                                    <td className="p-3 text-foreground">Spiel {match.match_no}</td>
+                                    <td className="p-3 text-foreground">{t('common.round')} {match.round}</td>
+                                    <td className="p-3 text-foreground">{t('common.match')} {match.match_no}</td>
                                     {tournament.location_id && (
                                       <td className="p-3 text-muted-foreground text-sm">
                                         {match.spielfeld_id ? (spielfeldIdToName[match.spielfeld_id] ?? `#${match.spielfeld_id}`) : '–'}
@@ -761,7 +949,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                                           variant="info"
                                           className="py-1 px-3 text-sm"
                                         >
-                                          Ergebnis
+                                          {t('common.result')}
                                         </Button>
                                       ) : (
                                         <span className="text-muted-foreground">-</span>
@@ -785,6 +973,56 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
       {/* KO Phase Matches */}
       {view !== 'group' && matchType === 'ko' && (
         <>
+          {canEdit && tournament.has_ko_phase && (
+            <div className="mb-4 rounded-lg border border-border bg-muted p-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="text-sm text-foreground">
+                  Min
+                  <input
+                    type="number"
+                    min={0}
+                    value={simMinScore}
+                    onChange={(e) => setSimMinScore(parseInt(e.target.value || '0', 10))}
+                    className="ml-2 w-20 rounded border border-border bg-background px-2 py-1 text-foreground"
+                  />
+                </label>
+                <label className="text-sm text-foreground">
+                  Max
+                  <input
+                    type="number"
+                    min={0}
+                    value={simMaxScore}
+                    onChange={(e) => setSimMaxScore(parseInt(e.target.value || '0', 10))}
+                    className="ml-2 w-20 rounded border border-border bg-background px-2 py-1 text-foreground"
+                  />
+                </label>
+                <label className="text-sm text-foreground flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={simAllowDraws}
+                    onChange={(e) => setSimAllowDraws(e.target.checked)}
+                  />
+                  Remis erlauben
+                </label>
+                <label className="text-sm text-foreground flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={simOverwrite}
+                    onChange={(e) => setSimOverwrite(e.target.checked)}
+                  />
+                  Bestehende Resultate überschreiben
+                </label>
+                <Button
+                  onClick={() => handleSimulatePhase('ko')}
+                  variant="warning"
+                  disabled={simLoadingPhase === 'ko'}
+                  className="text-sm"
+                >
+                  {simLoadingPhase === 'ko' ? 'Simulation läuft...' : 'KO-Phase simulieren'}
+                </Button>
+              </div>
+            </div>
+          )}
           {/* Regenerate Button (always visible if can edit and has KO phase) */}
           {canEdit && tournament.has_ko_phase && !isManualKo && (
             <div className="mb-6 flex justify-end">
@@ -826,10 +1064,16 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                   </p>
                   {qualifiedLoading && tournament.mode === 'combined' ? (
                     <p className="text-muted-foreground">Qualifizierte Teilnehmer werden geladen...</p>
-                  ) : manualPairs.length === 0 ? (
+                  ) : tournament.mode === 'combined' && r1ParticipantIds.length < 2 ? (
+                    <p className="text-warning">
+                      Noch keine qualifizierten Teilnehmer (mindestens 2 nötig). Bitte Gruppenphase vollständig werten und Tabellenstände klären.
+                    </p>
+                  ) : tournament.mode === 'knockout' && loading ? (
                     <p className="text-muted-foreground">Teilnehmer werden geladen...</p>
-                  ) : r1ParticipantIds.length < 2 && tournament.mode === 'combined' ? (
-                    <p className="text-warning">Noch keine qualifizierten Teilnehmer. Bitte Gruppenphase abschließen.</p>
+                  ) : tournament.mode === 'knockout' && r1ParticipantIds.length < 2 ? (
+                    <p className="text-warning">Mindestens zwei Turnier-Teilnehmer sind für die manuelle KO-Runde nötig.</p>
+                  ) : manualPairs.length === 0 ? (
+                    <p className="text-muted-foreground">Paarungen werden vorbereitet...</p>
                   ) : (
                     <div className="flex flex-col gap-3 mt-4">
                       {manualPairs.map((pair, index) => {
@@ -881,7 +1125,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                   )}
                   <div className="mt-4 flex justify-end">
                     <Button onClick={handleSaveManualPairs} variant="success" disabled={manualSaving || manualPairs.length === 0}>
-                      {manualSaving ? 'Speichere...' : 'Runde 1 speichern'}
+                      {manualSaving ? t('common.savingShort') : `${t('common.round')} 1 ${t('common.save').toLowerCase()}`}
                     </Button>
                   </div>
                 </div>
@@ -900,14 +1144,14 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                     variant={koViewMode === 'bracket' ? 'danger' : 'secondary'}
                     className={cn(koViewMode === 'bracket' && 'font-bold')}
                   >
-                    Turnierbaum
+                    {t('tournament.matchesContent.koBracket')}
                   </Button>
                   <Button
                     onClick={() => setKoViewMode('table')}
                     variant={koViewMode === 'table' ? 'danger' : 'secondary'}
                     className={cn(koViewMode === 'table' && 'font-bold')}
                   >
-                    Tabelle
+                    {t('tournament.detail.tabs.tables')}
                   </Button>
                 </div>
               </div>
@@ -935,7 +1179,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                         <div key={roundNum} className="p-4 bg-muted border border-border rounded-lg">
                           <h4 className="mt-0 mb-3 text-foreground">{roundLabel}</h4>
                           <p className="text-sm text-muted-foreground mb-4">
-                            {roundNum === 1 ? (tournament.mode === 'combined' ? 'Qualifizierte Teilnehmer (Auslosung eintragen)' : 'Teilnehmer (Auslosung eintragen)') : roundNum === 99 ? 'Halbfinal-Verlierer' : `Sieger aus Runde ${roundNum - 1}`}
+                            {roundNum === 1 ? (tournament.mode === 'combined' ? t('tournament.matchesContent.qualifiedParticipants') : t('tournament.matchesContent.participantsAssign')) : roundNum === 99 ? 'Halbfinal-Verlierer' : t('tournament.matchesContent.winnerOfRound', { round: roundNum - 1 })}
                           </p>
                           <div className="flex flex-col gap-2">
                             {pairs.map((pair) => {
@@ -977,7 +1221,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                           </div>
                           <div className="mt-4">
                             <Button onClick={() => handleSaveRoundPairings(roundNum)} variant="success" disabled={savingRound !== null}>
-                              {savingRound === roundNum ? 'Speichere...' : `${roundNum === 99 ? 'Bronze' : `Runde ${roundNum}`} speichern`}
+                              {savingRound === roundNum ? t('common.savingShort') : `${roundNum === 99 ? 'Bronze' : `${t('common.round')} ${roundNum}`} ${t('common.save').toLowerCase()}`}
                             </Button>
                           </div>
                         </div>
@@ -994,7 +1238,7 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                   {editingMatch && (
                     <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
                       <div className="bg-card p-8 rounded-lg min-w-[400px] shadow-lg border border-border">
-                        <h3 className="mt-0 mb-6 text-foreground">Ergebnis eintragen</h3>
+                        <h3 className="mt-0 mb-6 text-foreground">{t('tournament.koBracket.enter')}</h3>
                         {(() => {
                           const match = koMatches.find(m => m.id === editingMatch);
                           if (!match) return null;
@@ -1028,13 +1272,13 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                                     onClick={handleCancel}
                                     variant="secondary"
                                   >
-                                    Abbrechen
+                                    {t('common.cancel')}
                                   </Button>
                                   <Button
                                     onClick={() => handleSave(match.id)}
                                     variant="success"
                                   >
-                                    Speichern
+                                    {t('common.save')}
                                   </Button>
                                 </div>
                               )}
@@ -1050,9 +1294,9 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                     participants={participants}
                     onMatchEdit={handleMatchEditClick}
                     editingMatchId={editingMatch}
-                    drawMode={tournament.ko_distribution}
+                    drawMode={tournament.ko_draw_method}
                     tournamentId={tournamentId}
-                    koDistribution={tournament.ko_distribution}
+                    koDistribution={tournament.ko_distribution || tournament.ko_draw_method}
                     onRefresh={refreshKoMatches}
                   />
                 </div>
@@ -1064,15 +1308,15 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="bg-destructive text-foreground">
-                        <th className="p-3 text-left">Runde</th>
-                        <th className="p-3 text-left">Spiel</th>
+                        <th className="p-3 text-left">{t('common.round')}</th>
+                        <th className="p-3 text-left">{t('common.match')}</th>
                         {tournament.location_id && (
-                          <th className="p-3 text-left">Spielfeld</th>
+                          <th className="p-3 text-left">{t('liveTicker.spielfeld')}</th>
                         )}
-                        <th className="p-3 text-left">Spieler 1</th>
-                        <th className="p-3 text-left">Spieler 2</th>
-                        <th className="p-3 text-center">Ergebnis</th>
-                        <th className="p-3 text-center">Aktion</th>
+                        <th className="p-3 text-left">{t('tournament.matches.player1')}</th>
+                        <th className="p-3 text-left">{t('tournament.matches.player2')}</th>
+                        <th className="p-3 text-center">{t('common.result')}</th>
+                        <th className="p-3 text-center">{t('tournament.matches.action')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1080,8 +1324,8 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                         .sort((a, b) => (a.round - b.round) || (a.match_no - b.match_no))
                         .map((match) => (
                         <tr key={match.id} className="border-b border-border bg-muted">
-                          <td className="p-3 text-foreground">Runde {match.round === 99 ? 'Bronze' : match.round}</td>
-                          <td className="p-3 text-foreground">Spiel {match.match_no}</td>
+                          <td className="p-3 text-foreground">{t('common.round')} {match.round === 99 ? 'Bronze' : match.round}</td>
+                          <td className="p-3 text-foreground">{t('common.match')} {match.match_no}</td>
                           {tournament.location_id && (
                             <td className="p-3 text-sm">
                               {canEdit && spielfelderList.length > 0 ? (
@@ -1158,12 +1402,12 @@ export default function TournamentMatchesContent({ tournamentId, tournament, vie
                                     variant="info"
                                     className="py-1 px-3 text-sm"
                                   >
-                                    Ergebnis
+                                    {t('common.result')}
                                   </Button>
                                 )}
                               </div>
                             ) : canEdit && !canEnterKoResult(match) ? (
-                              <span className="text-xs text-muted-foreground">Runde noch nicht ausgelost</span>
+                              <span className="text-xs text-muted-foreground">{t('tournament.matchesContent.drawInProgress')}</span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}

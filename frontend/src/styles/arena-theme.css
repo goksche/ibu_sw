@@ -1,0 +1,168 @@
+/* frontend/src/styles/arena-theme.css
+   Arena Minimal Premium Theme (CSS Variables + Background Layers)
+*/
+
+:root {
+  /* Background */
+  --fs-bg-0: #06080d;
+  --fs-bg-1: #0c1320;
+
+  /* Surfaces */
+  --fs-surface-base: rgba(15, 20, 28, 0.96);
+  --fs-surface-elevated: rgba(22, 28, 38, 0.95);
+  --fs-surface-hero: rgba(255, 255, 255, 0.05);
+
+  /* Strokes */
+  --fs-stroke-soft: rgba(255, 255, 255, 0.08);
+  --fs-stroke-hero: rgba(255, 255, 255, 0.10);
+
+  /* Text */
+  --fs-text-1: #eaf0ff;
+  --fs-text-2: rgba(234, 240, 255, 0.72);
+  --fs-text-3: rgba(234, 240, 255, 0.52);
+
+  /* Accent */
+  --fs-accent-0: #2f5bff;
+  --fs-accent-1: #5a7cff;
+
+  /* Status */
+  --fs-success: #37d67a;
+  --fs-warning: #f3c969;
+  --fs-danger: #ff4d5e;
+
+  /* Shadows / Glows */
+  --fs-shadow-elev: 0 20px 60px rgba(0, 0, 0, 0.55);
+  --fs-glow-blue: rgba(59, 103, 255, 0.22);
+  --fs-glow-warm: rgba(255, 153, 0, 0.08);
+
+  /* Radius / Spacing */
+  --fs-radius-md: 20px;
+  --fs-radius-lg: 28px;
+  --fs-radius-pill: 999px;
+}
+
+.fs-arena-root {
+  color: var(--fs-text-1);
+  min-height: 100vh;
+  background: linear-gradient(180deg, var(--fs-bg-0) 0%, var(--fs-bg-1) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ambient glow layers */
+.fs-arena-root::before {
+  content: "";
+  position: absolute;
+  inset: -200px;
+  background:
+    radial-gradient(900px 700px at 78% 18%, var(--fs-glow-blue) 0%, rgba(59, 103, 255, 0) 60%),
+    radial-gradient(900px 700px at 18% 86%, var(--fs-glow-warm) 0%, rgba(255, 153, 0, 0) 62%);
+  filter: blur(40px);
+  opacity: 1;
+  pointer-events: none;
+}
+
+/* Subtle noise (pure CSS) */
+.fs-arena-root::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 4px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0, rgba(255,255,255,0.04) 1px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 6px);
+  mix-blend-mode: overlay;
+}
+
+.fs-arena-content {
+  position: relative;
+  z-index: 1;
+}
+
+.fs-surface-base {
+  background: var(--fs-surface-base);
+  border: 1px solid var(--fs-stroke-soft);
+  border-radius: var(--fs-radius-md);
+}
+
+.fs-surface-elevated {
+  background: var(--fs-surface-elevated);
+  border: 1px solid var(--fs-stroke-soft);
+  border-radius: var(--fs-radius-md);
+  box-shadow: var(--fs-shadow-elev);
+}
+
+.fs-surface-hero {
+  background: var(--fs-surface-hero);
+  border: 1px solid var(--fs-stroke-hero);
+  border-radius: var(--fs-radius-lg);
+  backdrop-filter: blur(20px);
+  box-shadow: var(--fs-shadow-elev);
+}
+
+.fs-text-2 { color: var(--fs-text-2); }
+.fs-text-3 { color: var(--fs-text-3); }
+
+.fs-pill {
+  border-radius: var(--fs-radius-pill);
+}
+
+.fs-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--fs-radius-pill);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: var(--fs-text-1);
+  background: linear-gradient(90deg, var(--fs-accent-0), var(--fs-accent-1));
+  box-shadow: 0 10px 24px rgba(47, 91, 255, 0.25);
+  transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
+}
+
+.fs-btn-primary:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: 0 14px 34px rgba(47, 91, 255, 0.32);
+}
+
+.fs-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--fs-radius-pill);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: var(--fs-text-1);
+  background: rgba(255,255,255,0.04);
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.fs-btn-ghost:hover {
+  background: rgba(255,255,255,0.06);
+  transform: translateY(-1px);
+}
+
+.fs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--fs-radius-pill);
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: var(--fs-text-2);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.fs-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--fs-danger);
+  box-shadow: 0 0 0 4px rgba(255, 77, 94, 0.12);
+}

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from app.models.match import KnockoutMatch
 from app.models.tournament import Tournament
+from app.services.ko_slots import next_round_slot_for
 import random
 
 BRONZE_ROUND = 99
@@ -105,27 +106,32 @@ def can_enter_ko_result(db: Session, match: KnockoutMatch) -> bool:
     return _match_complete(pred1) and _match_complete(pred2)
 
 
-def _next_round_slot_for(match_no: int) -> tuple[int, int]:
-    """Determine target match and slot for winner
-    
-    Logic:
-    - Match 1 and Match 2 -> both go to Match 1 of next round
-      - Match 1 winner -> slot 2 (bottom)
-      - Match 2 winner -> slot 1 (top)
-    - Match 3 and Match 4 -> both go to Match 2 of next round
-      - Match 3 winner -> slot 2 (bottom)
-      - Match 4 winner -> slot 1 (top)
+def _draw_method_value(tournament: Optional[Tournament]) -> Optional[str]:
+    if not tournament:
+        return None
+    draw_method = getattr(tournament, "ko_draw_method", None)
+    if draw_method is None:
+        return None
+    return getattr(draw_method, "value", None) or draw_method
+
+
+def _uses_random_each_round_strategy(tournament: Optional[Tournament]) -> bool:
     """
-    target = (match_no + 1) // 2
-    slot = 2 if (match_no % 2 == 1) else 1  # Reversed: odd -> bottom, even -> top
-    return target, slot
+    Modern strategy first: ko_draw_method == random_each_round.
+    Legacy fallback remains supported for existing tournaments via ko_distribution.
+    """
+    draw_method = _draw_method_value(tournament)
+    if draw_method == "random_each_round":
+        return True
+    return bool(tournament and tournament.ko_distribution == "random_each_round")
 
 
 def save_ko_result_and_propagate(
     db: Session,
     match_id: int,
     score1: Optional[int],
-    score2: Optional[int]
+    score2: Optional[int],
+    force_propagate: bool = False,
 ) -> None:
     """
     Propagate winner to next round (scores already saved in match)
@@ -143,12 +149,8 @@ def save_ko_result_and_propagate(
     
     # Get tournament draw mode
     tournament = db.query(Tournament).filter(Tournament.id == match.tournament_id).first()
-    draw_mode = tournament.ko_distribution if tournament else None
-
     # Don't propagate in manual draw mode ??? user enters next round pairings manually
-    if tournament and tournament.ko_draw_method is not None:
-        draw_method_val = getattr(tournament.ko_draw_method, 'value', None) or tournament.ko_draw_method
-        if draw_method_val == 'manual':
+    if tournament and _draw_method_value(tournament) == 'manual' and not force_propagate:
             return
 
     # Get winner - handle byes FIRST before checking scores
@@ -209,7 +211,7 @@ def save_ko_result_and_propagate(
     if max_round_result and match.round == max_round_result:
         return
 
-    if draw_mode == "random_each_round":
+    if _uses_random_each_round_strategy(tournament) and not force_propagate:
         # Bei "random_each_round" NICHT automatisch propagieren
         # Die Auslosung wird manuell über den /draw-next-round Endpoint ausgelöst
         return
@@ -229,7 +231,7 @@ def save_ko_result_and_propagate(
             # This is the final, don't propagate
             return
         
-        target_match_no, slot = _next_round_slot_for(match.match_no)
+        target_match_no, slot = next_round_slot_for(match.match_no)
         
         target_match = db.query(KnockoutMatch).filter(
             KnockoutMatch.tournament_id == match.tournament_id,
@@ -249,7 +251,7 @@ def save_ko_result_and_propagate(
     if match.round <= -1001 and match.round > -2000:
         # For double elimination losers bracket, next round is round - 1
         next_round = match.round - 1
-        target_match_no, slot = _next_round_slot_for(match.match_no)
+        target_match_no, slot = next_round_slot_for(match.match_no)
         
         target_match = db.query(KnockoutMatch).filter(
             KnockoutMatch.tournament_id == match.tournament_id,
@@ -287,7 +289,7 @@ def save_ko_result_and_propagate(
     if match.round <= -2001 and match.round > -3000:
         # For triple elimination first losers bracket, next round is round - 1
         next_round = match.round - 1
-        target_match_no, slot = _next_round_slot_for(match.match_no)
+        target_match_no, slot = next_round_slot_for(match.match_no)
         
         target_match = db.query(KnockoutMatch).filter(
             KnockoutMatch.tournament_id == match.tournament_id,
@@ -330,7 +332,7 @@ def save_ko_result_and_propagate(
     if match.round <= -3001 and match.round > -4000:
         # For triple elimination second losers bracket, next round is round - 1
         next_round = match.round - 1
-        target_match_no, slot = _next_round_slot_for(match.match_no)
+        target_match_no, slot = next_round_slot_for(match.match_no)
         
         target_match = db.query(KnockoutMatch).filter(
             KnockoutMatch.tournament_id == match.tournament_id,
@@ -398,7 +400,7 @@ def save_ko_result_and_propagate(
             winner_id = player1_id if total_score1 > total_score2 else player2_id
         
         # Propagate winner to next round (both legs of next round)
-        target_match_no, slot = _next_round_slot_for(match.match_no)
+        target_match_no, slot = next_round_slot_for(match.match_no)
         next_round = match.round + 1
         
         # Find both legs of next round match
@@ -466,9 +468,13 @@ def save_ko_result_and_propagate(
             # For now, we'll let the losers bracket be populated when matches are completed
         
         # For double elimination, also propagate winner to next winners bracket round
-        if match.round >= 1 and match.round < max_winners_round:
+        if (
+            match.round >= 1
+            and max_winners_round is not None
+            and match.round < max_winners_round
+        ):
             next_round = match.round + 1
-            target_match_no, slot = _next_round_slot_for(match.match_no)
+            target_match_no, slot = next_round_slot_for(match.match_no)
             
             target_match = db.query(KnockoutMatch).filter(
                 KnockoutMatch.tournament_id == match.tournament_id,
@@ -521,7 +527,7 @@ def save_ko_result_and_propagate(
             ).scalar()
             if max_winners_round and match.round < max_winners_round:
                 next_round = match.round + 1
-                target_match_no, slot = _next_round_slot_for(match.match_no)
+                target_match_no, slot = next_round_slot_for(match.match_no)
                 
                 target_match = db.query(KnockoutMatch).filter(
                     KnockoutMatch.tournament_id == match.tournament_id,
@@ -543,7 +549,7 @@ def save_ko_result_and_propagate(
     # Only execute if not aggregate_ko, not double_elimination, not triple_elimination
     if match.round > 0 and match.round < 2000:
         next_round = match.round + 1
-        target_match_no, slot = _next_round_slot_for(match.match_no)
+        target_match_no, slot = next_round_slot_for(match.match_no)
         
         target_match = db.query(KnockoutMatch).filter(
             KnockoutMatch.tournament_id == match.tournament_id,
@@ -659,7 +665,7 @@ def _assign_next_round_randomly(db: Session, tournament_id: int, current_round: 
 def draw_next_round_manually(db: Session, tournament_id: int, current_round: int) -> dict:
     """
     Manuelle Auslosung für die nächste Runde durchführen.
-    Wird aufgerufen wenn ko_distribution = 'random_each_round' und User den Button klickt.
+    Wird aufgerufen wenn die Strategie 'random_each_round' aktiv ist und User den Button klickt.
     
     Returns:
         dict mit status, message und ggf. den neuen Paarungen
@@ -671,7 +677,7 @@ def draw_next_round_manually(db: Session, tournament_id: int, current_round: int
         return {"status": "error", "message": "Turnier nicht gefunden"}
     
     # Prüfe ob random_each_round aktiv ist
-    if tournament.ko_distribution != "random_each_round":
+    if not _uses_random_each_round_strategy(tournament):
         return {"status": "error", "message": "Turnier ist nicht auf 'Jede Runde neu auslosen' eingestellt"}
     
     # Finde die höchste Runde (Finale) - ohne Bronze-Match
@@ -797,7 +803,7 @@ def get_draw_status(db: Session, tournament_id: int) -> dict:
         return {"can_draw": False, "reason": "Turnier nicht gefunden"}
     
     # Nur bei random_each_round relevant
-    if tournament.ko_distribution != "random_each_round":
+    if not _uses_random_each_round_strategy(tournament):
         return {"can_draw": False, "reason": "Nicht auf 'Jede Runde neu auslosen' eingestellt"}
     
     # Finde die höchste Runde mit Spielern (aktuelle Runde)
@@ -1026,6 +1032,10 @@ def ensure_bronze_from_semis(db: Session, tournament_id: int) -> bool:
     
     Desktop equivalent: ensure_bronze_from_semis
     """
+    t = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not t or not getattr(t, "ko_third_place_match", False):
+        return False
+
     # Find max round (final)
     from sqlalchemy import func
     max_round = db.query(func.max(KnockoutMatch.round)).filter(

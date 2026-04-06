@@ -1,8 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Protest+Guerrilla&family=Source+Sans+3:wght@400;500;600;700&family=Baskervville&family=Bodoni+Moda:wght@400;500;600;700&family=GFS+Didot&family=Tinos:wght@400;700&display=swap');
+@import './styles/arena-theme.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Protest+Guerrilla&family=Source+Sans+3:wght@400;500;600;700&family=Baskervville&family=Bodoni+Moda:wght@400;500;600;700&family=GFS+Didot&family=Tinos:wght@400;700&display=swap');
 
 /* ============================================================
    LEGACY CSS Variables (used by theme.ts + inline styles)
@@ -374,6 +375,186 @@
 }
 
 /* ============================================================
+   Arena Minimal Premium
+   ============================================================ */
+:root[data-layout="arena"] {
+  --bg-primary: var(--fs-bg-0);
+  --bg-secondary: var(--fs-bg-1);
+  --bg-card: var(--fs-surface-base);
+  --bg-accent: var(--fs-surface-elevated);
+  --text-primary: var(--fs-text-1);
+  --text-secondary: var(--fs-text-2);
+  --text-disabled: var(--fs-text-3);
+  --accent-primary: var(--fs-accent-0);
+  --accent-success: var(--fs-success);
+  --accent-warning: var(--fs-warning);
+  --accent-error: var(--fs-danger);
+  --accent-info: var(--fs-accent-1);
+  --border-standard: var(--fs-stroke-soft);
+  --border-hover: var(--fs-stroke-hero);
+  --border-focus: var(--fs-accent-1);
+  --button-text-primary: var(--fs-text-1);
+  --button-text-success: #03140a;
+  --button-text-info: #041124;
+  --button-text-danger: #21060a;
+  --button-text-warning: #2b1a02;
+  --sidebar-bg: rgba(11, 15, 22, 0.95);
+  --sidebar-active-bg: rgba(47, 91, 255, 0.2);
+  --sidebar-hover-bg: rgba(255, 255, 255, 0.05);
+  --font-family-base: 'Source Sans 3', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+
+  /* shadcn bridge */
+  --background: var(--fs-bg-0);
+  --foreground: var(--fs-text-1);
+  --card: var(--fs-surface-base);
+  --card-foreground: var(--fs-text-1);
+  --popover: var(--fs-surface-elevated);
+  --popover-foreground: var(--fs-text-1);
+  --primary: var(--fs-accent-0);
+  --primary-foreground: var(--fs-text-1);
+  --secondary: rgba(255, 255, 255, 0.06);
+  --secondary-foreground: var(--fs-text-1);
+  --muted: rgba(255, 255, 255, 0.04);
+  --muted-foreground: var(--fs-text-2);
+  --accent: rgba(255, 255, 255, 0.07);
+  --accent-foreground: var(--fs-text-1);
+  --destructive: var(--fs-danger);
+  --destructive-foreground: #ffffff;
+  --border: var(--fs-stroke-soft);
+  --input: var(--fs-stroke-soft);
+  --ring: var(--fs-accent-1);
+  --radius: 1.25rem;
+  --success: var(--fs-success);
+  --success-foreground: #02160a;
+  --warning: var(--fs-warning);
+  --warning-foreground: #2a1d02;
+  --info: var(--fs-accent-1);
+  --info-foreground: #041124;
+}
+
+/* ============================================================
+   Gsmartsol Design 3.0
+   ============================================================ */
+:root[data-layout="gsmartsol"] {
+  --bg-primary: #04050d;
+  --bg-secondary: #080c1a;
+  --bg-card: rgba(8, 12, 26, 0.86);
+  --bg-accent: rgba(0, 212, 255, 0.12);
+  --text-primary: #e8eaf0;
+  --text-secondary: #8f96ad;
+  --text-disabled: #6f7690;
+  --accent-primary: #00d4ff;
+  --accent-success: #15d39a;
+  --accent-warning: #ffb020;
+  --accent-error: #ff5d73;
+  --accent-info: #00d4ff;
+  --border-standard: rgba(0, 212, 255, 0.18);
+  --border-hover: rgba(0, 212, 255, 0.3);
+  --border-focus: rgba(0, 212, 255, 0.5);
+  --button-text-primary: #04050d;
+  --button-text-success: #04050d;
+  --button-text-info: #04050d;
+  --button-text-danger: #ffffff;
+  --button-text-warning: #04050d;
+  --sidebar-bg: rgba(8, 12, 26, 0.92);
+  --sidebar-active-bg: rgba(0, 212, 255, 0.16);
+  --sidebar-hover-bg: rgba(255, 255, 255, 0.06);
+
+  /* shadcn bridge */
+  --background: #04050d;
+  --foreground: #e8eaf0;
+  --card: rgba(8, 12, 26, 0.86);
+  --card-foreground: #e8eaf0;
+  --popover: rgba(8, 12, 26, 0.95);
+  --popover-foreground: #e8eaf0;
+  --primary: #00d4ff;
+  --primary-foreground: #04050d;
+  --secondary: rgba(255, 255, 255, 0.05);
+  --secondary-foreground: #c6d0ec;
+  --muted: rgba(255, 255, 255, 0.04);
+  --muted-foreground: #8f96ad;
+  --accent: rgba(0, 212, 255, 0.12);
+  --accent-foreground: #e8eaf0;
+  --destructive: #ff5d73;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 212, 255, 0.18);
+  --input: rgba(0, 212, 255, 0.18);
+  --ring: rgba(0, 212, 255, 0.5);
+  --success: #15d39a;
+  --success-foreground: #02150f;
+  --warning: #ffb020;
+  --warning-foreground: #251600;
+  --info: #00d4ff;
+  --info-foreground: #04050d;
+}
+
+@keyframes gsmartsol-drift-a {
+  0% { transform: translate3d(-2%, -1%, 0) scale(1); opacity: 0.35; }
+  50% { transform: translate3d(2%, 1%, 0) scale(1.05); opacity: 0.55; }
+  100% { transform: translate3d(-2%, -1%, 0) scale(1); opacity: 0.35; }
+}
+
+@keyframes gsmartsol-drift-b {
+  0% { transform: translate3d(1%, 2%, 0) scale(1.02); opacity: 0.22; }
+  50% { transform: translate3d(-2%, -1%, 0) scale(1.08); opacity: 0.4; }
+  100% { transform: translate3d(1%, 2%, 0) scale(1.02); opacity: 0.22; }
+}
+
+@keyframes gsmartsol-grid-pan {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(48px); }
+}
+
+:root[data-layout="gsmartsol"] body {
+  background: radial-gradient(circle at 50% 45%, #080c1a 0%, #04050d 68%);
+  color: #e8eaf0;
+}
+
+:root[data-layout="gsmartsol"] body::before {
+  content: '';
+  position: fixed;
+  inset: -15%;
+  pointer-events: none;
+  z-index: -2;
+  background:
+    radial-gradient(42% 38% at 78% 20%, rgba(0, 212, 255, 0.18) 0%, rgba(0, 212, 255, 0) 72%),
+    radial-gradient(35% 30% at 22% 84%, rgba(0, 212, 255, 0.12) 0%, rgba(0, 212, 255, 0) 72%);
+  filter: blur(14px);
+  animation: gsmartsol-drift-a 16s ease-in-out infinite;
+}
+
+:root[data-layout="gsmartsol"] body::after {
+  content: '';
+  position: fixed;
+  inset: -10%;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    linear-gradient(rgba(0, 212, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+  background-size: 100% 48px, 64px 100%;
+  mix-blend-mode: screen;
+  opacity: 0.18;
+  animation:
+    gsmartsol-drift-b 18s ease-in-out infinite,
+    gsmartsol-grid-pan 6s linear infinite;
+}
+
+/* Canvas-Hintergrund (Login/App): statische body-Overlays ausblenden, sonst Doppel-Effekt */
+:root[data-layout="gsmartsol"][data-cyber-canvas="1"] body::before,
+:root[data-layout="gsmartsol"][data-cyber-canvas="1"] body::after {
+  opacity: 0;
+  animation: none;
+}
+
+:root[data-layout="arena"][data-cyber-canvas="1"] body::before,
+:root[data-layout="arena"][data-cyber-canvas="1"] body::after {
+  opacity: 0;
+  animation: none;
+}
+
+/* ============================================================
    Tailwind base layer overrides
    ============================================================ */
 @layer base {
@@ -440,4 +621,197 @@ input[type="date"] {
 input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
   opacity: 0.8;
+}
+
+/* ============================================================
+   Arena page-level helpers
+   ============================================================ */
+:root[data-layout="arena"] .page-shell {
+  position: relative;
+}
+
+:root[data-layout="arena"] .page-shell::before {
+  content: '';
+  position: absolute;
+  inset: -120px;
+  pointer-events: none;
+  background:
+    radial-gradient(520px 360px at 86% 8%, rgba(59, 103, 255, 0.15) 0%, rgba(59, 103, 255, 0) 68%),
+    radial-gradient(520px 360px at 12% 94%, rgba(255, 153, 0, 0.08) 0%, rgba(255, 153, 0, 0) 70%);
+  filter: blur(36px);
+  z-index: 0;
+}
+
+:root[data-layout="arena"] .page-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+:root[data-layout="arena"] .arena-surface {
+  background: var(--fs-surface-base);
+  border: 1px solid var(--fs-stroke-soft);
+  border-radius: var(--fs-radius-md);
+}
+
+:root[data-layout="arena"] body {
+  background: linear-gradient(180deg, var(--fs-bg-0) 0%, var(--fs-bg-1) 100%);
+  color: var(--fs-text-1);
+}
+
+:root[data-layout="arena"] body::before {
+  content: '';
+  position: fixed;
+  inset: -220px;
+  pointer-events: none;
+  z-index: -2;
+  background:
+    radial-gradient(900px 700px at 78% 18%, var(--fs-glow-blue) 0%, rgba(59, 103, 255, 0) 60%),
+    radial-gradient(900px 700px at 18% 86%, var(--fs-glow-warm) 0%, rgba(255, 153, 0, 0) 62%);
+  filter: blur(40px);
+}
+
+:root[data-layout="arena"] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.05;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 4px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0, rgba(255,255,255,0.04) 1px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 6px);
+  mix-blend-mode: overlay;
+}
+
+:root[data-layout="arena"] .bg-card {
+  background: var(--fs-surface-base);
+}
+
+:root[data-layout="arena"] .shadow-sm {
+  box-shadow: var(--fs-shadow-elev);
+}
+
+:root[data-layout="arena"] .layout-shell {
+  background: transparent;
+}
+
+:root[data-layout="arena"] .layout-main {
+  max-width: 1520px;
+}
+
+:root[data-layout="arena"] .sidebar-shell {
+  background: rgba(11, 15, 22, 0.92);
+  border-right: 1px solid var(--fs-stroke-soft);
+  backdrop-filter: blur(14px);
+}
+
+:root[data-layout="arena"] .sidebar-brand-mark {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root[data-layout="arena"] .sidebar-nav-item {
+  border-radius: 12px;
+}
+
+:root[data-layout="arena"] .sidebar-nav-item.bg-transparent:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-layout="arena"] .sidebar-nav-item.bg-sidebar-active {
+  background: rgba(47, 91, 255, 0.18);
+  color: var(--fs-text-1);
+  border: 1px solid rgba(90, 124, 255, 0.28);
+}
+
+:root[data-layout="arena"] .topbar-shell {
+  background: rgba(11, 15, 22, 0.82);
+  border-bottom: 1px solid var(--fs-stroke-soft);
+  backdrop-filter: blur(12px);
+}
+
+:root[data-layout="arena"] .topbar-logout-btn {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--fs-radius-pill);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root[data-layout="arena"] .topbar-logout-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-layout="arena"] .rounded-lg {
+  border-radius: var(--fs-radius-md);
+}
+
+:root[data-layout="arena"] .rounded-md {
+  border-radius: 14px;
+}
+
+:root[data-layout="arena"] .rounded-full {
+  border-radius: var(--fs-radius-pill);
+}
+
+:root[data-layout="arena"] .text-muted-foreground {
+  color: var(--fs-text-2);
+}
+
+:root[data-layout="arena"] .border-border {
+  border-color: var(--fs-stroke-soft);
+}
+
+:root[data-layout="arena"] .bg-secondary {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root[data-layout="arena"] .bg-muted {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+:root[data-layout="arena"] input,
+:root[data-layout="arena"] select,
+:root[data-layout="arena"] textarea {
+  border-color: var(--fs-stroke-soft);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--fs-text-1);
+}
+
+:root[data-layout="arena"] input::placeholder,
+:root[data-layout="arena"] textarea::placeholder {
+  color: var(--fs-text-3);
+}
+
+:root[data-layout="arena"] select option {
+  background: #0d1320;
+  color: var(--fs-text-1);
+}
+
+:root[data-layout="arena"] select:focus option:checked {
+  background: var(--fs-accent-0);
+  color: var(--fs-text-1);
+}
+
+:root[data-layout="arena"] button[class*='bg-primary'] {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--fs-radius-pill);
+  background: linear-gradient(90deg, var(--fs-accent-0), var(--fs-accent-1));
+  box-shadow: 0 10px 24px rgba(47, 91, 255, 0.25);
+}
+
+:root[data-layout="arena"] button[class*='bg-primary']:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: 0 14px 34px rgba(47, 91, 255, 0.32);
+}
+
+:root[data-layout="arena"] button[class*='bg-secondary'] {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--fs-radius-pill);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root[data-layout="arena"] button[class*='bg-secondary']:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
 }

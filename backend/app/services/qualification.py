@@ -1,7 +1,7 @@
 # Qualification Service
 # v1.0.0
 
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Set
 from app.models.tournament import KOStartRound
 
 
@@ -125,21 +125,51 @@ def get_qualified_participants_from_groups(
         
         if selection == "best":
             manual_selected_ids = rule.get("manual_selected_ids") if isinstance(rule, dict) else None
-            candidates = _rank_candidates_at_position(
+            ranked_candidates = rank_candidates_with_keys(
                 group_rankings=group_rankings,
                 position=position,
                 group_stats=group_stats,
                 tie_breaking_rules=tie_breaking_rules
             )
-            if manual_selected_ids:
+            candidates = [c["participant_id"] for c in ranked_candidates]
+            if not manual_selected_ids:
+                qualified.extend(candidates[:count])
+                continue
+
+            tie_groups: Dict[Tuple, List[int]] = {}
+            for candidate in ranked_candidates:
+                tie_key = tuple(candidate.get("tie_key", []))
+                tie_groups.setdefault(tie_key, []).append(candidate["participant_id"])
+
+            cutoff_tie_group: List[int] = []
+            top_ids = set(candidates[:count])
+            for _, group_ids in tie_groups.items():
+                if group_ids and any(pid in top_ids for pid in group_ids) and any(pid not in top_ids for pid in group_ids):
+                    cutoff_tie_group = group_ids
+                    break
+
+            manual_req = compute_manual_selection_required(count, candidates, cutoff_tie_group)
+            tie_set = set(cutoff_tie_group)
+
+            if cutoff_tie_group and manual_req > 0:
+                clear_in_top = [pid for pid in candidates[:count] if pid not in tie_set]
+                manual_picks: List[int] = []
+                seen: Set[int] = set()
+                for pid in manual_selected_ids:
+                    if pid in tie_set and pid not in seen and pid in candidates:
+                        manual_picks.append(pid)
+                        seen.add(pid)
+                if len(manual_picks) < manual_req:
+                    fill = [pid for pid in candidates if pid in tie_set and pid not in seen]
+                    manual_picks.extend(fill[: max(0, manual_req - len(manual_picks))])
+                combined = clear_in_top + manual_picks
+                qualified.extend(combined[:count])
+            else:
                 selected = [pid for pid in manual_selected_ids if pid in candidates]
                 if len(selected) < count:
                     fill = [pid for pid in candidates if pid not in selected]
                     selected.extend(fill[: max(0, count - len(selected))])
                 qualified.extend(selected[:count])
-            else:
-                # Take top 'count' candidates
-                qualified.extend(candidates[:count])
     
     return qualified
 
@@ -196,6 +226,22 @@ def rank_candidates_with_keys(
 
     candidates.sort(key=lambda c: c["sort_key"])
     return candidates
+
+
+def compute_manual_selection_required(
+    count: int,
+    ordered_candidate_ids: List[int],
+    cutoff_tie_group: List[int],
+) -> int:
+    """
+    Anzahl der Teilnehmer, die der Nutzer bei einem Grenz-Gleichstand noch auswählen muss.
+    Plätze unter den Top ``count``, die nicht zur cutoff-Tie-Gruppe gehören, gelten als klar vergeben.
+    """
+    if not cutoff_tie_group or count <= 0:
+        return 0
+    tie_set = set(cutoff_tie_group)
+    clear_in_top = [pid for pid in ordered_candidate_ids[:count] if pid not in tie_set]
+    return max(0, count - len(clear_in_top))
 
 
 def _rank_candidates_at_position(

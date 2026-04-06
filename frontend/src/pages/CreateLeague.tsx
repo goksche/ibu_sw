@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -44,12 +45,15 @@ const YEARS = Array.from({ length: 7 }, (_, i) => CURRENT_YEAR - 1 + i);
 
 export default function CreateLeague() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [tournamentSource, setTournamentSource] = useState<'existing' | 'auto'>('existing');
+  const [wizardMode, setWizardMode] = useState(true);
+  const [wizardStep, setWizardStep] = useState(1);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -71,8 +75,7 @@ export default function CreateLeague() {
     autoTournamentCount: 5,
     tournamentNames: ['', '', '', '', ''] as string[],
     groupsCount: 4,
-    groupDistribution: 'random' as 'random' | 'seeded',
-    leagueScoringSystem: 'points' as 'points' | 'difference',
+    leagueScoringSystem: 'points' as 'points' | 'difference' | 'wins',
     tieBreakingRules: ['wins', 'diff', 'goals_for'] as string[],
     leagueVariant: 'classic' as 'classic' | 'double' | 'multiple',
     leagueRoundsMultiplier: 2,
@@ -221,16 +224,17 @@ export default function CreateLeague() {
 
     if (hasGroup) {
       s.groups_count = Number(formData.groupsCount);
-      s.group_distribution = formData.groupDistribution;
+      s.group_distribution = 'random';
       s.league_scoring_system = formData.leagueScoringSystem;
       s.tie_breaking_rules = formData.tieBreakingRules;
       s.league_variant = formData.leagueVariant;
       if (formData.leagueVariant === 'multiple') s.league_rounds_multiplier = Number(formData.leagueRoundsMultiplier);
       s.spielfeld_assignment_mode = formData.spielfeldAssignmentMode;
     }
+    const derivedKoStructure = hasKo ? 'single_elimination' : '';
     if (hasKo) {
       if (formData.koStartRound) s.ko_start_round = formData.koStartRound;
-      if (formData.koStructure) s.ko_structure = formData.koStructure;
+      if (derivedKoStructure) s.ko_structure = derivedKoStructure;
       if (formData.koDrawMethod) s.ko_draw_method = formData.koDrawMethod;
       s.ko_distribution = formData.koDistribution;
       s.ko_third_place_match = formData.koThirdPlaceMatch;
@@ -287,7 +291,7 @@ export default function CreateLeague() {
       }
       navigate(`/leagues/${league.id}`);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Fehler beim Erstellen der Meisterschaft');
+      setError(err?.response?.data?.detail || t('league.create.error'));
     } finally {
       setLoading(false);
     }
@@ -298,32 +302,57 @@ export default function CreateLeague() {
   const showKoSettings = formData.tournamentMode === 'knockout' || formData.tournamentMode === 'combined';
   const showParticipationPoints = formData.tournamentMode === 'combined';
   const showKoRounds = formData.tournamentMode === 'knockout' || formData.tournamentMode === 'combined';
+  const totalWizardSteps = 7;
+
+  const nextStep = () => setWizardStep((prev) => Math.min(totalWizardSteps, prev + 1));
+  const prevStep = () => setWizardStep((prev) => Math.max(1, prev - 1));
 
   const sel = "w-full min-h-10 px-3 py-2 text-base border border-border rounded-md bg-card text-foreground";
-  const tieLabels: Record<string, string> = { wins: 'Siege', diff: 'Differenz', goals_for: 'LF', direct_encounter: 'Direktbegegnung', decision_match: 'Entscheidungsspiel' };
+  const tieLabels: Record<string, string> = { wins: t('common.tieBreaking.wins'), diff: t('common.tieBreaking.diff'), goals_for: t('common.tieBreaking.goalsFor'), direct_encounter: t('common.tieBreaking.directEncounter'), decision_match: t('common.tieBreaking.decisionMatch') };
 
   return (
     <div className="p-8 bg-background min-h-screen text-foreground max-w-[1100px] mx-auto">
       <Button variant="secondary" onClick={() => navigate('/leagues')}>
-        <ArrowLeft size={18} className="mr-2 align-middle" /> Zurück
+        <ArrowLeft size={18} className="mr-2 align-middle" /> {t('common.back')}
       </Button>
-      <h1 className="text-foreground my-6">Neue Meisterschaft anlegen</h1>
+      <h1 className="text-foreground my-6">{t('league.create.title')}</h1>
+      <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-card/60 p-3">
+        <div className="text-sm text-muted-foreground">
+          Geführter Assistent: Schritt {wizardStep} von {totalWizardSteps}
+        </div>
+        <label className="flex items-center gap-2 text-sm cursor-pointer text-foreground">
+          <input
+            type="checkbox"
+            checked={wizardMode}
+            onChange={(e) => setWizardMode(e.target.checked)}
+          />
+          Geführter Assistent
+        </label>
+      </div>
+      {wizardMode && (
+        <div className="mb-6 h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary transition-all duration-300"
+            style={{ width: `${(wizardStep / totalWizardSteps) * 100}%` }}
+          />
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         {/* 1. Basisdaten */}
-        <Card className="mb-6">
-          <CardHeader><CardTitle className="mt-0">1. Basisdaten</CardTitle></CardHeader>
+        <Card className={`mb-6 ${wizardMode && wizardStep !== 1 ? 'hidden' : ''}`}>
+          <CardHeader><CardTitle className="mt-0">{t('league.create.step1')}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <Input name="name" value={formData.name} onChange={handleChange} placeholder="Name der Meisterschaft" required />
-            <Textarea name="description" value={formData.description} onChange={handleChange} placeholder="Beschreibung (optional)" rows={3} />
+            <Input name="name" value={formData.name} onChange={handleChange} placeholder={t('league.create.namePlaceholder')} required />
+            <Textarea name="description" value={formData.description} onChange={handleChange} placeholder={t('league.create.descriptionPlaceholder')} rows={3} />
 
             <div>
-              <label className="block mb-2 font-semibold text-foreground">Zeitraum</label>
+              <label className="block mb-2 font-semibold text-foreground">{t('league.create.period')}</label>
               <div className="flex gap-4 mb-3">
-                {(['year', 'dates', 'season'] as const).map(t => (
-                  <label key={t} className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="seasonType" value={t} checked={formData.seasonType === t} onChange={handleChange} />
-                    <span className="text-sm">{t === 'year' ? 'Jahr' : t === 'dates' ? 'Zeitraum' : 'Saison'}</span>
+                {(['year', 'dates', 'season'] as const).map(st => (
+                  <label key={st} className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="seasonType" value={st} checked={formData.seasonType === st} onChange={handleChange} />
+                    <span className="text-sm">{st === 'year' ? t('league.create.periodYear') : st === 'dates' ? t('league.create.periodDates') : t('league.create.periodSeason')}</span>
                   </label>
                 ))}
               </div>
@@ -354,20 +383,20 @@ export default function CreateLeague() {
         </Card>
 
         {/* 2. Meisterschaftsmodus */}
-        <Card className="mb-6">
-          <CardHeader><CardTitle className="mt-0">2. Meisterschaftsmodus</CardTitle></CardHeader>
+        <Card className={`mb-6 ${wizardMode && wizardStep !== 2 ? 'hidden' : ''}`}>
+          <CardHeader><CardTitle className="mt-0">{t('league.create.step2')}</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
               <div>
-                <label className="block mb-2 font-semibold text-foreground">Modus</label>
+                <label className="block mb-2 font-semibold text-foreground">{t('league.create.modeLabel')}</label>
                 <select name="leagueMode" value={formData.leagueMode} onChange={handleChange} className={sel}>
-                  <option value="liga">Liga (nur Punktewertung)</option>
-                  <option value="masters">Masters (Liga + finales KO-Turnier)</option>
+                  <option value="liga">{t('league.create.modeLiga')}</option>
+                  <option value="masters">{t('league.create.modeMasters')}</option>
                 </select>
               </div>
               {formData.leagueMode === 'masters' && (
                 <div>
-                  <label className="block mb-2 font-semibold text-foreground">Anzahl KO-Qualifikanten</label>
+                  <label className="block mb-2 font-semibold text-foreground">{t('league.create.koQualifiers')}</label>
                   <Input type="number" name="mastersKoCount" value={formData.mastersKoCount} onChange={handleChange} min={2} max={64} />
                 </div>
               )}
@@ -376,46 +405,46 @@ export default function CreateLeague() {
         </Card>
 
         {/* 3. Modus der Turniere */}
-        <Card className="mb-6">
+        <Card className={`mb-6 ${wizardMode && wizardStep !== 3 ? 'hidden' : ''}`}>
           <CardHeader>
-            <CardTitle className="mt-0">3. Modus der Turniere</CardTitle>
-            <CardDescription>Bestimmt den Turnier-Typ und die Punkteverteilung.</CardDescription>
+            <CardTitle className="mt-0">{t('league.create.step3')}</CardTitle>
+            <CardDescription>{t('league.create.step3Desc')}</CardDescription>
           </CardHeader>
           <CardContent>
             <select name="tournamentMode" value={formData.tournamentMode} onChange={(e) => setFormData(prev => ({ ...prev, tournamentMode: e.target.value as TournamentModeForLeague }))} className={sel}>
-              <option value="round_robin">Liga (Round Robin)</option>
-              <option value="knockout">KO-Turnier</option>
-              <option value="combined">Kombiniert (Gruppenphase + KO)</option>
+              <option value="round_robin">{t('common.mode.roundRobinFull')}</option>
+              <option value="knockout">{t('common.mode.knockoutFull')}</option>
+              <option value="combined">{t('common.mode.combinedFull')}</option>
             </select>
             <p className="text-xs text-muted-foreground mt-2">
-              {formData.tournamentMode === 'round_robin' && 'Alle Turniere sind Liga-Turniere. Punkteverteilung nach Rang 1-X.'}
-              {formData.tournamentMode === 'knockout' && 'Alle Turniere sind KO-Turniere. Punkteverteilung für Top 1-4 + KO-Runden.'}
-              {formData.tournamentMode === 'combined' && 'Alle Turniere haben Gruppenphase + KO. Punkteverteilung für Top 1-4 + KO-Runden + Teilnahme-Punkte.'}
+              {formData.tournamentMode === 'round_robin' && t('league.create.tournamentModeRoundRobin')}
+              {formData.tournamentMode === 'knockout' && t('league.create.tournamentModeKnockout')}
+              {formData.tournamentMode === 'combined' && t('league.create.tournamentModeCombined')}
             </p>
           </CardContent>
         </Card>
 
         {/* 4. Punkteverteilung */}
-        <Card className="mb-6">
+        <Card className={`mb-6 ${wizardMode && wizardStep !== 4 ? 'hidden' : ''}`}>
           <CardHeader>
-            <CardTitle className="mt-0">4. Punkteverteilung pro Turnier</CardTitle>
+            <CardTitle className="mt-0">{t('league.create.step4')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex gap-2 mb-4">
               {formData.tournamentMode === 'round_robin' ? (
                 <>
-                  <Button type="button" variant="secondary" size="sm" onClick={() => applyPreset('liga_f1')}>F1-Schema</Button>
-                  <Button type="button" variant="secondary" size="sm" onClick={() => applyPreset('liga_linear')}>Linear (10-1)</Button>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => applyPreset('liga_f1')}>{t('league.create.presetF1')}</Button>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => applyPreset('liga_linear')}>{t('league.create.presetLinear')}</Button>
                 </>
               ) : (
-                <Button type="button" variant="secondary" size="sm" onClick={() => applyPreset('ko_standard')}>Standard KO</Button>
+                <Button type="button" variant="secondary" size="sm" onClick={() => applyPreset('ko_standard')}>{t('league.create.presetStandardKO')}</Button>
               )}
             </div>
 
             {/* Top-Platzierungen */}
             <div className="mb-5">
               <h4 className="text-sm font-semibold mb-2">
-                {formData.tournamentMode === 'round_robin' ? 'Platzierungen (Rang 1-X)' : 'Top-Platzierungen (1.-4.)'}
+                {formData.tournamentMode === 'round_robin' ? t('league.create.placementsRank') : t('league.create.topPlacements')}
               </h4>
               <div className="space-y-2">
                 {formData.topPlacements.map((tp, idx) => (
@@ -424,46 +453,46 @@ export default function CreateLeague() {
                     <Input type="number" value={tp.rank} onChange={(e) => updateTop(idx, 'rank', Number(e.target.value))} min={1} className="w-20" />
                     <span className="text-sm text-muted-foreground">=</span>
                     <Input type="number" value={tp.points} onChange={(e) => updateTop(idx, 'points', Number(e.target.value))} min={0} className="w-24" />
-                    <span className="text-sm text-muted-foreground">Pkt</span>
+                    <span className="text-sm text-muted-foreground">{t('common.table.pts')}</span>
                     <button type="button" onClick={() => removeTop(idx)} className="text-destructive hover:text-destructive/80 p-1"><Trash size={16} /></button>
                   </div>
                 ))}
               </div>
-              <Button type="button" variant="secondary" size="sm" onClick={addTop} className="mt-2">+ Platz</Button>
+              <Button type="button" variant="secondary" size="sm" onClick={addTop} className="mt-2">{t('league.create.addPlace')}</Button>
             </div>
 
             {/* KO-Runden */}
             {showKoRounds && (
               <div className="mb-5">
-                <h4 className="text-sm font-semibold mb-2">KO-Runden Punkte</h4>
-                <p className="text-xs text-muted-foreground mb-3">Punkte für Teilnehmer einer KO-Runde (z.B. Viertelfinale = Rang 5-8).</p>
+                <h4 className="text-sm font-semibold mb-2">{t('league.create.koRoundsPoints')}</h4>
+                <p className="text-xs text-muted-foreground mb-3">{t('league.create.koRoundsHint')}</p>
                 <div className="space-y-3">
                   {formData.koRounds.map((kr, idx) => (
                     <div key={idx} className="flex flex-wrap items-center gap-3 p-3 border border-border rounded-md bg-muted/20">
-                      <Input value={kr.label} onChange={(e) => updateKO(idx, 'label', e.target.value)} placeholder="z.B. Viertelfinale" className="w-40" />
-                      <span className="text-xs text-muted-foreground">Rang</span>
+                      <Input value={kr.label} onChange={(e) => updateKO(idx, 'label', e.target.value)} placeholder={t('league.create.koRoundPlaceholder')} className="w-40" />
+                      <span className="text-xs text-muted-foreground">{t('common.rank')}</span>
                       <Input type="number" value={kr.fromRank} onChange={(e) => updateKO(idx, 'fromRank', Number(e.target.value))} min={1} className="w-16" />
                       <span className="text-xs text-muted-foreground">bis</span>
                       <Input type="number" value={kr.toRank} onChange={(e) => updateKO(idx, 'toRank', Number(e.target.value))} min={1} className="w-16" />
                       <span className="text-xs text-muted-foreground">=</span>
                       <Input type="number" value={kr.points} onChange={(e) => updateKO(idx, 'points', Number(e.target.value))} min={0} className="w-20" />
-                      <span className="text-xs text-muted-foreground">Pkt</span>
+                      <span className="text-xs text-muted-foreground">{t('common.table.pts')}</span>
                       <button type="button" onClick={() => removeKORound(idx)} className="text-destructive hover:text-destructive/80 p-1"><Trash size={16} /></button>
                     </div>
                   ))}
                 </div>
-                <Button type="button" variant="secondary" size="sm" onClick={addKORound} className="mt-2">+ KO-Runde</Button>
+                <Button type="button" variant="secondary" size="sm" onClick={addKORound} className="mt-2">{t('league.create.addKoRound')}</Button>
               </div>
             )}
 
             {/* Teilnahme-Punkte */}
             {showParticipationPoints && (
               <div>
-                <h4 className="text-sm font-semibold mb-2">Teilnahme-Punkte</h4>
-                <p className="text-xs text-muted-foreground mb-2">Punkte für Teilnehmer, die in der Gruppenphase ausscheiden.</p>
+                <h4 className="text-sm font-semibold mb-2">{t('league.create.participationPoints')}</h4>
+                <p className="text-xs text-muted-foreground mb-2">{t('league.create.participationPointsHint')}</p>
                 <div className="flex items-center gap-3">
                   <Input type="number" value={formData.participationPoints} onChange={(e) => setFormData(prev => ({ ...prev, participationPoints: Number(e.target.value) }))} min={0} className="w-24" />
-                  <span className="text-sm text-muted-foreground">Punkte</span>
+                  <span className="text-sm text-muted-foreground">{t('common.points')}</span>
                 </div>
               </div>
             )}
@@ -471,29 +500,29 @@ export default function CreateLeague() {
         </Card>
 
         {/* 5. Turniere */}
-        <Card className="mb-6">
-          <CardHeader><CardTitle className="mt-0">5. Turniere</CardTitle></CardHeader>
+        <Card className={`mb-6 ${wizardMode && wizardStep !== 5 ? 'hidden' : ''}`}>
+          <CardHeader><CardTitle className="mt-0">{t('league.create.step5')}</CardTitle></CardHeader>
           <CardContent>
             <div className="flex gap-4 mb-4">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" checked={tournamentSource === 'existing'} onChange={() => setTournamentSource('existing')} />
-                <span className="text-sm font-medium">Bestehende Turniere wählen</span>
+                <span className="text-sm font-medium">{t('league.create.existingTournaments')}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" checked={tournamentSource === 'auto'} onChange={() => setTournamentSource('auto')} />
-                <span className="text-sm font-medium">Turniere automatisch generieren</span>
+                <span className="text-sm font-medium">{t('league.create.autoGenerate')}</span>
               </label>
             </div>
 
             {tournamentSource === 'existing' ? (
               filteredTournaments.length === 0 ? (
-                <span className="text-muted-foreground">Keine passenden Turniere ({formData.tournamentMode === 'round_robin' ? 'Liga' : formData.tournamentMode === 'knockout' ? 'KO' : 'Kombi'}) vorhanden.</span>
+                <span className="text-muted-foreground">{t('league.create.noMatchingTournaments', { mode: formData.tournamentMode === 'round_robin' ? t('common.mode.roundRobin') : formData.tournamentMode === 'knockout' ? t('common.mode.knockout') : t('common.mode.combi') })}</span>
               ) : (
                 <div className="max-h-60 overflow-y-auto">
-                  {filteredTournaments.map(t => (
-                    <label key={t.id} className="flex items-center gap-2 mb-2">
-                      <input type="checkbox" checked={formData.tournamentIds.includes(t.id)} onChange={() => toggleId(t.id, 'tournamentIds')} />
-                      {t.name} <span className="text-xs text-muted-foreground ml-1">({t.status})</span>
+                  {filteredTournaments.map(tr => (
+                    <label key={tr.id} className="flex items-center gap-2 mb-2">
+                      <input type="checkbox" checked={formData.tournamentIds.includes(tr.id)} onChange={() => toggleId(tr.id, 'tournamentIds')} />
+                      {tr.name} <span className="text-xs text-muted-foreground ml-1">({tr.status})</span>
                     </label>
                   ))}
                 </div>
@@ -502,12 +531,12 @@ export default function CreateLeague() {
               <div className="space-y-6">
                 {/* Anzahl + Namen */}
                 <div>
-                  <label className="block mb-2 font-semibold text-foreground">Anzahl Turniere</label>
+                  <label className="block mb-2 font-semibold text-foreground">{t('league.create.tournamentCount')}</label>
                   <Input type="number" name="autoTournamentCount" value={formData.autoTournamentCount} onChange={(e) => setFormData(prev => ({ ...prev, autoTournamentCount: Number(e.target.value) }))} min={1} max={20} className="w-32" />
                 </div>
                 <div>
-                  <label className="block mb-2 font-semibold text-foreground">Turnier-Namen</label>
-                  <p className="text-xs text-muted-foreground mb-2">Leer lassen = automatischer Name "{formData.name} - Turnier X"</p>
+                  <label className="block mb-2 font-semibold text-foreground">{t('league.create.tournamentNames')}</label>
+                  <p className="text-xs text-muted-foreground mb-2">{t('league.create.tournamentNamesHint', { name: formData.name })}</p>
                   <div className="space-y-2">
                     {formData.tournamentNames.map((tn, idx) => (
                       <div key={idx} className="flex items-center gap-2">
@@ -518,7 +547,7 @@ export default function CreateLeague() {
                             updated[idx] = e.target.value;
                             return { ...prev, tournamentNames: updated };
                           });
-                        }} placeholder={`${formData.name || 'Meisterschaft'} – Turnier ${idx + 1}`} />
+                        }} placeholder={t('league.create.tournamentNamePlaceholder', { name: formData.name || 'Meisterschaft', index: idx + 1 })} />
                       </div>
                     ))}
                   </div>
@@ -526,9 +555,9 @@ export default function CreateLeague() {
 
                 {/* Spielort */}
                 <div>
-                  <label className="block mb-2 font-semibold text-foreground">Spielort (optional)</label>
+                  <label className="block mb-2 font-semibold text-foreground">{t('league.create.locationOptional')}</label>
                   <select value={formData.locationId ?? ''} onChange={(e) => setFormData(prev => ({ ...prev, locationId: e.target.value ? Number(e.target.value) : null }))} className={sel}>
-                    <option value="">— Kein Spielort —</option>
+                    <option value="">{t('common.noLocation')}</option>
                     {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
                   </select>
                 </div>
@@ -536,49 +565,50 @@ export default function CreateLeague() {
                 {/* Gruppenphase-Settings */}
                 {showGroupSettings && (
                   <div className="p-4 border border-border rounded-lg">
-                    <h4 className="text-sm font-semibold mb-3">Gruppenphase-Einstellungen</h4>
+                    <h4 className="text-sm font-semibold mb-3">{t('league.create.groupPhaseSettings')}</h4>
                     <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
                       <div>
-                        <label className="block mb-1 text-sm font-medium">Anzahl Gruppen</label>
+                        <label className="block mb-1 text-sm font-medium">{t('league.create.groupsCount')}</label>
                         <Input type="number" value={formData.groupsCount} onChange={(e) => setFormData(prev => ({ ...prev, groupsCount: Number(e.target.value) }))} min={1} />
                       </div>
                       <div>
-                        <label className="block mb-1 text-sm font-medium">Verteilung</label>
-                        <select value={formData.groupDistribution} onChange={(e) => setFormData(prev => ({ ...prev, groupDistribution: e.target.value as any }))} className={sel}>
-                          <option value="random">Zufällig</option>
-                          <option value="seeded">Gesetzt</option>
-                        </select>
+                        <label className="block mb-1 text-sm font-medium">{t('league.create.distribution')}</label>
+                        <p className="m-0 text-sm text-muted-foreground leading-relaxed">
+                          {t('common.groupDistribution.randomLabel')} — gesetzte Spieler je Turnier unter{' '}
+                          <strong>Turnier → Gruppen</strong>, nicht hier.
+                        </p>
                       </div>
                       <div>
-                        <label className="block mb-1 text-sm font-medium">Wertungssystem</label>
+                        <label className="block mb-1 text-sm font-medium">{t('league.create.scoringSystem')}</label>
                         <select value={formData.leagueScoringSystem} onChange={(e) => setFormData(prev => ({ ...prev, leagueScoringSystem: e.target.value as any }))} className={sel}>
-                          <option value="points">Punkte (3/1/0)</option>
-                          <option value="difference">Differenz</option>
+                          <option value="points">{t('common.scoring.points310')}</option>
+                          <option value="difference">{t('common.scoring.difference')}</option>
+                          <option value="wins">{t('common.scoring.wins')}</option>
                         </select>
                       </div>
                       {formData.tournamentMode === 'round_robin' && (
                         <div>
-                          <label className="block mb-1 text-sm font-medium">Liga-Variante</label>
+                          <label className="block mb-1 text-sm font-medium">{t('tournament.create.leagueVariant')}</label>
                           <select value={formData.leagueVariant} onChange={(e) => setFormData(prev => ({ ...prev, leagueVariant: e.target.value as any }))} className={sel}>
-                            <option value="classic">Klassisch</option>
-                            <option value="double">Doppelt</option>
-                            <option value="multiple">Mehrfach</option>
+                            <option value="classic">{t('common.leagueVariant.classicShort')}</option>
+                            <option value="double">{t('common.leagueVariant.doubleShort')}</option>
+                            <option value="multiple">{t('common.leagueVariant.multipleShort')}</option>
                           </select>
                         </div>
                       )}
                     </div>
                     {formData.locationId && (
                       <div className="mt-3">
-                        <label className="block mb-1 text-sm font-medium">Spielfeld-Zuweisung</label>
+                        <label className="block mb-1 text-sm font-medium">{t('league.create.spielfeldAssignment')}</label>
                         <select value={formData.spielfeldAssignmentMode} onChange={(e) => setFormData(prev => ({ ...prev, spielfeldAssignmentMode: e.target.value }))} className={sel}>
-                          <option value="random">Fair (rundenbasiert)</option>
-                          <option value="group_fixed">Fix pro Gruppe</option>
-                          <option value="group_random">Zufällig pro Gruppe</option>
+                          <option value="random">{t('common.spielfeldAssignment.fairShort')}</option>
+                          <option value="group_fixed">{t('common.spielfeldAssignment.fixedShort')}</option>
+                          <option value="group_random">{t('common.spielfeldAssignment.randomShort')}</option>
                         </select>
                       </div>
                     )}
                     <div className="mt-3">
-                      <label className="block mb-1 text-sm font-medium">Gleichstandsregeln</label>
+                      <label className="block mb-1 text-sm font-medium">{t('league.create.tieBreakingRules')}</label>
                       <div className="flex flex-wrap gap-2">
                         {Object.entries(tieLabels).map(([key, label]) => {
                           const checked = formData.tieBreakingRules.includes(key);
@@ -600,48 +630,47 @@ export default function CreateLeague() {
                 {/* KO-Phase-Settings */}
                 {showKoSettings && (
                   <div className="p-4 border border-border rounded-lg">
-                    <h4 className="text-sm font-semibold mb-3">KO-Phase-Einstellungen</h4>
+                    <h4 className="text-sm font-semibold mb-3">{t('league.create.koPhaseSettings')}</h4>
                     <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
                       {formData.tournamentMode === 'combined' && (
                         <div>
-                          <label className="block mb-1 text-sm font-medium">KO-Start-Runde</label>
+                          <label className="block mb-1 text-sm font-medium">{t('league.create.koStartRound')}</label>
                           <select value={formData.koStartRound} onChange={(e) => setFormData(prev => ({ ...prev, koStartRound: e.target.value }))} className={sel}>
-                            <option value="">-- Wählen --</option>
-                            <option value="round_of_32">Runde der 32</option>
-                            <option value="round_of_16">Achtelfinale (16)</option>
-                            <option value="quarterfinal">Viertelfinale (8)</option>
-                            <option value="semifinal">Halbfinale (4)</option>
-                            <option value="final">Finale (2)</option>
+                            <option value="">{t('league.create.koSelectLabel')}</option>
+                            <option value="round_of_32">{t('tournament.create.koStartRoundOptions.roundOf32')}</option>
+                            <option value="round_of_16">{t('tournament.create.koStartRoundOptions.roundOf16')}</option>
+                            <option value="quarterfinal">{t('tournament.create.koStartRoundOptions.quarterfinal')}</option>
+                            <option value="semifinal">{t('tournament.create.koStartRoundOptions.semifinal')}</option>
+                            <option value="final">{t('tournament.create.koStartRoundOptions.final')}</option>
                           </select>
                         </div>
                       )}
                       <div>
-                        <label className="block mb-1 text-sm font-medium">KO-Struktur</label>
-                        <select value={formData.koStructure} onChange={(e) => setFormData(prev => ({ ...prev, koStructure: e.target.value }))} className={sel}>
-                          <option value="">-- Wählen --</option>
-                          <option value="single_elimination">Einfach-KO</option>
-                          <option value="single_elimination_with_third">Einfach-KO + Spiel um Platz 3</option>
-                          <option value="consolation_bracket">Trostturnier</option>
-                          <option value="double_elimination">Doppel-KO</option>
-                        </select>
+                        <label className="block mb-1 text-sm font-medium">{t('league.create.koStructure')}</label>
+                        <div className="min-h-10 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground">
+                          {t('tournament.ko.structure.singleEliminationShort')}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground italic">
+                          {t('tournament.create.koStructureDerivedHint')}
+                        </p>
                       </div>
                       <div>
-                        <label className="block mb-1 text-sm font-medium">Auslosungsmethode</label>
+                        <label className="block mb-1 text-sm font-medium">{t('league.create.drawMethod')}</label>
                         <select value={formData.koDrawMethod} onChange={(e) => setFormData(prev => ({ ...prev, koDrawMethod: e.target.value }))} className={sel}>
-                          <option value="">-- Wählen --</option>
+                          <option value="">{t('league.create.koSelectLabel')}</option>
                           {formData.tournamentMode === 'knockout' ? (
                             <>
-                              <option value="full_random">Vollzufällig</option>
-                              <option value="pot_system">Topf-System</option>
-                              <option value="manual">Manuell</option>
+                              <option value="full_random">{t('tournament.ko.draw.fullRandomShort')}</option>
+                              <option value="pot_system">{t('tournament.ko.draw.potSystemShort')}</option>
+                              <option value="manual">{t('tournament.ko.draw.manualShort')}</option>
                             </>
                           ) : (
                             <>
-                              <option value="fixed_cross">Feste Kreuzpaarung</option>
-                              <option value="same_position_cross">Platzgleiches Kreuzen</option>
-                              <option value="overall_seeding">Gesamt-Seeding</option>
-                              <option value="full_random">Vollzufällig</option>
-                              <option value="manual">Manuell</option>
+                              <option value="fixed_cross">{t('tournament.ko.draw.fixedCross')}</option>
+                              <option value="same_position_cross">{t('tournament.ko.draw.samePositionCross')}</option>
+                              <option value="overall_seeding">{t('tournament.ko.draw.overallSeedingShort')}</option>
+                              <option value="full_random">{t('tournament.ko.draw.fullRandomShort')}</option>
+                              <option value="manual">{t('tournament.ko.draw.manualShort')}</option>
                             </>
                           )}
                         </select>
@@ -650,17 +679,17 @@ export default function CreateLeague() {
                     <div className="flex flex-wrap gap-4 mt-3">
                       <label className="flex items-center gap-2 text-sm cursor-pointer">
                         <input type="checkbox" checked={formData.koThirdPlaceMatch} onChange={(e) => setFormData(prev => ({ ...prev, koThirdPlaceMatch: e.target.checked }))} />
-                        Spiel um Platz 3
+                        {t('tournament.ko.thirdPlaceMatch')}
                       </label>
                       {showGroupSettings && (
                         <>
                           <label className="flex items-center gap-2 text-sm cursor-pointer">
                             <input type="checkbox" checked={formData.koBlockSameGroup} onChange={(e) => setFormData(prev => ({ ...prev, koBlockSameGroup: e.target.checked }))} />
-                            Keine Paarung gleiche Gruppe
+                            {t('tournament.ko.noSameGroup')}
                           </label>
                           <label className="flex items-center gap-2 text-sm cursor-pointer">
                             <input type="checkbox" checked={formData.koBlockSamePosition} onChange={(e) => setFormData(prev => ({ ...prev, koBlockSamePosition: e.target.checked }))} />
-                            Keine gleiche Platzierung
+                            {t('tournament.ko.noSamePosition')}
                           </label>
                         </>
                       )}
@@ -673,16 +702,16 @@ export default function CreateLeague() {
         </Card>
 
         {/* 6. Teilnehmer */}
-        <Card className="mb-6">
-          <CardHeader><CardTitle className="mt-0">6. Teilnehmer</CardTitle></CardHeader>
+        <Card className={`mb-6 ${wizardMode && wizardStep !== 6 ? 'hidden' : ''}`}>
+          <CardHeader><CardTitle className="mt-0">{t('league.create.step6')}</CardTitle></CardHeader>
           <CardContent>
             {participants.length === 0 ? (
-              <span className="text-muted-foreground">Keine Teilnehmer vorhanden.</span>
+              <span className="text-muted-foreground">{t('league.create.noParticipants')}</span>
             ) : (
               <>
                 <div className="flex gap-2 mb-3">
-                  <Button type="button" variant="secondary" size="sm" onClick={() => setFormData(prev => ({ ...prev, participantIds: participants.map(p => p.id) }))}>Alle auswählen</Button>
-                  <Button type="button" variant="secondary" size="sm" onClick={() => setFormData(prev => ({ ...prev, participantIds: [] }))}>Alle abwählen</Button>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setFormData(prev => ({ ...prev, participantIds: participants.map(p => p.id) }))}>{t('league.create.selectAll')}</Button>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setFormData(prev => ({ ...prev, participantIds: [] }))}>{t('league.create.deselectAll')}</Button>
                 </div>
                 <div className="max-h-72 overflow-y-auto">
                   {participants.map(p => (
@@ -692,15 +721,43 @@ export default function CreateLeague() {
                     </label>
                   ))}
                 </div>
-                <div className="mt-2 text-sm text-muted-foreground">{formData.participantIds.length} von {participants.length} ausgewählt</div>
+                <div className="mt-2 text-sm text-muted-foreground">{t('league.create.selectedCount', { selected: formData.participantIds.length, total: participants.length })}</div>
               </>
             )}
           </CardContent>
         </Card>
 
+        <Card className={`mb-6 ${wizardMode && wizardStep !== 7 ? 'hidden' : ''}`}>
+          <CardHeader>
+            <CardTitle className="mt-0">Zusammenfassung</CardTitle>
+            <CardDescription>Prüfe die wichtigsten Angaben und erstelle danach die Meisterschaft.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div><span className="text-muted-foreground">Name:</span> <span className="text-foreground">{formData.name || '—'}</span></div>
+            <div><span className="text-muted-foreground">Modus:</span> <span className="text-foreground">{formData.leagueMode}</span></div>
+            <div><span className="text-muted-foreground">Turniermodus:</span> <span className="text-foreground">{formData.tournamentMode}</span></div>
+            <div><span className="text-muted-foreground">Teilnehmer:</span> <span className="text-foreground">{formData.participantIds.length}</span></div>
+            <div><span className="text-muted-foreground">Turnierquelle:</span> <span className="text-foreground">{tournamentSource === 'existing' ? 'Bestehende Turniere' : 'Automatisch erzeugen'}</span></div>
+          </CardContent>
+        </Card>
+
         {error && <div className="text-destructive mt-4">{error}</div>}
-        <div className="mt-6">
-          <Button type="submit" disabled={loading}>{loading ? 'Speichern...' : 'Meisterschaft erstellen'}</Button>
+        <div className="mt-6 flex items-center gap-3">
+          {wizardMode && wizardStep > 1 && (
+            <Button type="button" variant="secondary" onClick={prevStep}>
+              Zurück
+            </Button>
+          )}
+          {wizardMode && wizardStep < totalWizardSteps && (
+            <Button type="button" variant="primary" onClick={nextStep}>
+              Weiter
+            </Button>
+          )}
+          {(!wizardMode || wizardStep === totalWizardSteps) && (
+            <Button type="submit" disabled={loading}>
+              {loading ? t('league.create.submitting') : t('league.create.submit')}
+            </Button>
+          )}
         </div>
       </form>
     </div>

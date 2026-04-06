@@ -8,7 +8,7 @@ import time
 
 from app.core.config import settings
 from app.core.database import init_db, SessionLocal
-from app.api.v1 import auth, tournaments, participants, groups, matches, tables, info, leagues, locations, access_requests, settings as settings_router, logs as logs_router
+from app.api.v1 import auth, tournaments, participants, groups, matches, tables, info, leagues, locations, access_requests, settings as settings_router, logs as logs_router, registration, profile, sharing, statistics, comments, ws_comments
 from app.api.v1.platform import dashboard, feedback
 from app.api.v1.platform.admin import users, apps, permissions, deployment, logs as admin_logs
 from app.models.logs import ApiRequestLog, AdminActionLog
@@ -74,7 +74,7 @@ async def request_logging_middleware(request: Request, call_next):
                 )
                 db.add(api_log)
 
-                if role == "admin" and request.method not in ("GET", "HEAD", "OPTIONS"):
+                if role in ("admin", "power_admin") and request.method not in ("GET", "HEAD", "OPTIONS"):
                     admin_log = AdminActionLog(
                         user_id=user_id,
                         method=request.method,
@@ -96,6 +96,13 @@ async def request_logging_middleware(request: Request, call_next):
                 db.close()
     return response
 
+# Serve uploaded avatars (local fallback when S3 is not configured)
+from fastapi.staticfiles import StaticFiles
+import os
+_upload_dir = os.environ.get("UPLOAD_DIR", "/app/uploads")
+os.makedirs(os.path.join(_upload_dir, "avatars"), exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=_upload_dir), name="uploads")
+
 # Include API Routers
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(tournaments.router, prefix="/api/v1")
@@ -109,6 +116,12 @@ app.include_router(info.router, prefix="/api/v1")
 app.include_router(access_requests.router, prefix="/api/v1")
 app.include_router(settings_router.router, prefix="/api/v1")
 app.include_router(logs_router.router, prefix="/api/v1")
+app.include_router(registration.router, prefix="/api/v1")
+app.include_router(profile.router, prefix="/api/v1")
+app.include_router(sharing.router, prefix="/api/v1")
+app.include_router(statistics.router, prefix="/api/v1")
+app.include_router(comments.router, prefix="/api/v1")
+app.include_router(ws_comments.router)
 
 # Platform Routers
 app.include_router(dashboard.router, prefix="/api/v1")

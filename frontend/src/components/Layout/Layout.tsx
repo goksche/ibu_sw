@@ -3,6 +3,8 @@ import { ReactNode, useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import Footer from '../Footer';
+import AnimatedCyberBackdrop from '../AnimatedCyberBackdrop';
+import { useDataLayout } from '@/hooks/useDataLayout';
 import { cn } from '@/lib/utils';
 
 const SIDEBAR_STORAGE_KEY = 'sidebar-collapsed';
@@ -12,6 +14,9 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
+  const dataLayout = useDataLayout();
+  const showCyberBackdrop = dataLayout !== 'standard';
+
   const [collapsed, setCollapsed] = useState(() => {
     try {
       const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
@@ -45,19 +50,34 @@ export default function Layout({ children }: LayoutProps) {
     });
   };
 
+  useEffect(() => {
+    if (showCyberBackdrop) {
+      document.documentElement.setAttribute('data-cyber-canvas', '1');
+    } else {
+      document.documentElement.removeAttribute('data-cyber-canvas');
+    }
+    return () => document.documentElement.removeAttribute('data-cyber-canvas');
+  }, [showCyberBackdrop]);
+
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    /* Kein overflow-y im Layout: lange Listen (Teilnehmer) per normalem Fenster-Scroll — eine Scroll-Spalte, volle Liste sichtbar */
+    <div
+      className={cn(
+        'layout-shell relative min-h-screen text-foreground flex flex-col',
+        showCyberBackdrop ? 'bg-transparent' : 'bg-background'
+      )}
+    >
+      {showCyberBackdrop && <AnimatedCyberBackdrop />}
       <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
       <TopBar sidebarCollapsed={collapsed} />
 
       <div
         className={cn(
-          'flex-1 flex flex-col transition-[margin-left] duration-300 ease-in-out',
+          'relative z-[5] flex flex-1 flex-col transition-[margin-left] duration-300 ease-in-out',
           collapsed ? 'ml-[var(--sidebar-collapsed-width)]' : 'ml-[var(--sidebar-width)]'
         )}
-        style={{ minHeight: 'calc(100vh - var(--topbar-height))' }}
       >
-        <main className="flex-1 p-6 max-w-[1400px] w-full mx-auto">
+        <main className="layout-main w-full max-w-[1400px] mx-auto p-6">
           {children}
         </main>
         <Footer />

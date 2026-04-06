@@ -7,6 +7,7 @@ from datetime import datetime, date
 import enum
 from typing import List, Dict, Any
 from app.core.database import Base
+from app.core.mode_matrix import infer_mode_variant, DRAW_METHOD_TO_PAIRING
 
 
 class TournamentMode(str, enum.Enum):
@@ -47,6 +48,7 @@ class KODrawMethod(str, enum.Enum):
     FULL_RANDOM = "full_random"  # Vollzufällige Auslosung mit Sperrregeln
     BONUS_DRAW_FOR_WINNERS = "bonus_draw_for_winners"  # Bonus-Auslosung für Gruppensieger
     PREDEFINED_BRACKET = "predefined_bracket"  # Vorgegebener Turnierbaum
+    RANDOM_EACH_ROUND = "random_each_round"  # Neue Runde wird jeweils separat ausgelost
     MANUAL = "manual"  # Manuelle Paarungen
 
 
@@ -54,6 +56,7 @@ class LeagueScoringSystem(str, enum.Enum):
     """League Scoring System Enum"""
     POINTS = "points"  # Punkte
     DIFFERENCE = "difference"  # Differenz
+    WINS = "wins"  # Siege
 
 
 class LeagueVariant(str, enum.Enum):
@@ -113,7 +116,12 @@ class Tournament(Base):
     
     # League Scoring Settings
     league_scoring_system = Column(Enum(LeagueScoringSystem), nullable=True)  # Liga-Wertungssystem
+    league_points_win = Column(Integer, default=3, nullable=False)  # Manuelle Siegpunkte
+    league_points_draw = Column(Integer, default=1, nullable=False)  # Manuelle Unentschiedenpunkte
+    league_points_loss = Column(Integer, default=0, nullable=False)  # Manuelle Niederlagenpunkte
     tie_breaking_rules = Column(JSON, nullable=True)  # Gleichstandsregeln als JSON Array
+    head_referee = Column(String(120), nullable=True)  # Schiedsrichter
+    scorekeeper = Column(String(120), nullable=True)  # Schreiber
     
     # League Variant Settings
     league_variant = Column(Enum(LeagueVariant), default=LeagueVariant.CLASSIC, nullable=False)  # Liga-Variante
@@ -125,6 +133,9 @@ class Tournament(Base):
     # Seeded Participants
     seeded_participant_ids = Column(JSON, nullable=True)  # Array von Participant-IDs für gesetzte Spieler
     
+    # Visibility
+    visibility = Column(String(10), default="public", nullable=False)
+
     # Settings
     show_matches = Column(Boolean, default=True, nullable=False)
     show_tables = Column(Boolean, default=True, nullable=False)
@@ -141,4 +152,25 @@ class Tournament(Base):
     # Relationships
     creator = relationship("User", backref="tournaments")
     location = relationship("Location", backref="tournaments")
+
+    @property
+    def mode_variant(self):
+        return infer_mode_variant(
+            {
+                "mode": self.mode.value if hasattr(self.mode, "value") else self.mode,
+                "has_ko_phase": self.has_ko_phase,
+                "groups_count": self.groups_count,
+                "ko_structure": self.ko_structure.value if self.ko_structure is not None and hasattr(self.ko_structure, "value") else self.ko_structure,
+                "league_variant": self.league_variant.value if self.league_variant is not None and hasattr(self.league_variant, "value") else self.league_variant,
+            }
+        )
+
+    @property
+    def ko_pairing_mode(self):
+        if not self.has_ko_phase:
+            return None
+        draw_method = self.ko_draw_method.value if self.ko_draw_method is not None and hasattr(self.ko_draw_method, "value") else self.ko_draw_method
+        if not draw_method:
+            return "P1"
+        return DRAW_METHOD_TO_PAIRING.get(draw_method, "P1")
 

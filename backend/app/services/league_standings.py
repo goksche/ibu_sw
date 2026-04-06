@@ -13,6 +13,7 @@ from app.models.league import League
 from app.models.tournament import Tournament
 from app.models.match import KnockoutMatch, GroupMatch
 from app.models.group import Group, GroupParticipant
+from app.models.participant import TournamentParticipant
 
 
 def _get_ko_final_placement(db: Session, tournament_id: int) -> Dict[int, int]:
@@ -20,47 +21,84 @@ def _get_ko_final_placement(db: Session, tournament_id: int) -> Dict[int, int]:
     Derive participant placements from KO bracket results.
     Returns {participant_id: placement} (1=winner, 2=runner-up, etc.)
     """
+    # Main KO bracket rounds (exclude bronze marker round 99).
     matches = (
         db.query(KnockoutMatch)
-        .filter(KnockoutMatch.tournament_id == tournament_id, KnockoutMatch.round > 0)
+        .filter(
+            KnockoutMatch.tournament_id == tournament_id,
+            KnockoutMatch.round > 0,
+            KnockoutMatch.round != 99,
+        )
         .order_by(KnockoutMatch.round.desc(), KnockoutMatch.match_no)
         .all()
     )
     if not matches:
         return {}
 
+    bronze_match = (
+        db.query(KnockoutMatch)
+        .filter(
+            KnockoutMatch.tournament_id == tournament_id,
+            KnockoutMatch.round == 99,
+            KnockoutMatch.score1.isnot(None),
+            KnockoutMatch.score2.isnot(None),
+        )
+        .order_by(KnockoutMatch.match_no.asc())
+        .first()
+    )
+
     max_round = max(m.round for m in matches)
     placements: Dict[int, int] = {}
-    current_place = 1
+    current_place = 3
 
-    for rnd in range(max_round, 0, -1):
+    # Final decides rank 1/2.
+    final_matches = [m for m in matches if m.round == max_round]
+    if final_matches:
+        final_match = final_matches[0]
+        if final_match.score1 is not None and final_match.score2 is not None:
+            if final_match.score1 > final_match.score2:
+                winner_id = final_match.player1_id
+                loser_id = final_match.player2_id
+            else:
+                winner_id = final_match.player2_id
+                loser_id = final_match.player1_id
+            if winner_id:
+                placements[winner_id] = 1
+            if loser_id:
+                placements[loser_id] = 2
+
+    # If a bronze match exists, it decides rank 3/4.
+    if bronze_match:
+        if bronze_match.score1 > bronze_match.score2:
+            bronze_winner = bronze_match.player1_id
+            bronze_loser = bronze_match.player2_id
+        else:
+            bronze_winner = bronze_match.player2_id
+            bronze_loser = bronze_match.player1_id
+        if bronze_winner and bronze_winner not in placements:
+            placements[bronze_winner] = 3
+        if bronze_loser and bronze_loser not in placements:
+            placements[bronze_loser] = 4
+        current_place = 5
+
+    # Remaining placements from earlier rounds: losers of each round.
+    for rnd in range(max_round - 1, 0, -1):
         round_matches = [m for m in matches if m.round == rnd]
-        winners = []
         losers = []
         for m in round_matches:
             if m.score1 is None or m.score2 is None:
                 continue
             if m.score1 > m.score2:
-                winners.append(m.player1_id)
                 losers.append(m.player2_id)
             elif m.score2 > m.score1:
-                winners.append(m.player2_id)
                 losers.append(m.player1_id)
 
-        if rnd == max_round:
-            for pid in winners:
-                if pid and pid not in placements:
-                    placements[pid] = current_place
-            current_place += len(winners)
-            for pid in losers:
-                if pid and pid not in placements:
-                    placements[pid] = current_place
-            current_place += len(losers)
-        else:
-            for pid in losers:
-                if pid and pid not in placements:
-                    placements[pid] = current_place
-            current_place += len(losers)
+        newly_assigned = 0
+        for pid in losers:
+            if pid and pid not in placements:
+                placements[pid] = current_place
+                newly_assigned += 1
+        current_place += newly_assigned
 
     return placements
 
@@ -73,6 +111,10 @@ def _get_group_placement(db: Session, tournament_id: int) -> Dict[int, int]:
     groups = db.query(Group).filter(Group.tournament_id == tournament_id).all()
     if not groups:
         return {}
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    points_for_win = (tournament.league_points_win if tournament else None) or 3
+    points_for_draw = (tournament.league_points_draw if tournament else None) or 1
+    points_for_loss = (tournament.league_points_loss if tournament else None) or 0
 
     all_stats: List[Dict[str, Any]] = []
 
@@ -109,17 +151,21 @@ def _get_group_placement(db: Session, tournament_id: int) -> Dict[int, int]:
 
             if m.score1 > m.score2:
                 if m.player1_id in stats:
-                    stats[m.player1_id]["points"] += 3
+                    stats[m.player1_id]["points"] += points_for_win
                     stats[m.player1_id]["wins"] += 1
+                if m.player2_id in stats:
+                    stats[m.player2_id]["points"] += points_for_loss
             elif m.score2 > m.score1:
                 if m.player2_id in stats:
-                    stats[m.player2_id]["points"] += 3
+                    stats[m.player2_id]["points"] += points_for_win
                     stats[m.player2_id]["wins"] += 1
+                if m.player1_id in stats:
+                    stats[m.player1_id]["points"] += points_for_loss
             else:
                 if m.player1_id in stats:
-                    stats[m.player1_id]["points"] += 1
+                    stats[m.player1_id]["points"] += points_for_draw
                 if m.player2_id in stats:
-                    stats[m.player2_id]["points"] += 1
+                    stats[m.player2_id]["points"] += points_for_draw
 
         for pid, s in stats.items():
             all_stats.append({"participant_id": pid, **s})
@@ -205,6 +251,12 @@ def compute_league_standings(
 
     for tournament in league.tournaments:
         placements = get_tournament_placements(db, tournament)
+        tournament_participant_ids = {
+            tp.participant_id
+            for tp in db.query(TournamentParticipant)
+            .filter(TournamentParticipant.tournament_id == tournament.id)
+            .all()
+        }
 
         for pid, entry in participant_totals.items():
             place = placements.get(pid)
@@ -213,6 +265,11 @@ def compute_league_standings(
                 points = _resolve_points_for_placement(placement_points, place)
                 entry["tournaments_played"] += 1
                 entry["place_counts"][place] = entry["place_counts"].get(place, 0) + 1
+            elif pid in tournament_participant_ids:
+                # Participant played the tournament but has no KO final placement
+                # (e.g., did not reach KO bracket). Award participation points.
+                points = placement_points.get("participation_points", 0)
+                entry["tournaments_played"] += 1
 
             entry["placements"].append({
                 "tournament_id": tournament.id,

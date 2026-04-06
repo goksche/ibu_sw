@@ -1,15 +1,17 @@
 // Tournament Groups Content (for Tab)
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { tournamentService } from '../../services/tournamentService';
 import { locationService } from '../../services/locationService';
 import { participantService } from '../../services/participantService';
 import { groupService, GroupWithParticipants } from '../../services/groupService';
-import { Tournament, Participant } from '../../types';
+import { Tournament, Participant, Spielfeld } from '../../types';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Label } from '../ui/label';
+import { useNavigate } from 'react-router-dom';
 
 interface TournamentGroupsContentProps {
   tournamentId: number;
@@ -17,7 +19,9 @@ interface TournamentGroupsContentProps {
 }
 
 export default function TournamentGroupsContent({ tournamentId, tournament }: TournamentGroupsContentProps) {
+  const { t } = useTranslation();
   const { canEdit } = useAuth();
+  const navigate = useNavigate();
   const [groups, setGroups] = useState<GroupWithParticipants[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,30 +33,33 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
   const [generating, setGenerating] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_generateResult, setGenerateResult] = useState<{message: string, groups_processed?: number, matches_created?: number, groups_created?: number, participants_assigned?: number, distribution_method?: string} | null>(null);
-  const [spielfeldIdToName, setSpielfeldIdToName] = useState<Record<number, string>>({});
+  /** Sortiert wie am Spielort (sort_order, id) – nicht über Object.entries (sonst wirkt die Reihenfolge „zufällig“). */
+  const [spielfelderOptions, setSpielfelderOptions] = useState<Spielfeld[]>([]);
 
   useEffect(() => {
     loadData();
-  }, [tournamentId]);
+  }, [tournamentId, tournament.groups_count, tournament.group_distribution, tournament.has_group_phase]);
 
   useEffect(() => {
     if (!tournament.location_id) {
-      setSpielfeldIdToName({});
+      setSpielfelderOptions([]);
       return;
     }
     const loadLocations = async () => {
       try {
         const locations = await locationService.getAll();
         const loc = locations.find(l => l.id === tournament.location_id);
-        if (loc?.spielfelder) {
-          const map: Record<number, string> = {};
-          loc.spielfelder.forEach(s => { map[s.id] = s.name; });
-          setSpielfeldIdToName(map);
+        if (loc?.spielfelder?.length) {
+          const sorted = [...loc.spielfelder].sort((a, b) => {
+            if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+            return a.id - b.id;
+          });
+          setSpielfelderOptions(sorted);
         } else {
-          setSpielfeldIdToName({});
+          setSpielfelderOptions([]);
         }
       } catch {
-        setSpielfeldIdToName({});
+        setSpielfelderOptions([]);
       }
     };
     loadLocations();
@@ -187,12 +194,16 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
     }
   };
 
-  const spielfelderList = tournament.location_id
-    ? Object.entries(spielfeldIdToName).map(([id, name]) => ({ id: Number(id), name }))
-    : [];
+  const spielfeldModeNorm = (tournament.spielfeld_assignment_mode || '').trim().toLowerCase();
+  const isSpielfeldGroupFixed = spielfeldModeNorm === 'group_fixed';
 
   const groupPhaseEnabled =
     tournament.has_group_phase || tournament.mode === 'round_robin' || tournament.mode === 'combined';
+
+  const showSeedingHint =
+    groupPhaseEnabled &&
+    (tournament.groups_count ?? 0) > 1 &&
+    tournament.group_distribution === 'seeded';
 
   const assignedParticipantIds = new Set<number>();
   groups.forEach((group) => {
@@ -204,9 +215,10 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
   const availableParticipants = participants.filter((participant) => !assignedParticipantIds.has(participant.id));
 
   const handleGroupSpielfeldChange = async (groupId: number, spielfeldId: number | null) => {
+    if (!canEdit) return;
     try {
       await groupService.updateGroup(groupId, { spielfeld_id: spielfeldId });
-      loadData();
+      await loadData();
     } catch (err) {
       console.error('Failed to update group spielfeld:', err);
       alert('Fehler beim Speichern des Spielfelds');
@@ -221,6 +233,22 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
         <div className="p-4 bg-warning/20 border border-warning rounded-lg mb-8 text-warning">
           ⚠️ Dieses Turnier hat keine Gruppenphase konfiguriert.
         </div>
+      )}
+
+      {showSeedingHint && (
+        <Card className="mb-8 border border-border bg-muted/40">
+          <CardContent className="p-4">
+            <p className="m-0 text-sm text-muted-foreground">{t('tournament.groups.seedingHint')}</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3"
+              onClick={() => navigate(`/tournaments/${tournamentId}/participants`)}
+            >
+              {t('tournament.groups.openParticipants')}
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {showCreateForm && (
@@ -314,23 +342,25 @@ export default function TournamentGroupsContent({ tournamentId, tournament }: To
               </div>
 
               <CardContent className="p-4">
-                {tournament.spielfeld_assignment_mode === 'group_fixed' && (
+                {isSpielfeldGroupFixed && (
                   <div className="mb-4">
                     <Label className="block mb-1.5 text-sm text-muted-foreground">
                       Spielfeld (Gruppe)
                     </Label>
-                    {spielfelderList.length > 0 ? (
+                    {spielfelderOptions.length > 0 ? (
                       <select
-                        value={group.spielfeld_id ?? ''}
+                        value={group.spielfeld_id != null ? String(group.spielfeld_id) : ''}
+                        disabled={!canEdit}
+                        title={canEdit ? undefined : t('tournament.groups.spielfeldReadonlyHint')}
                         onChange={(e) => handleGroupSpielfeldChange(
                           group.id,
                           e.target.value === '' ? null : Number(e.target.value)
                         )}
-                        className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-foreground"
+                        className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <option value="">– Kein Spielfeld –</option>
-                        {spielfelderList.map((sf) => (
-                          <option key={sf.id} value={sf.id}>
+                        {spielfelderOptions.map((sf) => (
+                          <option key={sf.id} value={String(sf.id)}>
                             {sf.name}
                           </option>
                         ))}

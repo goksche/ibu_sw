@@ -7,7 +7,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci
+# Use npm install to tolerate lock drift on server-side hotfix deployments.
+RUN npm install
 
 # Copy application code
 COPY . .

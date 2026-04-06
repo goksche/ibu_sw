@@ -8,7 +8,15 @@ from app.models.tournament import Tournament, TournamentMode, LeagueScoringSyste
 from app.models.group import Group, GroupParticipant
 
 
-def compute_group_stats(matches: List[Dict], participant_ids: List[int], scoring_system: LeagueScoringSystem, exclude_decision_matches: bool = True) -> Dict[int, Dict]:
+def compute_group_stats(
+    matches: List[Dict],
+    participant_ids: List[int],
+    scoring_system: LeagueScoringSystem,
+    exclude_decision_matches: bool = True,
+    points_for_win: int = 3,
+    points_for_draw: int = 1,
+    points_for_loss: int = 0,
+) -> Dict[int, Dict]:
     """
     Compute statistics for each participant in a group.
     Returns dict with participant_id -> stats (points/diff, wins, losses, draws, goals_for, goals_against)
@@ -57,18 +65,20 @@ def compute_group_stats(matches: List[Dict], participant_ids: List[int], scoring
             stats[p1_id]['wins'] += 1
             stats[p2_id]['losses'] += 1
             if scoring_system == LeagueScoringSystem.POINTS:
-                stats[p1_id]['points'] += 3
+                stats[p1_id]['points'] += points_for_win
+                stats[p2_id]['points'] += points_for_loss
         elif score2 > score1:
             stats[p2_id]['wins'] += 1
             stats[p1_id]['losses'] += 1
             if scoring_system == LeagueScoringSystem.POINTS:
-                stats[p2_id]['points'] += 3
+                stats[p2_id]['points'] += points_for_win
+                stats[p1_id]['points'] += points_for_loss
         else:
             stats[p1_id]['draws'] += 1
             stats[p2_id]['draws'] += 1
             if scoring_system == LeagueScoringSystem.POINTS:
-                stats[p1_id]['points'] += 1
-                stats[p2_id]['points'] += 1
+                stats[p1_id]['points'] += points_for_draw
+                stats[p2_id]['points'] += points_for_draw
         
         # Calculate difference
         stats[p1_id]['diff'] = stats[p1_id]['goals_for'] - stats[p1_id]['goals_against']
@@ -89,7 +99,10 @@ def _split_group_by_key(group: List[int], key_map: Dict[int, Tuple]) -> List[Lis
 def _direct_encounter_groups(
     group: List[int],
     matches: List[Dict],
-    scoring_system: LeagueScoringSystem
+    scoring_system: LeagueScoringSystem,
+    points_for_win: int = 3,
+    points_for_draw: int = 1,
+    points_for_loss: int = 0,
 ) -> List[List[int]]:
     if len(group) <= 1:
         return [group]
@@ -111,7 +124,15 @@ def _direct_encounter_groups(
         and m.get('score1') is not None
         and m.get('score2') is not None
     ]
-    mini_stats = compute_group_stats(direct_matches, group, scoring_system, exclude_decision_matches=False)
+    mini_stats = compute_group_stats(
+        direct_matches,
+        group,
+        scoring_system,
+        exclude_decision_matches=False,
+        points_for_win=points_for_win,
+        points_for_draw=points_for_draw,
+        points_for_loss=points_for_loss,
+    )
 
     key_map: Dict[int, Tuple] = {}
     for pid in group:
@@ -121,6 +142,12 @@ def _direct_encounter_groups(
                 stats.get('points', 0),
                 stats.get('diff', 0),
                 stats.get('goals_for', 0)
+            )
+        elif scoring_system == LeagueScoringSystem.WINS:
+            key_map[pid] = (
+                stats.get('wins', 0),
+                stats.get('diff', 0),
+                stats.get('goals_for', 0),
             )
         else:
             key_map[pid] = (
@@ -135,9 +162,20 @@ def compute_group_ranking_with_rules(
     matches: List[Dict],
     participant_ids: List[int],
     scoring_system: LeagueScoringSystem,
-    tie_breaking_rules: Optional[List[str]] = None
+    tie_breaking_rules: Optional[List[str]] = None,
+    points_for_win: int = 3,
+    points_for_draw: int = 1,
+    points_for_loss: int = 0,
 ) -> List[int]:
-    stats = compute_group_stats(matches, participant_ids, scoring_system, exclude_decision_matches=True)
+    stats = compute_group_stats(
+        matches,
+        participant_ids,
+        scoring_system,
+        exclude_decision_matches=True,
+        points_for_win=points_for_win,
+        points_for_draw=points_for_draw,
+        points_for_loss=points_for_loss,
+    )
     rules = tie_breaking_rules or []
 
     # Primary buckets by scoring system
@@ -145,6 +183,8 @@ def compute_group_ranking_with_rules(
     for pid in participant_ids:
         if scoring_system == LeagueScoringSystem.POINTS:
             primary_value = stats[pid].get('points', 0)
+        elif scoring_system == LeagueScoringSystem.WINS:
+            primary_value = stats[pid].get('wins', 0)
         else:
             primary_value = stats[pid].get('diff', 0)
         buckets.setdefault(primary_value, []).append(pid)
@@ -177,7 +217,16 @@ def compute_group_ranking_with_rules(
                     gf_map = {pid: (stats[pid].get('goals_for', 0),) for pid in g}
                     next_groups.extend(_split_group_by_key(g, gf_map))
                 elif rule == 'direct_encounter':
-                    next_groups.extend(_direct_encounter_groups(g, matches, scoring_system))
+                    next_groups.extend(
+                        _direct_encounter_groups(
+                            g,
+                            matches,
+                            scoring_system,
+                            points_for_win=points_for_win,
+                            points_for_draw=points_for_draw,
+                            points_for_loss=points_for_loss,
+                        )
+                    )
                 else:
                     next_groups.append(g)
             groups = next_groups
@@ -190,6 +239,13 @@ def compute_group_ranking_with_rules(
                 if not use_stats_fallback:
                     ordered.extend(sorted(g))
                 elif scoring_system == LeagueScoringSystem.POINTS:
+                    ordered.extend(
+                        sorted(
+                            g,
+                            key=lambda pid: (-stats[pid].get('diff', 0), -stats[pid].get('goals_for', 0), pid)
+                        )
+                    )
+                elif scoring_system == LeagueScoringSystem.WINS:
                     ordered.extend(
                         sorted(
                             g,
@@ -223,6 +279,17 @@ def find_tied_participants(stats: Dict[int, Dict], scoring_system: LeagueScoring
         
         # Return only groups with more than one participant
         tied_groups = [group for group in points_groups.values() if len(group) > 1]
+    elif scoring_system == LeagueScoringSystem.WINS:
+        # Group by wins
+        wins_groups = {}
+        for pid, stat in stats.items():
+            wins = stat['wins']
+            if wins not in wins_groups:
+                wins_groups[wins] = []
+            wins_groups[wins].append(pid)
+
+        # Return only groups with more than one participant
+        tied_groups = [group for group in wins_groups.values() if len(group) > 1]
     else:  # DIFFERENCE
         # Group by difference
         diff_groups = {}
@@ -258,7 +325,10 @@ def compute_ranking_with_decision_matches(
     decision_matches: List[Dict],
     participant_ids: List[int],
     scoring_system: LeagueScoringSystem,
-    tie_breaking_rules: Optional[List[str]] = None
+    tie_breaking_rules: Optional[List[str]] = None,
+    points_for_win: int = 3,
+    points_for_draw: int = 1,
+    points_for_loss: int = 0,
 ) -> Tuple[List[int], Dict[int, bool]]:
     """
     Compute group ranking considering decision matches.
@@ -275,14 +345,25 @@ def compute_ranking_with_decision_matches(
         - decision_winners: Dict mapping participant_id -> True if they won a decision match
     """
     # Compute stats from regular matches only (exclude decision matches)
-    stats = compute_group_stats(regular_matches, participant_ids, scoring_system, exclude_decision_matches=True)
+    stats = compute_group_stats(
+        regular_matches,
+        participant_ids,
+        scoring_system,
+        exclude_decision_matches=True,
+        points_for_win=points_for_win,
+        points_for_draw=points_for_draw,
+        points_for_loss=points_for_loss,
+    )
     
     # Get initial ranking from regular matches
     ranked_participants = compute_group_ranking_with_rules(
         regular_matches,
         participant_ids,
         scoring_system,
-        tie_breaking_rules
+        tie_breaking_rules,
+        points_for_win=points_for_win,
+        points_for_draw=points_for_draw,
+        points_for_loss=points_for_loss,
     )
     
     # Process decision matches to adjust ranking
@@ -396,7 +477,15 @@ def generate_decision_matches_for_group(
     
     # Compute stats (excluding decision matches)
     scoring_system = tournament.league_scoring_system or LeagueScoringSystem.POINTS
-    stats = compute_group_stats(matches, participant_ids, scoring_system, exclude_decision_matches=True)
+    stats = compute_group_stats(
+        matches,
+        participant_ids,
+        scoring_system,
+        exclude_decision_matches=True,
+        points_for_win=tournament.league_points_win or 3,
+        points_for_draw=tournament.league_points_draw or 1,
+        points_for_loss=tournament.league_points_loss or 0,
+    )
     
     # Calculate ranking to determine which ties need decision matches
     # For combined mode, only ties at qualification positions need decision matches
@@ -507,6 +596,11 @@ def _compute_ranking_from_stats(stats: Dict[int, Dict], scoring_system: LeagueSc
             stats.keys(),
             key=lambda pid: (-stats[pid]['points'], -stats[pid]['diff'], -stats[pid]['goals_for'])
         )
+    elif scoring_system == LeagueScoringSystem.WINS:
+        sorted_participants = sorted(
+            stats.keys(),
+            key=lambda pid: (-stats[pid]['wins'], -stats[pid]['diff'], -stats[pid]['goals_for'])
+        )
     else:  # DIFFERENCE
         sorted_participants = sorted(
             stats.keys(),
@@ -519,5 +613,7 @@ def _stats_equal(stat1: Dict, stat2: Dict, scoring_system: LeagueScoringSystem) 
     """Check if two stats are equal based on scoring system"""
     if scoring_system == LeagueScoringSystem.POINTS:
         return stat1['points'] == stat2['points']
+    elif scoring_system == LeagueScoringSystem.WINS:
+        return stat1['wins'] == stat2['wins']
     else:  # DIFFERENCE
         return stat1['diff'] == stat2['diff']

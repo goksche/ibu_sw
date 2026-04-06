@@ -1,5 +1,6 @@
 // Header Component
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { authService } from '@/services/authService';
 import { SignOut } from 'phosphor-react';
 import { Button } from '@/components/ui';
@@ -7,6 +8,7 @@ import { cn } from '@/lib/utils';
 
 export default function Header() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const isAuthenticated = authService.isAuthenticated();
 
   const handleLogout = () => {
@@ -38,10 +40,10 @@ export default function Header() {
         </div>
         <div>
           <h1 className="m-0 text-2xl font-bold text-foreground tracking-wider font-sans">
-            FinalStage.ch
+            {t('header.brandName')}
           </h1>
           <p className="m-0 text-xs text-muted-foreground tracking-wider">
-            Turnier-Verwaltung
+            {t('header.brandSubtitle')}
           </p>
         </div>
       </Link>
@@ -53,7 +55,7 @@ export default function Header() {
           className="flex items-center gap-2 hover:border-primary hover:text-primary transition-colors"
         >
           <SignOut size={20} />
-          <span>Logout</span>
+          <span>{t('header.logout')}</span>
         </Button>
       )}
     </header>

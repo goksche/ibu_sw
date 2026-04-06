@@ -7,7 +7,7 @@ class LeagueBase(BaseModel):
     """Base League schema"""
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    scoring_schema: Optional[Dict[str, int]] = None
+    scoring_schema: Optional[Dict[str, Any]] = None
     mode_presets: Optional[Dict[str, Any]] = None
     status: Optional[str] = "geplant"
     league_mode: Optional[str] = "liga"
@@ -21,6 +21,7 @@ class LeagueBase(BaseModel):
     season_year: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    visibility: Optional[str] = "public"
 
 
 class LeagueCreate(LeagueBase):
@@ -33,7 +34,7 @@ class LeagueUpdate(BaseModel):
     """Schema for updating a league"""
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
-    scoring_schema: Optional[Dict[str, int]] = None
+    scoring_schema: Optional[Dict[str, Any]] = None
     mode_presets: Optional[Dict[str, Any]] = None
     status: Optional[str] = None
     league_mode: Optional[str] = None
@@ -47,6 +48,7 @@ class LeagueUpdate(BaseModel):
     season_year: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    visibility: Optional[str] = None
     participant_ids: Optional[List[int]] = None
     tournament_ids: Optional[List[int]] = None
 

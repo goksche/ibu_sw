@@ -2,7 +2,8 @@
 import { Tournament } from '../../types';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '../ui/Card';
-import TournamentModeVisualization from './TournamentModeVisualization';
+import { getModeVariantInsight } from '../../domain/tournamentModeInsights';
+import TournamentModeDiagram from './TournamentModeDiagram';
 
 interface TournamentOverviewProps {
   tournament: Tournament;
@@ -11,6 +12,22 @@ interface TournamentOverviewProps {
 }
 
 export default function TournamentOverview({ tournament, locationName }: TournamentOverviewProps) {
+  const modeInsight = getModeVariantInsight(tournament.mode_variant);
+
+  const modeFamilyCardClass =
+    modeInsight.family === 'L'
+      ? 'border-emerald-500/30'
+      : modeInsight.family === 'K'
+        ? 'border-rose-500/30'
+        : 'border-blue-500/30';
+  const modeIdClass =
+    modeInsight.family === 'L'
+      ? 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
+      : modeInsight.family === 'K'
+        ? 'border border-rose-500/40 bg-rose-500/10 text-rose-800 dark:text-rose-200'
+        : 'border border-blue-500/40 bg-blue-500/10 text-blue-800 dark:text-blue-200';
+  const modePills = [modeInsight.wiki.format];
+
   // Labels für Gleichstandsregeln
   const tieBreakingRuleLabels: Record<string, string> = {
     'wins': 'Siege',
@@ -76,11 +93,9 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
             </div>
             
             <div className="bg-muted p-4 rounded-lg border border-border">
-              <div className="text-sm text-muted-foreground mb-2">Modus</div>
+              <div className="text-sm text-muted-foreground mb-2">Variante</div>
               <div className="text-lg font-semibold text-foreground">
-                {tournament.mode === 'round_robin' ? '🏆 Liga' :
-                 tournament.mode === 'knockout' ? '⚔️ KO-Phase' :
-                 '🔄 Kombiniert'}
+                {modeInsight.id} - {modeInsight.title}
               </div>
             </div>
             
@@ -115,17 +130,38 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
 
       <Card className="mb-8">
         <CardContent className="p-6">
-          <TournamentModeVisualization
-            mode={tournament.mode}
-            hasGroupPhase={tournament.has_group_phase}
-            hasKoPhase={tournament.has_ko_phase}
-            groupsCount={tournament.groups_count}
-            participantsPerGroup={tournament.participants_per_group}
-            groupDistribution={tournament.group_distribution}
-            koStartRound={tournament.ko_start_round ?? null}
-            koStructure={tournament.ko_structure}
-            koDrawMethod={tournament.ko_draw_method}
-          />
+          <h3 className="mb-4 mt-0 text-lg font-bold text-foreground">Modus-Visualisierung</h3>
+          <Card className={`overflow-hidden border-2 bg-card ${modeFamilyCardClass}`}>
+            <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+              <span className={`rounded px-2.5 py-1 text-xs font-bold tracking-[0.05em] ${modeIdClass}`}>{modeInsight.id}</span>
+              <span className="text-sm font-semibold text-foreground">{modeInsight.title}</span>
+            </div>
+            <div className="border-b border-border bg-muted/35 p-3">
+              <TournamentModeDiagram variant={modeInsight.id} size="sm" />
+            </div>
+            <div className="flex flex-wrap gap-1.5 border-b border-border px-4 py-3">
+              {modePills.map((pill, idx) => (
+                <span key={`${modeInsight.id}-${idx}`} className="rounded border border-border bg-muted/30 px-2 py-0.5 text-[10px] text-muted-foreground">
+                  {pill}
+                </span>
+              ))}
+            </div>
+            <div className="space-y-4 px-4 py-4">
+              <p className="text-xs leading-relaxed text-muted-foreground">{modeInsight.wiki.purpose}</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded border border-border bg-background p-2.5">
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Format</div>
+                  <div className="text-xs leading-relaxed text-foreground">{modeInsight.wiki.format}</div>
+                </div>
+                <div className="rounded border border-border bg-background p-2.5">
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Skalierung</div>
+                  <div className="text-xs leading-relaxed text-foreground">
+                    ab {modeInsight.wiki.participantScale.min}, empfohlen {modeInsight.wiki.participantScale.recommended}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
         </CardContent>
       </Card>
 
@@ -172,17 +208,25 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
                     Auslosungsart
                   </div>
                   <div className="text-lg text-foreground font-semibold mb-2">
-                    {tournament.group_distribution === 'random' ? 'Zufällig (Random)' : tournament.group_distribution === 'seeded' ? 'Gesetzt (Seeded)' : tournament.group_distribution}
+                    {tournament.group_distribution === 'manual'
+                      ? 'Manuell'
+                      : tournament.group_distribution === 'seeded'
+                        ? 'Gesetzt (automatisch mit gesetzten Spielern)'
+                        : 'Zufällig (automatisch)'}
                   </div>
                   <div className="text-sm text-muted-foreground italic leading-relaxed">
-                    {tournament.group_distribution === 'random' 
-                      ? 'Teilnehmer werden zufällig auf die Gruppen verteilt'
-                      : 'Gesetzte Spieler werden vorab in Gruppen eingeteilt, andere werden zugeordnet'}
+                    {tournament.group_distribution === 'manual'
+                      ? 'Teilnehmer werden nach Gruppenerstellung manuell den Gruppen zugewiesen'
+                      : tournament.group_distribution === 'seeded'
+                        ? 'Gesetzte Spieler unter Turnier → Teilnehmer markieren und speichern; Gruppen-Generierung verteilt sie auf getrennte Gruppen (Rest zufällig gleichmäßig).'
+                        : 'Teilnehmer werden gleichmäßig zufällig auf die Gruppen verteilt (ohne gesetzte Spieler).'}
                   </div>
                 </div>
               )}
               
-              {tournament.group_distribution === 'seeded' && tournament.seeded_participant_ids && tournament.seeded_participant_ids.length > 0 && (
+              {tournament.group_distribution === 'seeded' &&
+                tournament.seeded_participant_ids &&
+                tournament.seeded_participant_ids.length > 0 && (
                 <div className="mb-5 pb-5 border-b border-border">
                   <div className="text-sm text-muted-foreground mb-2 font-medium">
                     Gesetzte Spieler
@@ -200,14 +244,24 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
                   </div>
                   <div className={cn(
                     'inline-block py-2 px-4 rounded-md text-sm font-semibold mb-2',
-                    tournament.league_scoring_system === 'points' ? 'bg-success text-success-foreground' : 'bg-info text-info-foreground'
+                    tournament.league_scoring_system === 'points'
+                      ? 'bg-success text-success-foreground'
+                      : tournament.league_scoring_system === 'wins'
+                        ? 'bg-warning text-warning-foreground'
+                        : 'bg-info text-info-foreground'
                   )}>
-                    {tournament.league_scoring_system === 'points' ? 'Punkte' : 'Differenz'}
+                    {tournament.league_scoring_system === 'points'
+                      ? 'Punkte'
+                      : tournament.league_scoring_system === 'wins'
+                        ? 'Siege'
+                        : 'Differenz'}
                   </div>
                   <div className="text-sm text-muted-foreground italic leading-relaxed">
                     {tournament.league_scoring_system === 'points' 
                       ? 'Rangliste basierend auf Punkten (Sieg: 3 Punkte, Unentschieden: 1 Punkt, Niederlage: 0 Punkte)'
-                      : 'Rangliste basierend auf Differenz (Tore/Sätze/Legs für minus gegen)'}
+                      : tournament.league_scoring_system === 'wins'
+                        ? 'Rangliste primär basierend auf Siegen; Gleichstände werden über die konfigurierten Folgeregeln aufgelöst.'
+                        : 'Rangliste basierend auf Differenz (Tore/Sätze/Legs für minus gegen)'}
                   </div>
                 </div>
               )}

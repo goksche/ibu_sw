@@ -1,0 +1,18 @@
+---
+description: Login und Authentifizierung nicht anfassen
+alwaysApply: true
+---
+
+# Login & Auth — strikt schreibgeschützt
+
+**Ohne ausdrücklichen Auftrag des Nutzers dürfen Login, Registrierung und Authentifizierung nicht geändert werden.**
+
+Konkret nicht ändern (außer der Nutzer verlangt es explizit):
+
+- `frontend/src/pages/Login.tsx`, `Register.tsx` und ähnliche Auth-Seiten
+- `frontend/src/services/authService.ts`, `auth`-bezogene Services
+- `frontend/src/contexts/AuthContext.tsx`
+- Backend `auth`-Router, Token-/OTP-Logik, Passwort-Handling
+- Deploy-/Docker-Schritte, die `.env` mit `SECRET_KEY` / DB-Zugang weglassen (Login bricht sonst ohne Codeänderung)
+
+Deploy auf Server: immer `docker compose --env-file .env ...` verwenden, wenn die Compose-Datei `${VAR}` nutzt.

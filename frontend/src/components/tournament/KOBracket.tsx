@@ -1,5 +1,6 @@
 // KO Bracket Component - Visual Tournament Bracket Display
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { KnockoutMatch } from '../../services/matchService';
 import { Participant } from '../../types';
 import { cn } from '@/lib/utils';
@@ -20,7 +21,8 @@ interface KOBracketProps {
 }
 
 export default function KOBracket({ matches, participants, onMatchEdit, editingMatchId: _editingMatchId, drawMode, tournamentId, koDistribution, onRefresh, presentationMode }: KOBracketProps) {
-  // Layout toggle state (default to linear for brackets with >4 rounds)
+  const { t } = useTranslation();
+  // Layout toggle state (Standard ab 4 Runden: linear, siehe defaultLinear unten)
   const [useLinearLayout, setUseLinearLayout] = useState<boolean | null>(null);
   // View mode: 'main' | 'consolation' | 'both' | 'left' | 'right' | 'full'
   const [viewMode, setViewMode] = useState<'main' | 'consolation' | 'both' | 'left' | 'right' | 'full'>('both');
@@ -43,7 +45,8 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
   // Helper function to get participant name
   const getParticipantName = (participantId: number | null, match?: KnockoutMatch, slot?: 1 | 2): string => {
     if (!participantId) {
-      if (drawMode === 'predefined_slots' && match && slot && match.round > 1 && match.round !== 99) {
+      const usesManualSlots = drawMode === 'manual' || drawMode === 'predefined_slots';
+      if (usesManualSlots && match && slot && match.round > 1 && match.round !== 99) {
         const sourceMatchNo = (match.match_no - 1) * 2 + slot;
         return `Sieger Spiel ${sourceMatchNo}`;
       }
@@ -112,7 +115,8 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
 
   // Check draw status for random_each_round mode
   const checkDrawStatus = useCallback(async () => {
-    if (!tournamentId || koDistribution !== 'random_each_round') {
+    const randomEachRoundActive = drawMode === 'random_each_round' || koDistribution === 'random_each_round';
+    if (!tournamentId || !randomEachRoundActive) {
       setDrawStatus(null);
       return;
     }
@@ -125,7 +129,7 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
       console.error('Failed to check draw status:', err);
       setDrawStatus(null);
     }
-  }, [tournamentId, koDistribution]);
+  }, [tournamentId, koDistribution, drawMode]);
 
   useEffect(() => {
     checkDrawStatus();
@@ -150,7 +154,7 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
       }
     } catch (err: any) {
       console.error('Draw failed:', err);
-      setDrawError(err.response?.data?.detail || 'Auslosung fehlgeschlagen');
+      setDrawError(err.response?.data?.detail || t('common.error'));
     } finally {
       setIsDrawing(false);
     }
@@ -181,7 +185,7 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
   // Sort consolation rounds (most negative = first consolation round)
   const consolationRounds = Array.from(consolationByRound.keys()).sort((a, b) => a - b);
 
-  // Helper function to determine round label
+  // Helper function to determine round label (Hauptturnier: nach Anzahl Spiele/Runde, z. B. 32er-KO mit 5 Runden)
   const getRoundLabel = (round: number): string => {
     if (round === 99) return 'Bronze';
     if (round < 0) {
@@ -211,13 +215,18 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
         }
       }
     }
-    const labels: Record<number, string> = {
-      1: '1. Runde',
-      2: 'Viertelfinale',
-      3: 'Halbfinale',
-      4: 'Finale'
+    const n = matchesByRound.get(round)?.length ?? 0;
+    if (n <= 0) {
+      return `Runde ${round}`;
+    }
+    const byMatchCount: Record<number, string> = {
+      1: 'Finale',
+      2: 'Halbfinale',
+      4: 'Viertelfinale',
+      8: 'Achtelfinale',
+      16: 'Sechzehntelfinale',
     };
-    return labels[round] || `Runde ${round}`;
+    return byMatchCount[n] ?? `Runde ${round} (${n} Spiele)`;
   };
 
   const getMatchResult = (match: KnockoutMatch | undefined | null) => {
@@ -310,7 +319,7 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
               variant={hasResult ? 'secondary' : 'info'}
               className="mt-1.5 w-full p-1.5 text-xs"
             >
-              {hasResult ? 'Ändern' : 'Eintragen'}
+              {hasResult ? t('tournament.koBracket.edit') : t('tournament.koBracket.enter')}
             </Button>
           )}
         </div>
@@ -326,8 +335,8 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
     );
   }
 
-  // Initialize layout preference (default to linear for brackets with >4 rounds)
-  const defaultLinear = rounds.length > 4;
+  // Standard: ab 4 KO-Runden „Linear“, damit alle Runden in einer Zeile sichtbar sind (horizontal scrollen)
+  const defaultLinear = rounds.length >= 4;
   const actualUseLinear = useLinearLayout === null ? defaultLinear : useLinearLayout;
   const orderedRounds = [...rounds].sort((a, b) => a - b);
 
@@ -437,7 +446,7 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
           {hasConsolation && (
             <>
               <span className="text-sm text-muted-foreground mr-1">
-                Turnier:
+                {t('tournament.koBracket.tournament')}
               </span>
               <Button
                 onClick={() => setViewMode('main')}
@@ -529,10 +538,15 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
             Linear
           </Button>
         </div>
+        {rounds.length >= 4 && !actualUseLinear && (
+          <p className="text-xs text-muted-foreground w-full mt-1 mb-0">
+            Alle Runden: Layout „Linear“ wählen oder im Raster horizontal scrollen.
+          </p>
+        )}
       </div>
 
       {/* Draw Next Round Button (for random_each_round mode) */}
-      {koDistribution === 'random_each_round' && drawStatus && (
+      {(drawMode === 'random_each_round' || koDistribution === 'random_each_round') && drawStatus && (
         <div className={cn(
           "mb-4 p-4 rounded-lg border",
           drawStatus.can_draw ? "bg-success/20 border-success" : "bg-muted border-border"
@@ -553,7 +567,7 @@ export default function KOBracket({ matches, participants, onMatchEdit, editingM
                 variant="success"
                 className="py-3 px-6 text-base font-bold"
               >
-                {isDrawing ? 'Auslosung läuft...' : `Runde ${drawStatus.next_round} auslosen`}
+                {isDrawing ? t('tournament.matchesContent.drawInProgress') : t('tournament.matchesContent.drawRound', { round: drawStatus.next_round })}
               </Button>
             </div>
           ) : (

@@ -43,12 +43,12 @@ services:
       OTP_DEV_MODE: ${OTP_DEV_MODE:-true}
       OTP_EXPIRY_MINUTES: ${OTP_EXPIRY_MINUTES:-10}
       OTP_LENGTH: ${OTP_LENGTH:-6}
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM}
-      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@local.finalstage}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
     ports:
       - "8000:8000"
     volumes:
@@ -58,6 +58,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mailhog:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -66,24 +68,38 @@ services:
     networks:
       - ibu_network
 
-  # React Frontend (Vite Dev-Server, Port 3000; Nginx proxyt darauf)
+  # React Frontend (Vite Dev-Server, Port 3000 – gleiche Seiten wie lokal, API über Vite-Proxy)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: ibu_frontend
     environment:
-      # Leer oder "/" = gleiche Origin (Nginx /api) – Login/API funktionieren so auf dem Server
-      VITE_API_URL: http://localhost:8000
+      # same = Axios nutzt /api/v1 auf gleicher Origin → Vite proxyt nach backend
+      VITE_API_URL: same
+      VITE_PROXY_TARGET: http://backend:8000
+      # Lokal: kein Fallback auf Remote (vermeidet 401 mit lokalem JWT)
+      VITE_PROXY_FALLBACK: ${VITE_PROXY_FALLBACK:-off}
     ports:
       - "3000:3000"
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
       - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
     command: ["node", "node_modules/vite/bin/vite.js", "--port", "3000", "--host", "0.0.0.0"]
     depends_on:
       - backend
+    networks:
+      - ibu_network
+
+  # Lokaler SMTP-Catcher für OTP/Mails
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: ibu_mailhog
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # Web UI
     networks:
       - ibu_network
 

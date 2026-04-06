@@ -1,8 +1,10 @@
 // Dashboard Page - Uebersicht mit Statistik-Kacheln
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { tournamentService } from '../services/tournamentService';
 import { leagueService } from '../services/leagueService';
+import { infoService } from '../services/infoService';
 import { Tournament, League } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui';
@@ -15,10 +17,11 @@ function getLeagueStatus(league: League): string {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const { t } = useTranslation();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [leagues, setLeagues] = useState<League[]>([]);
   const [loading, setLoading] = useState(true);
-  const appVersion = '1.5.0 Beta';
+  const [appVersion, setAppVersion] = useState('1.8.0');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -30,25 +33,33 @@ export default function Dashboard() {
 
   const loadData = async () => {
     try {
-      const [tournamentsData, leaguesData] = await Promise.all([
-        tournamentService.getAll(),
-        leagueService.getAll(),
-      ]);
+      const appInfo = await infoService.getVersion();
+      if (appInfo?.version) {
+        setAppVersion(appInfo.version);
+      }
+    } catch {
+      // Keep fallback version when info endpoint is unavailable.
+    }
+    try {
+      const tournamentsData = await tournamentService.getAll();
       setTournaments(tournamentsData);
-      setLeagues(leaguesData);
     } catch {
       setTournaments([]);
-      setLeagues([]);
-    } finally {
-      setLoading(false);
     }
+    try {
+      const leaguesData = await leagueService.getAll();
+      setLeagues(leaguesData);
+    } catch {
+      setLeagues([]);
+    }
+    setLoading(false);
   };
 
   const stats = {
     total: tournaments.length,
-    running: tournaments.filter(t => t.status?.toLowerCase() === 'laufend' || t.status?.toLowerCase() === 'running').length,
-    completed: tournaments.filter(t => t.status?.toLowerCase() === 'abgeschlossen' || t.status?.toLowerCase() === 'completed').length,
-    planned: tournaments.filter(t => t.status?.toLowerCase() === 'geplant' || t.status?.toLowerCase() === 'planned').length,
+    running: tournaments.filter(tr => tr.status?.toLowerCase() === 'laufend' || tr.status?.toLowerCase() === 'running').length,
+    completed: tournaments.filter(tr => tr.status?.toLowerCase() === 'abgeschlossen' || tr.status?.toLowerCase() === 'completed').length,
+    planned: tournaments.filter(tr => tr.status?.toLowerCase() === 'geplant' || tr.status?.toLowerCase() === 'planned').length,
   };
 
   const leagueStatuses = leagues.map(l => getLeagueStatus(l));
@@ -59,49 +70,44 @@ export default function Dashboard() {
     planned: leagueStatuses.filter(s => s === 'geplant').length,
   };
 
-  if (loading) return <div className="p-8 text-foreground">Wird geladen...</div>;
+  if (loading) return <div className="p-8 text-foreground">{t('common.loading')}</div>;
 
   const statCards = [
-    { label: 'Turniere gesamt', value: stats.total, icon: <Trophy size={32} weight="fill" className="text-primary" />, link: '/tournaments' },
-    { label: 'Laufend', value: stats.running, icon: <PlayCircle size={32} weight="fill" className="text-warning" />, link: '/tournaments?status=laufend' },
-    { label: 'Abgeschlossen', value: stats.completed, icon: <CheckCircle size={32} weight="fill" className="text-success" />, link: '/tournaments?status=abgeschlossen' },
-    { label: 'Geplant', value: stats.planned, icon: <Calendar size={32} weight="fill" className="text-info" />, link: '/tournaments?status=geplant' },
+    { label: t('dashboard.tournamentsTotal'), value: stats.total, icon: <Trophy size={32} weight="fill" className="text-primary" />, link: '/tournaments' },
+    { label: t('dashboard.running'), value: stats.running, icon: <PlayCircle size={32} weight="fill" className="text-warning" />, link: '/tournaments?status=laufend' },
+    { label: t('dashboard.completed'), value: stats.completed, icon: <CheckCircle size={32} weight="fill" className="text-success" />, link: '/tournaments?status=abgeschlossen' },
+    { label: t('dashboard.planned'), value: stats.planned, icon: <Calendar size={32} weight="fill" className="text-info" />, link: '/tournaments?status=geplant' },
   ];
 
   const leagueCards = [
-    { label: 'Meisterschaften gesamt', value: leagueStats.total, icon: <ChartLine size={32} weight="fill" className="text-primary" />, link: '/leagues' },
-    { label: 'Laufend', value: leagueStats.running, icon: <PlayCircle size={32} weight="fill" className="text-warning" />, link: '/leagues?status=laufend' },
-    { label: 'Abgeschlossen', value: leagueStats.completed, icon: <CheckCircle size={32} weight="fill" className="text-success" />, link: '/leagues?status=abgeschlossen' },
-    { label: 'Geplant', value: leagueStats.planned, icon: <Calendar size={32} weight="fill" className="text-info" />, link: '/leagues?status=geplant' },
+    { label: t('dashboard.leaguesTotal'), value: leagueStats.total, icon: <ChartLine size={32} weight="fill" className="text-primary" />, link: '/leagues' },
+    { label: t('dashboard.running'), value: leagueStats.running, icon: <PlayCircle size={32} weight="fill" className="text-warning" />, link: '/leagues?status=laufend' },
+    { label: t('dashboard.completed'), value: leagueStats.completed, icon: <CheckCircle size={32} weight="fill" className="text-success" />, link: '/leagues?status=abgeschlossen' },
+    { label: t('dashboard.planned'), value: leagueStats.planned, icon: <Calendar size={32} weight="fill" className="text-info" />, link: '/leagues?status=geplant' },
   ];
 
   const quickLinks = [
-    { label: 'Turniere', icon: <Trophy size={28} weight="bold" />, link: '/tournaments' },
-    { label: 'Meisterschaften', icon: <ChartLine size={28} weight="bold" />, link: '/leagues' },
-    { label: 'Spielorte', icon: <MapPin size={28} weight="bold" />, link: '/locations' },
-    { label: 'Teilnehmer', icon: <Users size={28} weight="bold" />, link: '/participants' },
+    { label: t('dashboard.tournaments'), icon: <Trophy size={28} weight="bold" />, link: '/tournaments' },
+    { label: t('dashboard.leagues'), icon: <ChartLine size={28} weight="bold" />, link: '/leagues' },
+    { label: t('dashboard.locations'), icon: <MapPin size={28} weight="bold" />, link: '/locations' },
+    { label: t('dashboard.participants'), icon: <Users size={28} weight="bold" />, link: '/participants' },
   ];
 
   return (
-    <div>
-      {/* Page Title */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-semibold text-foreground m-0">Dashboard</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Willkommen bei FinalStage.ch — Version {appVersion}
-        </p>
-      </div>
+    <div className="space-y-8 page-shell">
+      <section className="space-y-1">
+        <h1 className="text-2xl font-bold text-foreground">{t('dashboard.title')}</h1>
+        <p className="text-muted-foreground">{t('dashboard.welcome', { version: appVersion })}</p>
+      </section>
 
       {/* Turnier Statistics */}
-      <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
-        <Trophy size={22} weight="bold" className="text-primary" />
-        Turniere
-      </h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-foreground">{t('dashboard.tournaments')}</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map((card) => (
           <Card
             key={card.label}
-            className="cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary hover:-translate-y-0.5"
+            className="arena-surface cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary hover:-translate-y-0.5"
             onClick={() => navigate(card.link)}
           >
             <CardContent className="flex items-center gap-4 p-6">
@@ -113,18 +119,17 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ))}
-      </div>
+        </div>
+      </section>
 
       {/* Meisterschaft Statistics */}
-      <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
-        <ChartLine size={22} weight="bold" className="text-primary" />
-        Meisterschaften
-      </h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-foreground">{t('dashboard.leagues')}</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {leagueCards.map((card) => (
           <Card
             key={card.label}
-            className="cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary hover:-translate-y-0.5"
+            className="arena-surface cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary hover:-translate-y-0.5"
             onClick={() => navigate(card.link)}
           >
             <CardContent className="flex items-center gap-4 p-6">
@@ -136,15 +141,17 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ))}
-      </div>
+        </div>
+      </section>
 
       {/* Quick Navigation */}
-      <h3 className="text-lg font-semibold text-foreground mb-4">Schnellzugriff</h3>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-foreground">{t('dashboard.quickAccess')}</h2>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {quickLinks.map((item) => (
           <Card
             key={item.label}
-            className="cursor-pointer transition-all duration-200 hover:border-primary hover:-translate-y-0.5 hover:shadow-md text-center"
+            className="arena-surface cursor-pointer transition-all duration-200 hover:border-primary hover:-translate-y-0.5 hover:shadow-md text-center"
             onClick={() => navigate(item.link)}
           >
             <CardContent className="p-5">
@@ -153,7 +160,9 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ))}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }
+

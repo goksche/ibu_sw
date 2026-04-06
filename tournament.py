@@ -24,7 +24,7 @@ class TournamentCreate(TournamentBase):
     """Schema for creating a new tournament"""
     groups_count: int = Field(default=0, ge=0)
     participants_per_group: int | None = Field(default=None, ge=2)
-    group_distribution: str = Field(default='random', pattern='^(random|seeded)$')
+    group_distribution: str = Field(default='random', pattern='^(random|seeded|manual)$')
     ko_participants: int = Field(default=0, ge=0)  # Legacy, kept for backward compatibility
     ko_first_round_size: int | None = Field(default=4, ge=4, le=16)  # Legacy
     ko_start_round: KOStartRound | None = None
@@ -60,7 +60,7 @@ class TournamentUpdate(BaseModel):
     has_ko_phase: bool | None = None
     groups_count: int | None = Field(default=None, ge=0)
     participants_per_group: int | None = Field(default=None, ge=2)
-    group_distribution: str | None = Field(default=None, pattern='^(random|seeded)$')
+    group_distribution: str | None = Field(default=None, pattern='^(random|seeded|manual)$')
     ko_participants: int | None = Field(default=None, ge=0)  # Legacy
     ko_first_round_size: int | None = Field(default=None, ge=4, le=16)  # Legacy
     ko_start_round: KOStartRound | None = None

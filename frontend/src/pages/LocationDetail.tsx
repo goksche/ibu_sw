@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button, Card, CardContent, Input } from '@/components/ui';
 import { locationService } from '../services/locationService';
 import { Location, Spielfeld } from '../types';
@@ -10,6 +11,7 @@ export default function LocationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { canEdit } = useAuth();
+  const { t } = useTranslation();
   const [location, setLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -38,7 +40,7 @@ export default function LocationDetail() {
 
   const handleDelete = async () => {
     if (!location || !canEdit) return;
-    const confirmed = window.confirm(`Spielort "${location.name}" und alle Spielfelder wirklich löschen?`);
+    const confirmed = window.confirm(t('locations.detail.deleteConfirm', { name: location.name }));
     if (!confirmed) return;
     setDeleting(true);
     try {
@@ -83,7 +85,7 @@ export default function LocationDetail() {
 
   const handleDeleteSpielfeld = async (s: Spielfeld) => {
     if (!canEdit) return;
-    const confirmed = window.confirm(`Spielfeld "${s.name}" löschen?`);
+    const confirmed = window.confirm(t('locations.detail.deleteSpielfeldConfirm', { name: s.name }));
     if (!confirmed) return;
     try {
       await locationService.deleteSpielfeld(s.id);
@@ -94,12 +96,12 @@ export default function LocationDetail() {
   };
 
   if (loading) {
-    return <div className="p-8 text-foreground">Wird geladen...</div>;
+    return <div className="p-8 text-foreground">{t('common.loading')}</div>;
   }
 
   if (!location) {
     return (
-      <div className="p-8 text-foreground">Spielort nicht gefunden.</div>
+      <div className="p-8 text-foreground">{t('locations.detail.notFound')}</div>
     );
   }
 
@@ -112,17 +114,17 @@ export default function LocationDetail() {
       <div className="flex justify-between items-center mb-6">
         <Button variant="secondary" onClick={() => navigate('/locations')}>
           <ArrowLeft size={18} className="mr-2 align-middle" />
-          Zurück
+          {t('common.back')}
         </Button>
         {canEdit && (
           <div className="flex gap-3">
             <Button variant="secondary" onClick={() => navigate(`/locations/${location.id}/edit`)}>
               <PencilSimple size={18} className="mr-2 align-middle" />
-              Bearbeiten
+              {t('common.edit')}
             </Button>
             <Button variant="danger" onClick={handleDelete} disabled={deleting}>
               <Trash size={18} className="mr-2 align-middle" />
-              Löschen
+              {t('common.delete')}
             </Button>
           </div>
         )}
@@ -136,24 +138,24 @@ export default function LocationDetail() {
 
       <Card>
         <CardContent className="p-6">
-          <h3 className="mt-0 mb-4">Spielfelder</h3>
+          <h3 className="mt-0 mb-4">{t('locations.detail.spielfelder')}</h3>
           {canEdit && (
             <div className="flex gap-2 mb-4 flex-wrap">
               <Input
                 value={newSpielfeldName}
                 onChange={(e) => setNewSpielfeldName(e.target.value)}
-                placeholder="Name (z.B. Scheibe 1)"
+                placeholder={t('locations.detail.spielfeldPlaceholder')}
                 className="max-w-[200px]"
                 onKeyDown={(e) => e.key === 'Enter' && handleAddSpielfeld()}
               />
               <Button onClick={handleAddSpielfeld} disabled={addingSpielfeld || !newSpielfeldName.trim()}>
                 <Plus size={18} className="mr-2 align-middle" />
-                Hinzufügen
+                {t('common.add')}
               </Button>
             </div>
           )}
           {spielfelderSorted.length === 0 ? (
-            <span className="text-muted-foreground">Keine Spielfelder. Fügen Sie Spielfelder hinzu.</span>
+            <span className="text-muted-foreground">{t('locations.detail.noSpielfelder')}</span>
           ) : (
             <ul className="m-0 pl-5 list-none">
               {spielfelderSorted.map((s) => (

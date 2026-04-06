@@ -23,11 +23,9 @@ async def get_user_apps(
     Get list of apps available to the current user.
     Admins see all active apps, regular users see only apps they have permission for.
     """
-    if current_user.role == UserRole.ADMIN:
-        # Admins see all active apps
+    if current_user.role in [UserRole.ADMIN, UserRole.POWER_ADMIN]:
         apps = db.query(App).filter(App.status == AppStatus.ACTIVE).all()
     else:
-        # Regular users see only apps they have permission for
         app_ids = get_user_app_permissions(current_user.id, db)
         apps = db.query(App).filter(
             App.id.in_(app_ids),
@@ -47,8 +45,7 @@ async def get_app_details(
     Get details of a specific app.
     User must have permission to access this app (or be admin).
     """
-    # Admins can access any app
-    if current_user.role == UserRole.ADMIN:
+    if current_user.role in [UserRole.ADMIN, UserRole.POWER_ADMIN]:
         app = db.query(App).filter(App.id == app_id).first()
     else:
         # Check permission

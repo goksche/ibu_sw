@@ -61,12 +61,19 @@ def get_current_user(
     return user
 
 
+def require_power_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Require POWER_ADMIN role (highest privilege level)."""
+    if current_user.role != UserRole.POWER_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions. Power Admin role required."
+        )
+    return current_user
+
+
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    """
-    Dependency to require admin role.
-    Raises HTTPException if user is not an admin.
-    """
-    if current_user.role != UserRole.ADMIN:
+    """Require ADMIN or POWER_ADMIN role."""
+    if current_user.role not in [UserRole.ADMIN, UserRole.POWER_ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions. Admin role required."
@@ -75,11 +82,8 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 
 def require_user_or_admin(current_user: User = Depends(get_current_user)) -> User:
-    """
-    Dependency to require USER or ADMIN role.
-    Raises HTTPException if user is VIEWER or not authenticated.
-    """
-    if current_user.role not in [UserRole.USER, UserRole.ADMIN]:
+    """Require USER, ADMIN, or POWER_ADMIN role."""
+    if current_user.role not in [UserRole.USER, UserRole.ADMIN, UserRole.POWER_ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions. User or Admin role required."
@@ -88,12 +92,8 @@ def require_user_or_admin(current_user: User = Depends(get_current_user)) -> Use
 
 
 def require_viewer_or_above(current_user: User = Depends(get_current_user)) -> User:
-    """
-    Dependency to require VIEWER, USER or ADMIN role.
-    Allows all authenticated users (for read operations).
-    Raises HTTPException if user is not authenticated.
-    """
-    if current_user.role not in [UserRole.VIEWER, UserRole.USER, UserRole.ADMIN]:
+    """Allow all authenticated users (VIEWER, USER, ADMIN, POWER_ADMIN)."""
+    if current_user.role not in [UserRole.VIEWER, UserRole.USER, UserRole.ADMIN, UserRole.POWER_ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions. Authentication required."
@@ -128,8 +128,8 @@ def check_app_permission(
     Admins have access to all apps.
     Raises HTTPException if user doesn't have permission.
     """
-    # Admins have access to all apps
-    if current_user.role == UserRole.ADMIN:
+    # Admins and Power Admins have access to all apps
+    if current_user.role in [UserRole.ADMIN, UserRole.POWER_ADMIN]:
         app = db.query(App).filter(App.id == app_id).first()
         if app is None:
             raise HTTPException(

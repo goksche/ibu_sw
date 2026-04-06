@@ -29,6 +29,8 @@ export interface FallbackCandidateRule {
   selection: string;
   candidates: QualificationCandidate[];
   cutoff_tie_group?: number[];
+  /** Anzahl der noch manuell zu wählenden Plätze bei Grenz-Gleichstand (≤ count) */
+  manual_selection_required?: number;
   manual_selected_ids?: number[];
 }
 

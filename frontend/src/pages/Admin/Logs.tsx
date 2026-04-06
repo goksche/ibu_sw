@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, Card, Input, Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui';
 import { logsService, LogQueryParams } from '../../services/logsService';
@@ -14,12 +15,12 @@ import { ArrowLeft, ListBullets } from 'phosphor-react';
 
 type TabKey = 'page_views' | 'login_events' | 'api_requests' | 'admin_actions' | 'nginx';
 
-const TAB_LABELS: Record<TabKey, string> = {
-  page_views: 'Seitenaufrufe',
-  login_events: 'Login-Events',
-  api_requests: 'API-Requests',
-  admin_actions: 'Admin-Aktionen',
-  nginx: 'Nginx Access-Log'
+const TAB_LABEL_KEYS: Record<TabKey, string> = {
+  page_views: 'admin.logs.tabs.pageViews',
+  login_events: 'admin.logs.tabs.loginEvents',
+  api_requests: 'admin.logs.tabs.apiRequests',
+  admin_actions: 'admin.logs.tabs.adminActions',
+  nginx: 'admin.logs.tabs.nginx'
 };
 
 const formatTimestamp = (value: string) => {
@@ -39,6 +40,7 @@ const formatTimestamp = (value: string) => {
 export default function Logs() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabKey>('page_views');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +87,7 @@ export default function Logs() {
         setNginxLogs(data);
       }
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Logs konnten nicht geladen werden.');
+      setError(err?.response?.data?.detail || t('admin.logs.loadError'));
     } finally {
       setLoading(false);
     }
@@ -99,8 +101,8 @@ export default function Logs() {
   if (!isAdmin) {
     return (
       <div className="p-8 text-center">
-        <h2 className="text-foreground">Zugriff verweigert</h2>
-        <p className="text-muted-foreground">Sie haben keine Berechtigung für diese Seite.</p>
+        <h2 className="text-foreground">{t('admin.logs.accessDenied')}</h2>
+        <p className="text-muted-foreground">{t('admin.logs.noPermission')}</p>
       </div>
     );
   }
@@ -110,19 +112,19 @@ export default function Logs() {
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
           <ListBullets size={26} className="text-foreground" />
-          <h1 className="m-0 text-foreground">Logs</h1>
+          <h1 className="m-0 text-foreground">{t('admin.logs.title')}</h1>
         </div>
         <Button variant="secondary" onClick={() => navigate('/settings')}>
           <ArrowLeft size={18} className="mr-2 align-middle" />
-          Zurück
+          {t('common.back')}
         </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
         <TabsList className="flex gap-3 mb-4 flex-wrap">
-          {Object.entries(TAB_LABELS).map(([key, label]) => (
+          {Object.entries(TAB_LABEL_KEYS).map(([key, translationKey]) => (
             <TabsTrigger key={key} value={key}>
-              {label}
+              {t(translationKey)}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -131,24 +133,24 @@ export default function Logs() {
           <Card className="p-4 mb-4">
             <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-4">
               <Input
-                label="Suche (Pfad/User/E-Mail)"
+                label={t('admin.logs.searchLabel')}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
               <Input
-                label="Von"
+                label={t('admin.logs.fromLabel')}
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
               <Input
-                label="Bis"
+                label={t('admin.logs.toLabel')}
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
               <Input
-                label="Limit"
+                label={t('admin.logs.limitLabel')}
                 type="number"
                 min={1}
                 max={500}
@@ -158,7 +160,7 @@ export default function Logs() {
             </div>
             <div className="mt-4 flex justify-end">
               <Button variant="secondary" onClick={loadActiveTab} disabled={loading}>
-                Aktualisieren
+                {t('common.refresh')}
               </Button>
             </div>
           </Card>
@@ -168,7 +170,7 @@ export default function Logs() {
           <Card className="p-4 mb-4">
             <div className="flex gap-4 items-end">
               <Input
-                label="Letzte Zeilen"
+                label={t('admin.logs.tailLabel')}
                 type="number"
                 min={1}
                 max={2000}
@@ -176,7 +178,7 @@ export default function Logs() {
                 onChange={(e) => setTail(Number(e.target.value) || 200)}
               />
               <Button variant="secondary" onClick={loadActiveTab} disabled={loading}>
-                Aktualisieren
+                {t('common.refresh')}
               </Button>
             </div>
           </Card>
@@ -190,16 +192,16 @@ export default function Logs() {
 
         <TabsContent value="page_views" className="mt-0">
           {loading && activeTab === 'page_views' ? (
-            <div className="p-4 text-muted-foreground">Lädt...</div>
+            <div className="p-4 text-muted-foreground">{t('common.loadingShort')}</div>
           ) : (
           <Card className="p-0 overflow-hidden">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="border-b-2 border-border">
-                    <th className="p-3 text-left text-foreground">Zeit</th>
-                    <th className="p-3 text-left text-foreground">Pfad</th>
-                    <th className="p-3 text-left text-foreground">User</th>
-                    <th className="p-3 text-left text-foreground">IP</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.time')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.path')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.user')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.ip')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -221,17 +223,17 @@ export default function Logs() {
 
         <TabsContent value="login_events" className="mt-0">
           {loading && activeTab === 'login_events' ? (
-            <div className="p-4 text-muted-foreground">Lädt...</div>
+            <div className="p-4 text-muted-foreground">{t('common.loadingShort')}</div>
           ) : (
           <Card className="p-0 overflow-hidden">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="border-b-2 border-border">
-                    <th className="p-3 text-left text-foreground">Zeit</th>
-                    <th className="p-3 text-left text-foreground">Typ</th>
-                    <th className="p-3 text-left text-foreground">User/E-Mail</th>
-                    <th className="p-3 text-left text-foreground">Ergebnis</th>
-                    <th className="p-3 text-left text-foreground">Grund</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.time')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.type')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.userEmail')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.result')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.reason')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -240,7 +242,7 @@ export default function Logs() {
                       <td className="p-3 text-foreground">{formatTimestamp(row.created_at)}</td>
                       <td className="p-3 text-foreground">{row.event_type}</td>
                       <td className="p-3 text-foreground">{row.username || row.email || '-'}</td>
-                      <td className="p-3 text-foreground">{row.success ? 'OK' : 'Fehler'}</td>
+                      <td className="p-3 text-foreground">{row.success ? t('admin.logs.resultOk') : t('admin.logs.resultError')}</td>
                       <td className="p-3 text-foreground">{row.reason || '-'}</td>
                     </tr>
                   ))}
@@ -252,17 +254,17 @@ export default function Logs() {
 
         <TabsContent value="api_requests" className="mt-0">
           {loading && activeTab === 'api_requests' ? (
-            <div className="p-4 text-muted-foreground">Lädt...</div>
+            <div className="p-4 text-muted-foreground">{t('common.loadingShort')}</div>
           ) : (
           <Card className="p-0 overflow-hidden">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="border-b-2 border-border">
-                    <th className="p-3 text-left text-foreground">Zeit</th>
-                    <th className="p-3 text-left text-foreground">Methode</th>
-                    <th className="p-3 text-left text-foreground">Pfad</th>
-                    <th className="p-3 text-left text-foreground">Status</th>
-                    <th className="p-3 text-left text-foreground">Dauer</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.time')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.method')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.path')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.status')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.duration')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -283,16 +285,16 @@ export default function Logs() {
 
         <TabsContent value="admin_actions" className="mt-0">
           {loading && activeTab === 'admin_actions' ? (
-            <div className="p-4 text-muted-foreground">Lädt...</div>
+            <div className="p-4 text-muted-foreground">{t('common.loadingShort')}</div>
           ) : (
           <Card className="p-0 overflow-hidden">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="border-b-2 border-border">
-                    <th className="p-3 text-left text-foreground">Zeit</th>
-                    <th className="p-3 text-left text-foreground">Aktion</th>
-                    <th className="p-3 text-left text-foreground">Status</th>
-                    <th className="p-3 text-left text-foreground">User</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.time')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.action')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.status')}</th>
+                    <th className="p-3 text-left text-foreground">{t('admin.logs.table.user')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -312,11 +314,11 @@ export default function Logs() {
 
         <TabsContent value="nginx" className="mt-0">
           {loading && activeTab === 'nginx' ? (
-            <div className="p-4 text-muted-foreground">Lädt...</div>
+            <div className="p-4 text-muted-foreground">{t('common.loadingShort')}</div>
           ) : (
           <Card className="p-4">
               <div className="font-mono whitespace-pre-wrap text-sm">
-                {(nginxLogs?.lines || []).join('\n') || 'Keine Logs vorhanden.'}
+                {(nginxLogs?.lines || []).join('\n') || t('admin.logs.noLogs')}
               </div>
             </Card>
           )}

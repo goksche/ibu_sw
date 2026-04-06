@@ -9,7 +9,7 @@ from datetime import datetime
 class ParticipantBase(BaseModel):
     """Base Participant Schema"""
     first_name: str = Field(..., min_length=1, max_length=100)
-    last_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(default="", max_length=100)
     club: str | None = Field(default=None, max_length=200)
     scolia_id: str | None = Field(default=None, max_length=50, description="Scolia ID")
     email: str | None = Field(default=None, max_length=200)
@@ -29,6 +29,19 @@ class ParticipantBase(BaseModel):
         except EmailNotValidError:
             raise ValueError('Invalid email format')
 
+    @field_validator('first_name')
+    @classmethod
+    def validate_first_name(cls, v: str) -> str:
+        value = (v or '').strip()
+        if not value:
+            raise ValueError('First name is required')
+        return value
+
+    @field_validator('last_name')
+    @classmethod
+    def normalize_last_name(cls, v: str | None) -> str:
+        return (v or '').strip()
+
 
 class ParticipantCreate(ParticipantBase):
     """Schema for creating a new participant"""
@@ -38,7 +51,7 @@ class ParticipantCreate(ParticipantBase):
 class ParticipantUpdate(BaseModel):
     """Schema for updating a participant"""
     first_name: str | None = Field(default=None, min_length=1, max_length=100)
-    last_name: str | None = Field(default=None, min_length=1, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
     club: str | None = None
     scolia_id: str | None = None
     email: str | None = Field(default=None, max_length=200)

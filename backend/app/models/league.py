@@ -40,6 +40,8 @@ class League(Base):
     auto_tournament_mode = Column(String(20), nullable=True)
     auto_tournament_settings = Column(JSON, nullable=True)
 
+    visibility = Column(String(10), default="public", nullable=False)
+
     season_type = Column(String(20), default="year")
     season_year = Column(String(20), nullable=True)
     start_date = Column(Date, nullable=True)

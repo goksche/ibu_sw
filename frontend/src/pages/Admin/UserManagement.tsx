@@ -1,6 +1,7 @@
 // Admin User Management Page
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, Input, Button, Select, Badge } from '../../components/ui';
 import { User } from '../../types';
@@ -10,6 +11,7 @@ import { cn } from '@/lib/utils';
 
 // UserRole enum for the component
 enum UserRole {
+  POWER_ADMIN = 'power_admin',
   ADMIN = 'admin',
   USER = 'user',
   VIEWER = 'viewer'
@@ -23,6 +25,7 @@ interface UserFormData {
 export default function UserManagement() {
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -53,7 +56,7 @@ export default function UserManagement() {
       setError('');
     } catch (err: any) {
       console.error('Failed to load users:', err);
-      setError(err.response?.data?.detail || 'Fehler beim Laden der Benutzer');
+      setError(err.response?.data?.detail || t('admin.users.loadError'));
     } finally {
       setLoading(false);
     }
@@ -91,7 +94,7 @@ export default function UserManagement() {
       resetForm();
     } catch (err: any) {
       console.error('User operation failed:', err);
-      setError(err.response?.data?.detail || 'Fehler beim Speichern');
+      setError(err.response?.data?.detail || t('admin.users.saveError'));
     } finally {
       setSaving(false);
     }
@@ -108,12 +111,12 @@ export default function UserManagement() {
 
   const handleDelete = async (user: User) => {
     // Prevent deletion of the main admin user
-    if (user.username === 'goksche' || user.role === 'admin') {
-      alert('Der Administrator-Benutzer kann nicht gelöscht werden.');
+    if (user.username === 'goksche' || user.role === 'power_admin' || user.role === 'admin') {
+      alert(t('admin.users.adminDeleteProtected'));
       return;
     }
 
-    if (!confirm(`Benutzer "${user.username}" wirklich löschen?`)) {
+    if (!confirm(t('admin.users.deleteConfirm', { name: user.username }))) {
       return;
     }
 
@@ -126,7 +129,7 @@ export default function UserManagement() {
       await loadUsers();
     } catch (err: any) {
       console.error('Delete failed:', err);
-      setError(err.response?.data?.detail || 'Fehler beim Löschen');
+      setError(err.response?.data?.detail || t('admin.users.deleteError'));
     }
   };
 
@@ -143,7 +146,8 @@ export default function UserManagement() {
     setShowForm(true);
   };
 
-  const getRoleBadgeVariant = (role: string): 'info' | 'success' | 'secondary' => {
+  const getRoleBadgeVariant = (role: string): 'info' | 'success' | 'secondary' | 'destructive' => {
+    if (role === UserRole.POWER_ADMIN) return 'destructive';
     if (role === UserRole.ADMIN) return 'info';
     if (role === UserRole.USER) return 'success';
     return 'secondary';
@@ -152,8 +156,8 @@ export default function UserManagement() {
   if (!isAdmin) {
     return (
       <div className="p-8 text-center">
-        <h2 className="text-foreground">Zugriff verweigert</h2>
-        <p className="text-muted-foreground">Sie haben keine Berechtigung für diese Seite.</p>
+        <h2 className="text-foreground">{t('admin.users.accessDenied')}</h2>
+        <p className="text-muted-foreground">{t('admin.users.noPermission')}</p>
       </div>
     );
   }
@@ -168,18 +172,18 @@ export default function UserManagement() {
             className="flex items-center gap-2 py-2 px-4"
           >
             <ArrowLeft size={16} />
-            Zurück
+            {t('common.back')}
           </Button>
 
           <div>
             <h1 className="m-0 text-foreground flex items-center gap-4">
               <Users size={32} />
-              Benutzer-Verwaltung
+              {t('admin.users.title')}
             </h1>
             <p className="text-muted-foreground mt-2 mb-0">
-              Verwalten Sie Benutzer und deren Rollen
+              {t('admin.users.subtitle')}
               <br />
-              <small className="text-muted-foreground">Änderungen werden in der Datenbank gespeichert</small>
+              <small className="text-muted-foreground">{t('admin.users.dbNote')}</small>
             </p>
           </div>
         </div>
@@ -189,7 +193,7 @@ export default function UserManagement() {
           className="flex items-center gap-2"
         >
           <Plus size={16} />
-          Neuer Benutzer
+          {t('admin.users.newUser')}
         </Button>
       </div>
 
@@ -201,13 +205,13 @@ export default function UserManagement() {
 
       {showForm && (
         <Card className="mb-8">
-          <h3 className="text-foreground">{editingUser ? 'Benutzer bearbeiten' : 'Neuer Benutzer'}</h3>
+          <h3 className="text-foreground">{editingUser ? t('admin.users.editUser') : t('admin.users.newUser')}</h3>
 
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4 mb-4">
               <div>
                 <Input
-                  label="E-Mail"
+                  label={t('admin.users.emailLabel')}
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -217,10 +221,11 @@ export default function UserManagement() {
 
               <div>
                 <Select
-                  label="Rolle"
+                  label={t('admin.users.roleLabel')}
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                   options={[
+                    { value: UserRole.POWER_ADMIN, label: 'Power Admin' },
                     { value: UserRole.ADMIN, label: 'Admin' },
                     { value: UserRole.USER, label: 'User' },
                     { value: UserRole.VIEWER, label: 'Viewer' }
@@ -231,16 +236,16 @@ export default function UserManagement() {
 
               <div className="col-span-full">
                 <div className="text-sm text-muted-foreground">
-                  Benutzername wird automatisch aus der E-Mail erzeugt.
+                  {t('admin.users.autoUsername')}
                   <br />
-                  Login erfolgt per OTP (E-Mail).
+                  {t('admin.users.otpLogin')}
                 </div>
               </div>
             </div>
 
             <div className="flex gap-4">
               <Button type="submit" disabled={saving}>
-                {saving ? 'Speichern...' : (editingUser ? 'Aktualisieren' : 'Erstellen')}
+                {saving ? t('common.savingShort') : (editingUser ? t('common.update') : t('common.create'))}
               </Button>
               <Button
                 type="button"
@@ -250,7 +255,7 @@ export default function UserManagement() {
                   setEditingUser(null);
                 }}
               >
-                Abbrechen
+                {t('common.cancel')}
               </Button>
             </div>
           </form>
@@ -258,21 +263,21 @@ export default function UserManagement() {
       )}
 
       <Card>
-        <h3 className="text-foreground">Benutzer-Liste</h3>
+        <h3 className="text-foreground">{t('admin.users.userList')}</h3>
 
         {loading ? (
-          <p className="text-muted-foreground">Lade Benutzer...</p>
+          <p className="text-muted-foreground">{t('admin.users.loadingUsers')}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse mt-4">
               <thead>
                 <tr className="border-b border-border text-left">
-                  <th className="p-4">Benutzername</th>
-                  <th className="p-4">E-Mail</th>
-                  <th className="p-4">Rolle</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4">Erstellt</th>
-                  <th className="p-4">Aktionen</th>
+                  <th className="p-4">{t('admin.users.table.username')}</th>
+                  <th className="p-4">{t('admin.users.table.email')}</th>
+                  <th className="p-4">{t('admin.users.table.role')}</th>
+                  <th className="p-4">{t('admin.users.table.status')}</th>
+                  <th className="p-4">{t('admin.users.table.created')}</th>
+                  <th className="p-4">{t('admin.users.table.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -289,7 +294,7 @@ export default function UserManagement() {
                       <span className={cn(
                         user.is_active ? 'text-success' : 'text-destructive'
                       )}>
-                        {user.is_active ? 'Aktiv' : 'Inaktiv'}
+                        {user.is_active ? t('common.status.active') : t('common.status.inactive')}
                       </span>
                     </td>
                     <td className="p-4">
@@ -308,7 +313,7 @@ export default function UserManagement() {
                           variant="danger"
                           onClick={() => handleDelete(user)}
                           className="p-1"
-                          disabled={user.username === 'goksche' || user.role === 'admin'}
+                          disabled={user.username === 'goksche' || user.role === 'power_admin' || user.role === 'admin'}
                         >
                           <Trash size={14} />
                         </Button>

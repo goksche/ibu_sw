@@ -3,7 +3,7 @@ export interface User {
   id: number;
   username: string;
   email: string;
-  role: 'admin' | 'user' | 'viewer';
+  role: 'power_admin' | 'admin' | 'user' | 'viewer';
   is_active: boolean;
   created_at: string;
 }
@@ -13,6 +13,8 @@ export type KOStructure =
   | 'single_elimination_with_third'
   | 'consolation_bracket'
   | 'double_elimination'
+  | 'triple_elimination'
+  | 'aggregate_ko'
   | 'group_then_single_ko'
   | 'group_then_double_ko'
   | 'ko_with_group_winner_advantage'
@@ -24,6 +26,7 @@ export type KODrawMethod =
   | 'overall_seeding'
   | 'pot_system'
   | 'full_random'
+  | 'random_each_round'
   | 'bonus_draw_for_winners'
   | 'predefined_bracket'
   | 'manual';
@@ -43,6 +46,11 @@ export type KOStartRound =
   | 'final';  // 2 Teilnehmer
 
 export type LeagueVariant = 'classic' | 'double' | 'multiple';
+export type TournamentModeVariant =
+  | 'L1' | 'L2' | 'L3' | 'L4'
+  | 'K1' | 'K2' | 'K3' | 'K4' | 'K5' | 'K6'
+  | 'C1' | 'C2' | 'C3' | 'C4' | 'C5';
+export type KOPairingVariant = 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6' | 'P7';
 
 export interface QualificationPlan {
   required_participants: number;
@@ -77,6 +85,8 @@ export interface Tournament {
     selection: 'best';
   }>;
   ko_distribution: KODrawMode | null;  // Deprecated
+  mode_variant?: TournamentModeVariant | null;
+  ko_pairing_mode?: KOPairingVariant | null;
   ko_structure: KOStructure | null;
   ko_draw_method: KODrawMethod | null;
   ko_third_place_match: boolean;
@@ -84,8 +94,13 @@ export interface Tournament {
   ko_block_same_group: boolean;
   ko_block_same_position: boolean;
   ko_random_seed: number | null;
-  league_scoring_system: 'points' | 'difference' | null;
+  league_scoring_system: 'points' | 'difference' | 'wins' | null;
+  league_points_win?: number;
+  league_points_draw?: number;
+  league_points_loss?: number;
   tie_breaking_rules: string[] | null;
+  head_referee?: string | null;
+  scorekeeper?: string | null;
   league_variant?: LeagueVariant;
   league_rounds_multiplier?: number;
   is_template: boolean;
@@ -93,10 +108,15 @@ export interface Tournament {
   show_matches: boolean;
   show_tables: boolean;
   location_id: number | null;
+  visibility?: 'public' | 'shared' | 'private';
   spielfeld_assignment_mode?: string;
   created_at: string;
   updated_at: string;
   creator_id: number | null;
+  /** Echte Anzahl Turnierteilnehmer (API); Karten bevorzugen dies vor Planungsfeldern */
+  participant_count?: number | null;
+  /** Bei status completed: Sieger (Platz 1), falls auswertbar */
+  winner_name?: string | null;
 }
 
 export interface Spielfeld {
@@ -221,7 +241,7 @@ export interface RegisterData {
   username: string;
   email: string;
   password: string;
-  role: 'admin' | 'user' | 'viewer';
+  role: 'power_admin' | 'admin' | 'user' | 'viewer';
 }
 
 export interface AuthResponse {
@@ -315,7 +335,7 @@ export interface DashboardSettings {
 export interface PlaceholderSettings {
   language: string;
   timezone: string;
-  layout: 'standard' | 'neon' | 'neon_yellow' | 'neon_cyan' | 'neon_blue';
+  layout: 'standard' | 'neon' | 'neon_yellow' | 'neon_cyan' | 'neon_blue' | 'arena' | 'gsmartsol';
   font_family:
     | 'Protest Guerilla'
     | 'Source Sans 3'

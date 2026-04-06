@@ -1,21 +1,54 @@
 # KO Bracket Generation Service
 # v1.3.2
 
-from typing import List, Tuple, Dict, Optional
+from typing import List, Dict, Optional
 import math
 import random
+
+from app.services.ko_propagation import BRONZE_ROUND
+
+
+def append_third_place_placeholder_if_needed(
+    matches: List[Dict],
+    *,
+    ko_third_place_match: bool,
+    ko_structure: Optional[str],
+) -> List[Dict]:
+    """
+    Append a placeholder match for the bronze / 3rd-place game (round BRONZE_ROUND) when the
+    tournament requests it and the KO structure is a classic single-elimination tree.
+    """
+    if any(m.get("round") == BRONZE_ROUND for m in matches):
+        return matches
+
+    struct = (ko_structure or "").strip()
+    if struct in (
+        "double_elimination",
+        "triple_elimination",
+        "consolation_bracket",
+        "aggregate_ko",
+        "page_playoff",
+    ):
+        return matches
+
+    want = bool(ko_third_place_match) or struct == "single_elimination_with_third"
+    if not want:
+        return matches
+
+    matches.append(
+        {
+            "round": BRONZE_ROUND,
+            "match_no": 1,
+            "player1_id": None,
+            "player2_id": None,
+        }
+    )
+    return matches
 
 
 def _log2_int(x: int) -> int:
     """Calculate log2 and round to integer"""
     return int(round(math.log2(x))) if x > 0 else 0
-
-
-def _next_round_slot_for(match_no: int) -> Tuple[int, int]:
-    """Determine target match and slot for winner"""
-    target = (match_no + 1) // 2
-    slot = 1 if (match_no % 2 == 1) else 2
-    return target, slot
 
 
 def compute_group_ranking_with_ties(
@@ -507,11 +540,76 @@ def _generate_cross_mode(
         # Validate we have enough matches
         expected_matches = first_round_size // 2
         if len(matches) < expected_matches:
-            raise ValueError(
-                f"Kann nicht genügend Spiele für Cross-Mode generieren: "
-                f"{len(matches)} Spiele erstellt, {expected_matches} benötigt. "
-                f"Bitte verwenden Sie Draw-Mode für {gcount} Gruppen mit {first_round_size} Teilnehmern."
+            # Robust fallback for arbitrary group constellations:
+            # build a global seeded pool (position 1 across groups, then position 2, ...),
+            # then pair seeded participants while avoiding same-group pairings whenever possible.
+            seeded_pool = _build_overall_seeding_pool(
+                group_list=group_list,
+                group_rankings=group_rankings,
+                group_stats=group_stats,
+                tie_breaking_rules=tie_breaking_rules,
             )
+            # Deduplicate while preserving order.
+            seen_ids = set()
+            seeded_pool = [pid for pid in seeded_pool if not (pid in seen_ids or seen_ids.add(pid))]
+
+            if len(seeded_pool) < first_round_size:
+                raise ValueError(
+                    f"Kann nicht genügend Spiele für Cross-Mode generieren: "
+                    f"{len(matches)} Spiele erstellt, {expected_matches} benötigt. "
+                    f"Verfügbarer Qualifikanten-Pool: {len(seeded_pool)} von {first_round_size}."
+                )
+
+            seeded_pool = seeded_pool[:first_round_size]
+            participant_to_group = {}
+            for gid, ranking in group_rankings.items():
+                for pid in ranking:
+                    participant_to_group[pid] = gid
+
+            # Greedy seeded pairing:
+            # take best remaining participant and search from the tail for an opponent
+            # from a different group. If impossible, fall back to the tail candidate.
+            remaining = seeded_pool[:]
+            matches = []
+            match_no = 1
+            while remaining:
+                p1 = remaining.pop(0)
+                if not remaining:
+                    p2 = None
+                else:
+                    p1_group = participant_to_group.get(p1)
+                    pick_idx = None
+                    for idx in range(len(remaining) - 1, -1, -1):
+                        candidate = remaining[idx]
+                        candidate_group = participant_to_group.get(candidate)
+                        if p1_group is None or candidate_group is None or candidate_group != p1_group:
+                            pick_idx = idx
+                            break
+                    if pick_idx is None:
+                        pick_idx = len(remaining) - 1
+                    p2 = remaining.pop(pick_idx)
+
+                matches.append({
+                    'round': 1,
+                    'match_no': match_no,
+                    'player1_id': p1,
+                    'player2_id': p2
+                })
+                match_no += 1
+
+            # Disperse strong seeds across bracket slots, so top qualifiers
+            # (e.g., group winners) meet as late as possible.
+            slot_orders = {
+                2: [1, 2],
+                4: [1, 4, 2, 3],
+                8: [1, 8, 4, 5, 2, 7, 3, 6],
+                16: [1, 16, 8, 9, 4, 13, 5, 12, 2, 15, 7, 10, 3, 14, 6, 11],
+            }
+            order = slot_orders.get(expected_matches, list(range(1, expected_matches + 1)))
+            if len(order) == len(matches):
+                for i, m in enumerate(matches):
+                    m['match_no'] = order[i]
+                matches.sort(key=lambda x: x['match_no'])
     
     # Add subsequent rounds
     rounds_total = _log2_int(first_round_size)
@@ -941,7 +1039,8 @@ def generate_ko_bracket_from_participants(
     
     Args:
         participant_ids: List of participant IDs to include in bracket
-        draw_method: 'full_random', 'pot_system', or 'overall_seeding'
+        draw_method: 'full_random', 'pot_system', 'overall_seeding',
+            'predefined_bracket' or 'bonus_draw_for_winners'
         rng_seed: Optional random seed for reproducible draws
         
     Returns:
@@ -979,6 +1078,11 @@ def generate_ko_bracket_from_participants(
     participants = participant_ids.copy()
     participants.extend([None] * num_byes)
     
+    # Normalize draw method aliases used in model/API.
+    if draw_method in ('predefined_bracket', 'bonus_draw_for_winners'):
+        # In pure KO (no groups), these methods behave like seeded order.
+        draw_method = 'overall_seeding'
+
     # Apply draw method
     if draw_method == 'full_random':
         # Random shuffle
@@ -1455,6 +1559,37 @@ def generate_triple_elimination_bracket(
     })
     
     return matches
+
+
+def generate_page_playoff_bracket(
+    participant_ids: List[int],
+    draw_method: str = 'overall_seeding',
+    rng_seed: Optional[int] = None
+) -> List[Dict]:
+    """
+    Generate a compact Page playoff bracket (Top-4).
+    Match flow:
+    - R1M1: seed1 vs seed2
+    - R1M2: seed3 vs seed4
+    - R2M1: loser(M1) vs winner(M2)
+    - R3M1: winner(M1) vs winner(R2M1)
+    """
+    if len(participant_ids) < 4:
+        raise ValueError("Page-Playoff benoetigt mindestens 4 Teilnehmer")
+
+    ids = participant_ids[:]
+    if draw_method == 'full_random':
+        if rng_seed is not None:
+            random.seed(rng_seed)
+        random.shuffle(ids)
+
+    seeds = ids[:4]
+    return [
+        {"round": 1, "match_no": 1, "player1_id": seeds[0], "player2_id": seeds[1]},
+        {"round": 1, "match_no": 2, "player1_id": seeds[2], "player2_id": seeds[3]},
+        {"round": 2, "match_no": 1, "player1_id": None, "player2_id": None},
+        {"round": 3, "match_no": 1, "player1_id": None, "player2_id": None},
+    ]
 
 
 def generate_aggregate_ko_bracket(

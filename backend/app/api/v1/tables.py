@@ -54,6 +54,15 @@ def _compute_ranking_from_stats_for_table(
                 buckets[points] = []
             buckets[points].append(pid)
         sorted_values = sorted(buckets.keys(), reverse=True)
+    elif scoring_system == LeagueScoringSystem.WINS:
+        # Group by wins
+        buckets = {}
+        for pid, stat in stats.items():
+            wins = stat.get('wins', 0)
+            if wins not in buckets:
+                buckets[wins] = []
+            buckets[wins].append(pid)
+        sorted_values = sorted(buckets.keys(), reverse=True)
     else:  # DIFFERENCE
         # Group by difference
         buckets = {}
@@ -91,6 +100,16 @@ def _compute_ranking_from_stats_for_table(
                         a_gf = stats[a].get('goals_for', 0)
                         b_gf = stats[b].get('goals_for', 0)
                         result.extend([a, b] if a_gf >= b_gf else [b, a])
+                elif scoring_system == LeagueScoringSystem.WINS:
+                    # Compare diff, then goals_for
+                    a_diff = stats[a].get('diff', 0)
+                    b_diff = stats[b].get('diff', 0)
+                    if a_diff != b_diff:
+                        result.extend([a, b] if a_diff > b_diff else [b, a])
+                    else:
+                        a_gf = stats[a].get('goals_for', 0)
+                        b_gf = stats[b].get('goals_for', 0)
+                        result.extend([a, b] if a_gf >= b_gf else [b, a])
                 else:
                     # Compare goals_for
                     a_gf = stats[a].get('goals_for', 0)
@@ -118,7 +137,10 @@ def _create_mini_table_for_tie_group(
     matches: List[Dict],
     participants_map: Dict[int, Any],
     scoring_system: LeagueScoringSystem,
-    tie_breaking_rules: List[str]
+    tie_breaking_rules: List[str],
+    points_for_win: int = 3,
+    points_for_draw: int = 1,
+    points_for_loss: int = 0,
 ) -> Tuple[List[Dict], bool, List[List[int]]]:
     """
     Create a mini table showing only direct encounters between tied participants.
@@ -159,42 +181,44 @@ def _create_mini_table_for_tie_group(
             mini_stats[p1_id]['wins'] += 1
             mini_stats[p2_id]['losses'] += 1
             if scoring_system == LeagueScoringSystem.POINTS:
-                mini_stats[p1_id]['points'] += 3
+                mini_stats[p1_id]['points'] += points_for_win
+                mini_stats[p2_id]['points'] += points_for_loss
         elif score2 > score1:
             mini_stats[p2_id]['wins'] += 1
             mini_stats[p1_id]['losses'] += 1
             if scoring_system == LeagueScoringSystem.POINTS:
-                mini_stats[p2_id]['points'] += 3
+                mini_stats[p2_id]['points'] += points_for_win
+                mini_stats[p1_id]['points'] += points_for_loss
         else:
             mini_stats[p1_id]['draws'] += 1
             mini_stats[p2_id]['draws'] += 1
             if scoring_system == LeagueScoringSystem.POINTS:
-                mini_stats[p1_id]['points'] += 1
-                mini_stats[p2_id]['points'] += 1
+                mini_stats[p1_id]['points'] += points_for_draw
+                mini_stats[p2_id]['points'] += points_for_draw
         
         # Calculate differences
         mini_stats[p1_id]['diff'] = mini_stats[p1_id]['goals_for'] - mini_stats[p1_id]['goals_against']
         mini_stats[p2_id]['diff'] = mini_stats[p2_id]['goals_for'] - mini_stats[p2_id]['goals_against']
     
-    applicable_rules = [r for r in tie_breaking_rules if r not in ('direct_encounter', 'decision_match')]
+    # Für die Reihenfolge in der Minitabelle dieselben Tie-Break-Regeln verwenden
+    # wie in der normalen Tabelle (inkl. direct_encounter in der definierten Reihenfolge).
+    ordered_participant_ids = compute_group_ranking_with_rules(
+        direct_matches,
+        tied_participant_ids,
+        scoring_system,
+        tie_breaking_rules,
+        points_for_win=points_for_win,
+        points_for_draw=points_for_draw,
+        points_for_loss=points_for_loss,
+    )
 
-    # Build mini table entries sorted by tie-breaking criteria
+    # Build mini table entries in resolved ranking order
     mini_table_entries = []
-    for pid in tied_participant_ids:
+    for pid in ordered_participant_ids:
         stats = mini_stats[pid]
         participant = participants_map.get(pid)
         if not participant:
             continue
-        
-        scoring_value = stats['points'] if scoring_system == LeagueScoringSystem.POINTS else stats['diff']
-        rule_key = [scoring_value]
-        for rule in applicable_rules:
-            if rule == 'wins':
-                rule_key.append(stats['wins'])
-            elif rule == 'diff':
-                rule_key.append(stats['diff'])
-            elif rule == 'goals_for':
-                rule_key.append(stats['goals_for'])
 
         entry = {
             'participant_id': pid,
@@ -210,24 +234,26 @@ def _create_mini_table_for_tie_group(
         
         if scoring_system == LeagueScoringSystem.POINTS:
             entry['points'] = stats['points']
-            # Sort key: rules (without direct encounter), then diff/goals_for for stable ordering
-            entry['_sort_key'] = tuple([-value for value in rule_key] + [-stats['diff'], -stats['goals_for'], pid])
-        else:
-            # Sort key: rules (without direct encounter), then goals_for for stable ordering
-            entry['_sort_key'] = tuple([-value for value in rule_key] + [-stats['goals_for'], pid])
-
-        entry['_rule_key'] = tuple(rule_key)
+        # "offener Gleichstand" nur noch bei vollständig identischen Mini-Statistiken.
+        stat_tuple = (
+            stats['games'],
+            stats['wins'],
+            stats['draws'],
+            stats['losses'],
+            stats['goals_for'],
+            stats['goals_against'],
+            stats['diff'],
+            stats['points'] if scoring_system == LeagueScoringSystem.POINTS else None,
+        )
+        entry['_stat_tuple'] = stat_tuple
         
         mini_table_entries.append(entry)
-    
-    # Sort by sort key
-    mini_table_entries.sort(key=lambda x: x['_sort_key'])
-    
-    # Group by rule key to find unresolved ties
-    rule_groups: Dict[Tuple, List[int]] = {}
+
+    # Group by full stat tuple to find genuinely unresolved ties
+    stat_groups: Dict[Tuple, List[int]] = {}
     for entry in mini_table_entries:
-        rule_groups.setdefault(entry['_rule_key'], []).append(entry['participant_id'])
-    unresolved_tie_groups = [group for group in rule_groups.values() if len(group) > 1]
+        stat_groups.setdefault(entry['_stat_tuple'], []).append(entry['participant_id'])
+    unresolved_tie_groups = [group for group in stat_groups.values() if len(group) > 1]
 
     # "Komplett identisch" nur, wenn alle Teilnehmer in der Minitabelle in allen Statistiken
     # übereinstimmen (Sp, S, U, N, LF, LA, Diff, ggf. Pkt) – nicht nur nach Tie-Breaker-Regeln
@@ -242,8 +268,7 @@ def _create_mini_table_for_tie_group(
     
     # Remove sort key before returning
     for entry in mini_table_entries:
-        del entry['_sort_key']
-        del entry['_rule_key']
+        del entry['_stat_tuple']
         entry['is_completely_tied'] = is_completely_tied
     
     return mini_table_entries, is_completely_tied, unresolved_tie_groups
@@ -313,7 +338,15 @@ async def get_group_table(
     ]
     
     # Calculate all stats first (needed for ranking and tie group detection)
-    all_stats = compute_group_stats(regular_matches, group_participants, scoring_system, exclude_decision_matches=True)
+    all_stats = compute_group_stats(
+        regular_matches,
+        group_participants,
+        scoring_system,
+        exclude_decision_matches=True,
+        points_for_win=tournament.league_points_win or 3,
+        points_for_draw=tournament.league_points_draw or 1,
+        points_for_loss=tournament.league_points_loss or 0,
+    )
     
     # Compute ranking with decision matches (if any exist)
     if decision_matches:
@@ -322,14 +355,20 @@ async def get_group_table(
             decision_matches,
             group_participants,
             scoring_system,
-            tie_breaking_rules
+            tie_breaking_rules,
+            points_for_win=tournament.league_points_win or 3,
+            points_for_draw=tournament.league_points_draw or 1,
+            points_for_loss=tournament.league_points_loss or 0,
         )
     else:
         ranked_participant_ids = compute_group_ranking_with_rules(
             regular_matches,
             group_participants,
             scoring_system,
-            tie_breaking_rules
+            tie_breaking_rules,
+            points_for_win=tournament.league_points_win or 3,
+            points_for_draw=tournament.league_points_draw or 1,
+            points_for_loss=tournament.league_points_loss or 0,
         )
         decision_winners = {}
     
@@ -344,18 +383,21 @@ async def get_group_table(
         stats = all_stats[participant_id]
         if scoring_system == LeagueScoringSystem.POINTS:
             stats['scoring_value'] = stats.get('points', 0)
+        elif scoring_system == LeagueScoringSystem.WINS:
+            stats['scoring_value'] = stats.get('wins', 0)
         else:
             stats['scoring_value'] = stats.get('diff', 0)
     
-    # Find tie groups for mini table: when direct_encounter is used, group only by scoring_value
-    # (points), so that all with same points get one mini table (Direktbegegnung = Kriterium Nr. 1).
-    # Otherwise group by scoring_value + wins/diff from rules before direct_encounter.
-    use_direct_encounter_for_tie_group = 'direct_encounter' in (tie_breaking_rules or [])
-
-    def _build_tie_key(stats: Dict) -> Tuple:
+    # Gleichstandsgruppe für Minitabelle: nur Teilnehmer, die nach allen Kriterien *vor*
+    # „direct_encounter“ noch ungetrennt sind (z. B. gleiche Punkte + gleiche Diff).
+    # Erst dann ist Direktbegegnung/Minitabelle sinnvoll – nicht schon bei gleichen Punkten,
+    # wenn Diff alle unterscheidet (sequenzielle Wertung wie compute_group_ranking_with_rules).
+    def _build_tie_key_before_direct_encounter(stats: Dict) -> Tuple:
         parts = [stats['scoring_value']]
         for r in (tie_breaking_rules or []):
-            if r in ('direct_encounter', 'decision_match'):
+            if r == 'direct_encounter':
+                break
+            if r == 'decision_match':
                 continue
             if r == 'wins':
                 parts.append(stats.get('wins', 0))
@@ -366,11 +408,7 @@ async def get_group_table(
         return tuple(parts)
 
     def _build_tie_group_key_for_mini_table(stats: Dict) -> Tuple:
-        """Key for grouping participants into one mini table. If direct_encounter is a rule,
-        everyone with the same points (or diff) is in one group; else use full tie key."""
-        if use_direct_encounter_for_tie_group:
-            return (stats['scoring_value'],)
-        return _build_tie_key(stats)
+        return _build_tie_key_before_direct_encounter(stats)
 
     tie_groups = {}
     for participant_id in group_participants:
@@ -430,7 +468,10 @@ async def get_group_table(
                 regular_matches,
                 participants_map,
                 scoring_system,
-                tie_breaking_rules
+                tie_breaking_rules,
+                points_for_win=tournament.league_points_win or 3,
+                points_for_draw=tournament.league_points_draw or 1,
+                points_for_loss=tournament.league_points_loss or 0,
             )
             if mini_table:
                 tie_break_mini_tables.append({

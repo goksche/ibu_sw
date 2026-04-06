@@ -2,6 +2,7 @@
 # v1.3.2
 
 from typing import List, Tuple, Optional
+import random
 
 
 def _generate_classic_rounds(participant_ids: List[int]) -> List[List[Tuple[int, int]]]:
@@ -74,13 +75,13 @@ def generate_round_robin_rounds(
     if not base_rounds:
         return []
     
-    # Apply variant logic
-    if variant == 'double':
-        # Double: return base rounds twice
-        return base_rounds + base_rounds.copy()
-    elif variant == 'multiple' and multiplier > 1:
-        # Multiple: repeat base rounds multiplier times
+    # Apply repetition logic:
+    # - New preferred path: multiplier controls repeats regardless of variant.
+    # - Legacy path: "double" implies 2 if multiplier not provided.
+    if multiplier and multiplier > 1:
         return base_rounds * multiplier
+    if variant == 'double':
+        return base_rounds + base_rounds.copy()
     
     # Classic: return base rounds once (multiplier=1)
     return base_rounds
@@ -96,4 +97,50 @@ def validate_round_robin_participants(participant_ids: List[int]) -> Tuple[bool,
         return False, "Doppelte Teilnehmer gefunden"
     
     return True, None
+
+
+def generate_swiss_like_rounds(
+    participant_ids: List[int],
+    rounds_count: int,
+    rng_seed: int | None = None,
+) -> List[List[Tuple[int, int]]]:
+    """
+    Precompute swiss-like pairings without live score feedback.
+    This is a pragmatic approximation for planning mode previews.
+    """
+    if len(participant_ids) < 2 or rounds_count <= 0:
+        return []
+
+    ids = participant_ids.copy()
+    rng = random.Random(rng_seed)
+    rng.shuffle(ids)
+    rounds: List[List[Tuple[int, int]]] = []
+    seen_pairs: set[Tuple[int, int]] = set()
+
+    for round_idx in range(rounds_count):
+        # snake-like rotation per round to spread opponents
+        if round_idx > 0:
+            ids = ids[1:] + ids[:1]
+
+        remaining = ids.copy()
+        round_pairs: List[Tuple[int, int]] = []
+        while len(remaining) >= 2:
+            p1 = remaining.pop(0)
+            candidate_idx = None
+            for idx, p2 in enumerate(remaining):
+                key = tuple(sorted((p1, p2)))
+                if key not in seen_pairs:
+                    candidate_idx = idx
+                    break
+            if candidate_idx is None:
+                candidate_idx = 0
+            p2 = remaining.pop(candidate_idx)
+            key = tuple(sorted((p1, p2)))
+            seen_pairs.add(key)
+            round_pairs.append((p1, p2))
+
+        if round_pairs:
+            rounds.append(round_pairs)
+
+    return rounds
 

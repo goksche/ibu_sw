@@ -2,7 +2,7 @@
 import api from './api';
 import { AuthResponse, LoginCredentials, User, UserWithPermissions } from '../types';
 
-export type UserRole = 'admin' | 'user' | 'viewer';
+export type UserRole = 'power_admin' | 'admin' | 'user' | 'viewer';
 
 // Token refresh interval (11 hours, tokens expire after 12 hours)
 const TOKEN_REFRESH_INTERVAL = 11 * 60 * 60 * 1000;
@@ -37,9 +37,9 @@ export const authService = {
         this.startTokenRefresh();
       }
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
-      throw new Error(error.response?.data?.detail || 'Login fehlgeschlagen');
+      throw error;
     }
   },
 

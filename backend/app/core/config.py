@@ -4,6 +4,14 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 from urllib.parse import quote_plus
+from pathlib import Path
+
+
+# Resolve common .env locations independent from current working directory.
+# This prevents missing SMTP/OTP config when backend is started from /backend.
+_CONFIG_FILE = Path(__file__).resolve()
+_BACKEND_DIR = _CONFIG_FILE.parents[2]  # .../backend
+_REPO_ROOT_DIR = _CONFIG_FILE.parents[3]  # .../ibu_sw
 
 
 class Settings(BaseSettings):
@@ -11,7 +19,7 @@ class Settings(BaseSettings):
     
     # App Info
     APP_NAME: str = "IBU Turniere API"
-    APP_VERSION: str = "1.6.0"
+    APP_VERSION: str = "1.8.0"
     DEBUG: bool = False
     
     # Database
@@ -62,6 +70,15 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_RETENTION_DAYS: int = 90
     
+    # S3 / Avatar Storage
+    S3_ENDPOINT: Optional[str] = None
+    S3_BUCKET: str = "finalstage-avatars"
+    S3_ACCESS_KEY: Optional[str] = None
+    S3_SECRET_KEY: Optional[str] = None
+    S3_REGION: str = "auto"
+    AVATAR_MAX_SIZE: int = 2 * 1024 * 1024  # 2MB
+    AVATAR_DIMENSION: int = 200
+
     # Platform Settings
     UPLOAD_DIR: str = "/app/uploads"
     NGINX_CONF_DIR: str = "/etc/nginx/conf.d"
@@ -69,10 +86,16 @@ class Settings(BaseSettings):
     DOCKER_SOCKET: str = "/var/run/docker.sock"
     
     class Config:
-        env_file = ".env"
+        env_file = (
+            str(_BACKEND_DIR / ".env"),
+            str(_REPO_ROOT_DIR / ".env"),
+            ".env",
+        )
         case_sensitive = False
+        extra = "ignore"
 
 
 # Global Settings Instance
 settings = Settings()
+
 

@@ -41,7 +41,7 @@ export interface TieBreakMiniTable {
 export interface GroupTable {
   group_id: number;
   group_name: string;
-  scoring_system?: 'points' | 'difference';
+  scoring_system?: 'points' | 'difference' | 'wins';
   table: GroupTableEntry[];
   tie_break_mini_tables?: TieBreakMiniTable[];  // Mini tables for tie groups with >2 participants
 }

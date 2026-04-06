@@ -2,6 +2,18 @@
 import api from './api';
 import { Participant } from '../types';
 
+export type ParticipantImportResult = {
+  imported: number;
+  skipped: number;
+  errors: string[];
+  skipped_items?: Array<{
+    row: number;
+    name: string;
+    scolia_id?: string;
+    reason: string;
+  }>;
+};
+
 export const participantService = {
   // Get all participants
   async getAll(): Promise<Participant[]> {
@@ -30,6 +42,14 @@ export const participantService = {
   // Delete participant
   async delete(id: number): Promise<void> {
     await api.delete(`/participants/${id}`);
+  },
+
+  /** CSV-Import (gleiche baseURL/Proxy wie alle anderen API-Calls) */
+  async importCsv(file: File): Promise<ParticipantImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<ParticipantImportResult>('/participants/import', formData);
+    return response.data;
   },
 
   // Tournament participants
