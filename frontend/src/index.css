@@ -552,30 +552,31 @@
 }
 
 /* GSmartSol: native Formularfelder — gleiches Muster wie Arena (keine weißen System-Selects).
-   !important: Tailwind-Utilities auf select (bg-card …) haben sonst höhere Klassen-Spezifität. */
+   !important: Input-Komponente nutzt lange Tailwind-Ketten (.bg-background …) mit höherer Spezifität als ein Layout-Selektor. */
 :root[data-layout="gsmartsol"] input:not([type='checkbox']):not([type='radio']):not([type='range']),
 :root[data-layout="gsmartsol"] textarea {
-  border-color: var(--border);
-  background-color: rgba(8, 12, 26, 0.94);
-  color: var(--foreground);
+  border-color: rgba(0, 212, 255, 0.22) !important;
+  background-color: rgba(8, 12, 26, 0.96) !important;
+  color: #e8eaf0 !important;
 }
 
 :root[data-layout="gsmartsol"] select {
-  border-color: var(--border);
-  background-color: rgba(8, 12, 26, 0.94) !important;
+  border-color: rgba(0, 212, 255, 0.22) !important;
+  background-color: rgba(8, 12, 26, 0.96) !important;
   color: #e8eaf0 !important;
   -webkit-appearance: none;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='%238f96ad' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
-  background-position: right 0.65rem center;
-  background-size: 1.25rem;
-  background-repeat: no-repeat;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='%238f96ad' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E") !important;
+  background-position: right 0.65rem center !important;
+  background-size: 1.25rem !important;
+  background-repeat: no-repeat !important;
   padding-right: 2.25rem;
 }
 
 :root[data-layout="gsmartsol"] input::placeholder,
 :root[data-layout="gsmartsol"] textarea::placeholder {
-  color: var(--muted-foreground);
+  color: #8f96ad !important;
+  opacity: 1;
 }
 
 :root[data-layout="gsmartsol"] select option {
@@ -859,4 +860,39 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 :root[data-layout="arena"] button[class*='bg-secondary']:hover {
   background: rgba(255, 255, 255, 0.06);
   transform: translateY(-1px);
+}
+
+/*
+ * GSmartSol — zweite Zeile ganz am Ende der Datei:
+ * Utility-Klassen aus der gebauten CSS-Reihenfolge können obige Regeln noch überlagern.
+ * html[] selbst = :root; explizit + !important für dieselben Deklarationen.
+ */
+html[data-layout='gsmartsol'] input:not([type='checkbox']):not([type='radio']):not([type='range']),
+html[data-layout='gsmartsol'] textarea {
+  border-color: rgba(0, 212, 255, 0.22) !important;
+  background-color: rgba(8, 12, 26, 0.96) !important;
+  color: #e8eaf0 !important;
+}
+
+html[data-layout='gsmartsol'] select {
+  border-color: rgba(0, 212, 255, 0.22) !important;
+  background-color: rgba(8, 12, 26, 0.96) !important;
+  color: #e8eaf0 !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='%238f96ad' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E") !important;
+  background-position: right 0.65rem center !important;
+  background-size: 1.25rem !important;
+  background-repeat: no-repeat !important;
+}
+
+html[data-layout='gsmartsol'] input::placeholder,
+html[data-layout='gsmartsol'] textarea::placeholder {
+  color: #8f96ad !important;
+  opacity: 1;
+}
+
+html[data-layout='gsmartsol'] select option {
+  background-color: #080c1a !important;
+  color: #e8eaf0 !important;
 }
