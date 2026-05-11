@@ -678,9 +678,25 @@ export default function CreateTournament() {
   const totalWizardSteps = 5;
   const showStep = (step: number) => !wizardMode || wizardStep === step;
 
-  /** Native-Selects: gleicher Kontrast wie übrige Wizard-Felder (GSmartSol helles Theme). */
-  const wizardSelectClass =
-    'w-full px-3 py-3 text-base bg-card text-foreground border border-border rounded-md transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2';
+  /**
+   * Wizard Schritt 4/5: feste dunkle Fläche mit Tailwind-`!` (schlägt lange Input-/Select-Ketten wie `bg-background`).
+   * Sichtbarkeits-Dropdown und Gruppen-Auslosung teilen sich dieselbe Oberfläche.
+   */
+  const wizardControlSurface =
+    '!border-[rgba(0,212,255,0.22)] !bg-[rgba(8,12,26,0.96)] !text-[#e8eaf0]';
+
+  const wizardSelectClass = cn(
+    wizardControlSurface,
+    'w-full px-3 py-3 text-base rounded-md border font-medium',
+    'transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  );
+
+  /** Native-Zahlfeld (z. B. Multiplikator) — gleiche Lesbarkeit wie Select. */
+  const wizardNumericFieldClass = cn(
+    wizardControlSurface,
+    'w-full min-h-[2.75rem] px-3 py-2 text-base rounded-md border font-medium',
+    'transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  );
 
   /** Auslosungsart nur sinnvoll mit Gruppenphase und mindestens einer Gruppe (Zahl robust parsen). */
   const groupsCountNum = Math.max(0, Number(formData.groups_count) || 0);
@@ -698,9 +714,9 @@ export default function CreateTournament() {
         onChange={handleChange}
         className={wizardSelectClass}
       >
-        <option className="bg-card text-foreground" value="random">{t('common.groupDistribution.randomLabel')}</option>
-        <option className="bg-card text-foreground" value="seeded">{t('common.groupDistribution.seededLabel')}</option>
-        <option className="bg-card text-foreground" value="manual">Manuell (keine Auto-Verteilung)</option>
+        <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="random">{t('common.groupDistribution.randomLabel')}</option>
+        <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="seeded">{t('common.groupDistribution.seededLabel')}</option>
+        <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="manual">Manuell (keine Auto-Verteilung)</option>
       </select>
       {formData.group_distribution === 'manual' && (
         <div className="mt-4 rounded border border-warning bg-warning/15 p-3 text-sm text-warning">
@@ -768,11 +784,11 @@ export default function CreateTournament() {
                   handleTemplateSelect(templateId);
                 }
               }}
-              className="w-full px-3 py-3 text-base bg-card text-foreground border border-border rounded-md transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className={wizardSelectClass}
             >
-              <option value="" className="bg-card text-foreground">{t('common.noTemplate')}</option>
+              <option value="" className="!bg-[#080c1a] !text-[#e8eaf0]">{t('common.noTemplate')}</option>
               {templates.map(template => (
-                <option key={template.id} value={template.id} className="bg-card text-foreground">
+                <option key={template.id} value={template.id} className="!bg-[#080c1a] !text-[#e8eaf0]">
                   {template.name}
                 </option>
               ))}
@@ -833,11 +849,11 @@ export default function CreateTournament() {
                 name="location_id"
                 value={formData.location_id ?? ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, location_id: e.target.value === '' ? null : Number(e.target.value) }))}
-                className="w-full px-3 py-3 text-base bg-card text-foreground border border-border rounded-md transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                className={wizardSelectClass}
               >
-                <option value="">{t('common.noLocation')}</option>
+                <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="">{t('common.noLocation')}</option>
                 {locations.map(loc => (
-                  <option key={loc.id} value={loc.id}>{loc.name}</option>
+                  <option key={loc.id} className="!bg-[#080c1a] !text-[#e8eaf0]" value={loc.id}>{loc.name}</option>
                 ))}
               </select>
               {formData.location_id != null && (formData.mode === 'round_robin' || formData.mode === 'combined') && (
@@ -849,11 +865,11 @@ export default function CreateTournament() {
                     name="spielfeld_assignment_mode"
                     value={formData.spielfeld_assignment_mode}
                     onChange={(e) => setFormData(prev => ({ ...prev, spielfeld_assignment_mode: e.target.value as 'random' | 'group_fixed' | 'group_random' }))}
-                    className="w-full px-3 py-3 text-base bg-card text-foreground border border-border rounded-md transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    className={wizardSelectClass}
                   >
-                    <option value="random">{t('common.spielfeldAssignment.random')}</option>
-                    <option value="group_fixed">{t('common.spielfeldAssignment.groupFixed')}</option>
-                    <option value="group_random">{t('common.spielfeldAssignment.groupRandom')}</option>
+                    <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="random">{t('common.spielfeldAssignment.random')}</option>
+                    <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="group_fixed">{t('common.spielfeldAssignment.groupFixed')}</option>
+                    <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="group_random">{t('common.spielfeldAssignment.groupRandom')}</option>
                   </select>
                 </div>
               )}
@@ -875,10 +891,10 @@ export default function CreateTournament() {
                     ...variantToPreset(nextVariant),
                   }));
                 }}
-                className="w-full px-3 py-3 mb-3 text-base bg-card text-foreground border border-border rounded-md transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                className={cn(wizardSelectClass, 'mb-3')}
               >
                 {MODE_VARIANTS.map((variant) => (
-                  <option key={variant.id} value={variant.id}>
+                  <option key={variant.id} className="!bg-[#080c1a] !text-[#e8eaf0]" value={variant.id}>
                     {variant.title}
                   </option>
                 ))}
@@ -914,10 +930,10 @@ export default function CreateTournament() {
                 required
                 className={wizardSelectClass}
               >
-                <option className="bg-card text-foreground" value="">{t('common.selectPlaceholder')}</option>
-                <option className="bg-card text-foreground" value="points">{t('common.scoring.points')}</option>
-                <option className="bg-card text-foreground" value="difference">{t('common.scoring.difference')}</option>
-                <option className="bg-card text-foreground" value="wins">{t('common.scoring.wins')}</option>
+                <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="">{t('common.selectPlaceholder')}</option>
+                <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="points">{t('common.scoring.points')}</option>
+                <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="difference">{t('common.scoring.difference')}</option>
+                <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="wins">{t('common.scoring.wins')}</option>
               </select>
               {formData.league_scoring_system === 'points' && (
                 <div className="mt-3 grid grid-cols-3 gap-3">
@@ -1000,7 +1016,7 @@ export default function CreateTournament() {
                   min={1}
                   max={10}
                   required
-                  className="w-full px-2 py-2 text-base border border-border rounded"
+                  className={wizardNumericFieldClass}
                 />
                 <p className="mt-2 text-sm text-muted-foreground italic">
                   {t('tournament.create.roundsMultiplierHint')}
@@ -1138,12 +1154,12 @@ export default function CreateTournament() {
                     required
                     className={wizardSelectClass}
                   >
-                    <option className="bg-card text-foreground" value="">{t('common.selectPlaceholder')}</option>
-                    <option className="bg-card text-foreground" value="round_of_32">{t('tournament.create.koStartRoundOptions.roundOf32')}</option>
-                    <option className="bg-card text-foreground" value="round_of_16">{t('tournament.create.koStartRoundOptions.roundOf16')}</option>
-                    <option className="bg-card text-foreground" value="quarterfinal">{t('tournament.create.koStartRoundOptions.quarterfinal')}</option>
-                    <option className="bg-card text-foreground" value="semifinal">{t('tournament.create.koStartRoundOptions.semifinal')}</option>
-                    <option className="bg-card text-foreground" value="final">{t('tournament.create.koStartRoundOptions.final')}</option>
+                    <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="">{t('common.selectPlaceholder')}</option>
+                    <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="round_of_32">{t('tournament.create.koStartRoundOptions.roundOf32')}</option>
+                    <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="round_of_16">{t('tournament.create.koStartRoundOptions.roundOf16')}</option>
+                    <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="quarterfinal">{t('tournament.create.koStartRoundOptions.quarterfinal')}</option>
+                    <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="semifinal">{t('tournament.create.koStartRoundOptions.semifinal')}</option>
+                    <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="final">{t('tournament.create.koStartRoundOptions.final')}</option>
                   </select>
 
                   {loadingQualificationPlan && (
@@ -1258,7 +1274,7 @@ export default function CreateTournament() {
                       className={`${wizardSelectClass} mb-3`}
                     >
                       {PAIRING_VARIANTS.map((variant) => (
-                        <option key={variant.id} className="bg-card text-foreground" value={variant.id}>
+                        <option key={variant.id} className="!bg-[#080c1a] !text-[#e8eaf0]" value={variant.id}>
                           {variant.label}
                         </option>
                       ))}
@@ -1294,7 +1310,7 @@ export default function CreateTournament() {
                       className={wizardSelectClass}
                     >
                       {koDrawModeOptions.map(option => (
-                        <option key={option.value} className="bg-card text-foreground" value={option.value}>
+                        <option key={option.value} className="!bg-[#080c1a] !text-[#e8eaf0]" value={option.value}>
                           {option.label}
                         </option>
                       ))}
@@ -1392,9 +1408,9 @@ export default function CreateTournament() {
               onChange={(e) => setFormData({ ...formData, visibility: e.target.value as any })}
               className={wizardSelectClass}
             >
-              <option className="bg-card text-foreground" value="public">{t('common.visibility.public')}</option>
-              <option className="bg-card text-foreground" value="shared">{t('common.visibility.shared')}</option>
-              <option className="bg-card text-foreground" value="private">{t('common.visibility.private')}</option>
+              <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="public">{t('common.visibility.public')}</option>
+              <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="shared">{t('common.visibility.shared')}</option>
+              <option className="!bg-[#080c1a] !text-[#e8eaf0]" value="private">{t('common.visibility.private')}</option>
             </select>
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
