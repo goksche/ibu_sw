@@ -8,7 +8,8 @@ import tr from './locales/tr.json';
 import it from './locales/it.json';
 import fr from './locales/fr.json';
 
-i18n
+/** Promise nach init — App erst mounten, wenn react-i18next die Instanz gesetzt hat. */
+export const i18nInitPromise = i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
@@ -19,11 +20,20 @@ i18n
       it: { translation: it },
       fr: { translation: fr },
     },
+    ns: ['translation'],
+    defaultNS: 'translation',
     fallbackLng: 'de',
+    supportedLngs: ['de', 'en', 'tr', 'it', 'fr'],
+    nonExplicitSupportedLngs: true,
+    load: 'languageOnly',
     // Locale-JSON nutzt flache Keys mit Punkt im Namen ("login.appName"), keine Verschachtelung.
     keySeparator: false,
     interpolation: {
       escapeValue: false,
+    },
+    react: {
+      // Kein <Suspense> um die App — sonst wirft react-i18next bei !ready u.U. eine Promise ohne Boundary.
+      useSuspense: false,
     },
     detection: {
       order: ['localStorage'],
