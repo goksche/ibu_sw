@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List, Optional
 import re
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token, decode_access_token
@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.dependencies import get_current_user, get_user_app_permissions, require_admin
 import secrets
 import smtplib
+import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
  
@@ -227,9 +228,24 @@ async def validate_token(token_data: TokenRefresh):
 
 # OTP Authentication Routes
 
+def _normalize_otp_email(value: object) -> object:
+    """Strip whitespace and trailing dots (paste/autofill) before EmailStr validation."""
+    if value is None or not isinstance(value, str):
+        return value
+    s = value.strip()
+    while s.endswith("."):
+        s = s[:-1]
+    return s
+
+
 class SendOTPRequest(BaseModel):
     """Request model for sending OTP"""
     email: EmailStr
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalize_email(cls, v: object) -> object:
+        return _normalize_otp_email(v)
 
 
 class VerifyOTPRequest(BaseModel):
@@ -237,15 +253,27 @@ class VerifyOTPRequest(BaseModel):
     email: EmailStr
     otp_code: str
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalize_email(cls, v: object) -> object:
+        return _normalize_otp_email(v)
+
+    @field_validator("otp_code", mode="before")
+    @classmethod
+    def _strip_otp(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.strip()
+        return v
+
 
 def send_email_otp(email: str, otp_code: str) -> bool:
     """Send OTP code via email"""
-    if not settings.SMTP_HOST or not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD:
+    if not settings.SMTP_HOST:
         print("SMTP not configured - cannot send OTP email.")
         return False
 
     try:
-        smtp_from = settings.SMTP_FROM or settings.SMTP_USERNAME
+        smtp_from = settings.SMTP_FROM or settings.SMTP_USERNAME or "noreply@localhost"
 
         # Create message
         msg = MIMEMultipart()
@@ -269,15 +297,30 @@ Ihr IBU Turniere Team
 """
         msg.attach(MIMEText(body, 'plain'))
 
-        # Send email
-        server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
-        if settings.SMTP_USE_TLS:
-            server.starttls()
-        server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
-        server.sendmail(smtp_from, [email], msg.as_string())
-        server.quit()
-
-        return True
+        # Send email (robust against strict SMTP servers)
+        try:
+            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
+            server.ehlo()
+            if settings.SMTP_USE_TLS:
+                server.starttls(context=ssl.create_default_context())
+                server.ehlo()
+            if settings.SMTP_USERNAME and settings.SMTP_PASSWORD:
+                server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+            server.sendmail(smtp_from, [email], msg.as_string())
+            server.quit()
+            return True
+        except smtplib.SMTPServerDisconnected:
+            # Some providers close the first session unexpectedly; reconnect once.
+            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
+            server.ehlo()
+            if settings.SMTP_USE_TLS:
+                server.starttls(context=ssl.create_default_context())
+                server.ehlo()
+            if settings.SMTP_USERNAME and settings.SMTP_PASSWORD:
+                server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+            server.sendmail(smtp_from, [email], msg.as_string())
+            server.quit()
+            return True
     except Exception as e:
         print(f"Failed to send email: {e}")
         return False
@@ -366,7 +409,7 @@ async def send_otp(request: SendOTPRequest, db: Session = Depends(get_db), http_
         )
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="OTP konnte nicht versendet werden. SMTP ist nicht konfiguriert."
+        detail="OTP konnte nicht versendet werden. SMTP-Konfiguration oder Verbindung prüfen."
     )
 
 
