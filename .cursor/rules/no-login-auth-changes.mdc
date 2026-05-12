@@ -7,11 +7,13 @@ alwaysApply: true
 
 **Ohne ausdrücklichen Auftrag des Nutzers dürfen Login, Registrierung und Authentifizierung nicht geändert werden.**
 
-## Login-Seite — UI/Design eingefroren
+## Login-Seite — UI/Design eingefroren (FinalStage Cyber)
 
-Die **Login-Oberfläche** (`frontend/src/pages/Login.tsx`) ist auf den Stand **vor dem Cyber-/Glass-Redesign** zurückgeführt (klassisches Theme-Layout, `theme.ts`, einfache Card, kein `AnimatedCyberBackdrop`, kein `LanguageSwitcher` auf der Login-Karte).
+Die **genehmigte Login-Oberfläche** ist das **FinalStage-Cyber-Layout** in `frontend/src/pages/Login.tsx`: dunkler Hintergrund `#04050d`, `AnimatedCyberBackdrop`, `LanguageSwitcher` oben rechts, Badge **„Secure Login“**, Glas-/Cyan-Card (`max-w-[430px]`, Rand- und Schattenklassen wie im Produkt-Screenshot), CTA-Buttons in **Cyan** (`#00d4ff`), Fehlerbox rot halbtransparent.
 
-**Dieses Layout, die Farb-/Abstandsstruktur und die visuelle Hierarchie dürfen nicht mehr verändert werden** — auch nicht „kleine“ kosmetische Anpassungen, Refactors auf Tailwind-only oder Austausch der Komponenten-Hülle. Ausnahme **nur** bei **ausdrücklichem** Nutzerauftrag (Formulierung wie: „Login-Design ändern“, „Login-Seite umbauen“).
+**Dieses Layout darf ohne ausdrücklichen Nutzerauftrag nicht verändert werden** — weder auf das alte Theme-Layout (`theme.ts` + Inline-Styles) zurück noch ein neues Redesign. Ausnahme **nur** bei explizitem Wunsch (z. B. „Login-Design ändern“, „Cyber-Login ersetzen“).
+
+Referenz im Git-Verlauf (Inhalt identisch prüfen): Commit, der `AnimatedCyberBackdrop` in `Login.tsx` einführte (Suche: `git log -S 'AnimatedCyberBackdrop' -- frontend/src/pages/Login.tsx`).
 
 Konkret nicht ändern (außer der Nutzer verlangt es explizit):
 

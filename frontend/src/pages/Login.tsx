@@ -1,13 +1,14 @@
-// Login Page — UI/Layout eingefroren (siehe .cursor/rules/no-login-auth-changes.mdc)
+// Login Page
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
-import { Card, Input, Button } from '../components/ui';
-import { theme } from '../theme/theme';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, Input, Button } from '../components/ui';
 import { Envelope, Key } from 'phosphor-react';
 import Footer from '../components/Footer';
+import AnimatedCyberBackdrop from '../components/AnimatedCyberBackdrop';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 import { formatAuthFlowError } from '../utils/authErrors';
 
 export default function Login() {
@@ -30,7 +31,8 @@ export default function Login() {
     try {
       const response = await authService.sendOTP(email);
       if (response.dev_otp_code) {
-        setInfo(`DEV-OTP: ${response.dev_otp_code}`);
+        // Keep user flow consistent: never show raw OTP code in UI.
+        setInfo(t('login.otpSent'));
       } else {
         setInfo(t('login.otpSent'));
       }
@@ -66,149 +68,113 @@ export default function Login() {
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-        background: theme.colors.background.primary,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          flex: '1',
-        }}
-      >
-        <Card className="w-full max-w-[400px] p-6">
-          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-            <h1
-              style={{
-                margin: 0,
-                color: theme.colors.text.primary,
-                fontSize: '1.5rem',
-                fontWeight: 'bold',
-                letterSpacing: '2px',
-                fontFamily: 'Arial, sans-serif',
-              }}
-            >
-              {t('login.appName')}
-            </h1>
-            <p
-              style={{
-                margin: '0.25rem 0 0',
-                color: theme.colors.text.secondary,
-                fontSize: '0.75rem',
-                letterSpacing: '1px',
-              }}
-            >
-              {t('login.appDescription')}
-            </p>
-          </div>
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#04050d] text-[#e8eaf0]">
+      <AnimatedCyberBackdrop />
 
-          <h2
-            style={{
-              marginBottom: '1.5rem',
-              textAlign: 'center',
-              color: theme.colors.text.secondary,
-            }}
-          >
-            {t('login.title')}
-          </h2>
+      <div className="absolute top-4 right-4 z-[1400] pointer-events-auto">
+        <LanguageSwitcher />
+      </div>
 
-          {step === 'email' ? (
-            <form onSubmit={handleEmailSubmit} className="space-y-4">
-              <Input
-                label={t('login.email')}
-                type="email"
-                value={email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                required
-              />
+      <div className="relative z-[10] flex flex-1 items-center justify-center px-4 py-10">
+        <Card className="w-full max-w-[430px] border-[rgba(0,212,255,0.18)] bg-[rgba(8,12,26,0.82)] text-[#e8eaf0] shadow-[0_24px_60px_rgba(0,0,0,0.55)] backdrop-blur-sm">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 inline-flex items-center gap-2 rounded-full border border-[rgba(0,212,255,0.2)] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[#00d4ff]">
+              <span className="h-2 w-2 rounded-full bg-[#00d4ff]" />
+              Secure Login
+            </div>
+            <CardTitle className="text-3xl font-semibold tracking-tight text-[#f4f8ff]">{t('login.appName')}</CardTitle>
+            <CardDescription className="text-[#8f96ad]">{t('login.appDescription')}</CardDescription>
+          </CardHeader>
 
-              {info && (
-                <div
-                  style={{
-                    color: theme.colors.accent.primary,
-                    marginBottom: '1rem',
-                    padding: '0.75rem',
-                    background: `${theme.colors.accent.primary}15`,
-                    border: `1px solid ${theme.colors.accent.primary}`,
-                    borderRadius: theme.borderRadius.card,
-                  }}
-                >
-                  {info}
-                </div>
-              )}
+          <CardContent>
+            <h2 className="mb-6 text-center text-xl font-semibold text-[#f4f8ff]">{t('login.title')}</h2>
 
-              {error && (
-                <div
-                  style={{
-                    color: theme.colors.accent.error,
-                    marginBottom: '1rem',
-                    padding: '0.75rem',
-                    background: `${theme.colors.accent.error}20`,
-                    border: `1px solid ${theme.colors.accent.error}`,
-                    borderRadius: theme.borderRadius.card,
-                  }}
-                >
-                  {error}
-                </div>
-              )}
+            {step === 'email' ? (
+              <form onSubmit={handleEmailSubmit} className="space-y-4">
+                <Input
+                  className="border-[rgba(0,212,255,0.15)] bg-[rgba(255,255,255,0.03)] text-[#e8eaf0] placeholder:text-[#6f7690] focus-visible:ring-[rgba(0,212,255,0.45)]"
+                  label={t('login.email')}
+                  type="email"
+                  value={email}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                  required
+                />
 
-              <Button type="submit" variant="primary" disabled={loading} className="w-full gap-2">
-                {loading ? (
-                  t('login.sendingCode')
-                ) : (
-                  <>
-                    <Envelope size={18} /> {t('login.sendCode')}
-                  </>
+                {info && (
+                  <div className="rounded-lg border border-[rgba(0,212,255,0.35)] bg-[rgba(0,212,255,0.12)] p-3 text-sm text-[#7ae8ff]">
+                    {info}
+                  </div>
                 )}
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={handleOTPSubmit} className="space-y-4">
-              <Input
-                label={t('login.otpCode')}
-                type="text"
-                value={otpCode}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtpCode(e.target.value)}
-                required
-              />
 
-              {error && (
-                <div
-                  style={{
-                    color: theme.colors.accent.error,
-                    marginBottom: '1rem',
-                    padding: '0.75rem',
-                    background: `${theme.colors.accent.error}20`,
-                    border: `1px solid ${theme.colors.accent.error}`,
-                    borderRadius: theme.borderRadius.card,
-                  }}
+                {error && (
+                  <div className="rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-300">
+                    {error}
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full gap-2 bg-[#00d4ff] font-semibold text-[#04050d] hover:bg-[#33dcff]"
                 >
-                  {error}
-                </div>
-              )}
-
-              <div className="flex gap-3">
-                <Button type="button" variant="secondary" onClick={handleBack} className="flex-1">
-                  {t('common.back')}
-                </Button>
-                <Button type="submit" variant="primary" disabled={loading} className="flex-1 gap-2">
-                  {loading ? (
-                    t('login.verifying')
-                  ) : (
+                  {loading ? t('login.sendingCode') : (
                     <>
-                      <Key size={18} /> {t('login.verify')}
+                      <Envelope size={18} /> {t('login.sendCode')}
                     </>
                   )}
                 </Button>
-              </div>
-            </form>
-          )}
+
+                <div className="text-center mt-4">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/register')}
+                    className="cursor-pointer border-none bg-transparent text-sm text-[#7ae8ff] hover:underline"
+                  >
+                    {t('login.noAccount')}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleOTPSubmit} className="space-y-4">
+                <Input
+                  className="border-[rgba(0,212,255,0.15)] bg-[rgba(255,255,255,0.03)] text-[#e8eaf0] placeholder:text-[#6f7690] focus-visible:ring-[rgba(0,212,255,0.45)]"
+                  label={t('login.otpCode')}
+                  type="text"
+                  value={otpCode}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtpCode(e.target.value)}
+                  required
+                />
+
+                {error && (
+                  <div className="rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-300">
+                    {error}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleBack}
+                    className="flex-1 border border-[rgba(0,212,255,0.18)] bg-[rgba(255,255,255,0.04)] text-[#c6d0ec] hover:bg-[rgba(255,255,255,0.08)]"
+                  >
+                    {t('common.back')}
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 gap-2 bg-[#00d4ff] font-semibold text-[#04050d] hover:bg-[#33dcff]"
+                  >
+                    {loading ? t('login.verifying') : (
+                      <>
+                        <Key size={18} /> {t('login.verify')}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </CardContent>
         </Card>
       </div>
       <Footer />
