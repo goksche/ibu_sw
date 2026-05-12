@@ -5,6 +5,46 @@ from typing import List, Tuple, Dict, Optional
 import math
 import random
 
+from app.services.ko_propagation import BRONZE_ROUND
+
+
+def append_third_place_placeholder_if_needed(
+    matches: List[Dict],
+    *,
+    ko_third_place_match: bool,
+    ko_structure: Optional[str],
+) -> List[Dict]:
+    """
+    Append a placeholder match for the bronze / 3rd-place game (round BRONZE_ROUND) when the
+    tournament requests it and the KO structure is a classic single-elimination tree.
+    """
+    if any(m.get("round") == BRONZE_ROUND for m in matches):
+        return matches
+
+    struct = (ko_structure or "").strip()
+    if struct in (
+        "double_elimination",
+        "triple_elimination",
+        "consolation_bracket",
+        "aggregate_ko",
+        "page_playoff",
+    ):
+        return matches
+
+    want = bool(ko_third_place_match) or struct == "single_elimination_with_third"
+    if not want:
+        return matches
+
+    matches.append(
+        {
+            "round": BRONZE_ROUND,
+            "match_no": 1,
+            "player1_id": None,
+            "player2_id": None,
+        }
+    )
+    return matches
+
 
 def _log2_int(x: int) -> int:
     """Calculate log2 and round to integer"""
