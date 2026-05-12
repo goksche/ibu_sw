@@ -6,7 +6,7 @@ import { authService } from '../services/authService';
 import { participantService } from '../services/participantService';
 import { qualificationService } from '../services/qualificationService';
 import { locationService } from '../services/locationService';
-import { Participant, LeagueVariant, KOStartRound, QualificationPlan, Location, KOStructure } from '../types';
+import { Participant, LeagueVariant, KOStartRound, QualificationPlan, Location, KOStructure, KODrawMethod } from '../types';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Textarea } from '../components/ui';
 import { cn } from '@/lib/utils';
 import { ArrowLeft } from 'phosphor-react';
@@ -43,13 +43,13 @@ export default function EditTournament() {
     ko_fallback_qualifiers: null as Array<{position: number; count: number; selection: 'best'}> | null,
     ko_distribution: 'random_first_round' as KODrawModeValue,  // Deprecated, kept for backward compatibility
     ko_structure: null as KOStructure | null,
-    ko_draw_method: null as 'fixed_cross' | 'same_position_cross' | 'overall_seeding' | 'pot_system' | 'full_random' | 'bonus_draw_for_winners' | 'predefined_bracket' | 'manual' | null,
+    ko_draw_method: null as KODrawMethod | null,
     ko_third_place_match: false,
     ko_group_winner_advantage: false,
     ko_block_same_group: true,
     ko_block_same_position: false,
     ko_random_seed: null as number | null,
-    league_scoring_system: null as 'points' | 'difference' | null,
+    league_scoring_system: null as 'points' | 'difference' | 'wins' | null,
     tie_breaking_rules: [] as string[],
     league_variant: 'classic' as LeagueVariant,
     league_rounds_multiplier: 1,
