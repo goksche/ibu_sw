@@ -1,15 +1,19 @@
-// Login Page
+// Login Page — UI/Layout eingefroren (siehe .cursor/rules/no-login-auth-changes.mdc)
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, Input, Button } from '../components/ui';
+import { Card, Input, Button } from '../components/ui';
+import { theme } from '../theme/theme';
 import { Envelope, Key } from 'phosphor-react';
 import Footer from '../components/Footer';
+import { formatAuthFlowError } from '../utils/authErrors';
 
 export default function Login() {
   const navigate = useNavigate();
   const { refreshUser } = useAuth();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [step, setStep] = useState<'email' | 'otp'>('email');
@@ -27,21 +31,12 @@ export default function Login() {
       const response = await authService.sendOTP(email);
       if (response.dev_otp_code) {
         setInfo(`DEV-OTP: ${response.dev_otp_code}`);
-        try {
-          await authService.verifyOTP(email, response.dev_otp_code);
-          await refreshUser();
-          navigate('/dashboard');
-          return;
-        } catch (err: any) {
-          setError(err.response?.data?.detail || 'Login fehlgeschlagen');
-          return;
-        }
       } else {
-        setInfo('OTP wurde per E-Mail versendet.');
+        setInfo(t('login.otpSent'));
       }
       setStep('otp');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Login fehlgeschlagen');
+    } catch (err: unknown) {
+      setError(formatAuthFlowError(err, t));
     } finally {
       setLoading(false);
     }
@@ -56,8 +51,8 @@ export default function Login() {
       await authService.verifyOTP(email, otpCode);
       await refreshUser();
       navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Ungültiger oder abgelaufener Code');
+    } catch (err: unknown) {
+      setError(formatAuthFlowError(err, t));
     } finally {
       setLoading(false);
     }
@@ -71,78 +66,149 @@ export default function Login() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <div className="flex justify-center items-center flex-1">
-        <Card className="w-[400px]">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">FinalStage.ch</CardTitle>
-            <CardDescription>Turnier-Verwaltung</CardDescription>
-          </CardHeader>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: '100vh',
+        background: theme.colors.background.primary,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          flex: '1',
+        }}
+      >
+        <Card className="w-full max-w-[400px] p-6">
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <h1
+              style={{
+                margin: 0,
+                color: theme.colors.text.primary,
+                fontSize: '1.5rem',
+                fontWeight: 'bold',
+                letterSpacing: '2px',
+                fontFamily: 'Arial, sans-serif',
+              }}
+            >
+              {t('login.appName')}
+            </h1>
+            <p
+              style={{
+                margin: '0.25rem 0 0',
+                color: theme.colors.text.secondary,
+                fontSize: '0.75rem',
+                letterSpacing: '1px',
+              }}
+            >
+              {t('login.appDescription')}
+            </p>
+          </div>
 
-          <CardContent>
-            <h2 className="text-xl font-semibold text-center text-foreground mb-6">Login</h2>
+          <h2
+            style={{
+              marginBottom: '1.5rem',
+              textAlign: 'center',
+              color: theme.colors.text.secondary,
+            }}
+          >
+            {t('login.title')}
+          </h2>
 
-            {step === 'email' ? (
-              <form onSubmit={handleEmailSubmit} className="space-y-4">
-                <Input
-                  label="E-Mail"
-                  type="email"
-                  value={email}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                  required
-                />
+          {step === 'email' ? (
+            <form onSubmit={handleEmailSubmit} className="space-y-4">
+              <Input
+                label={t('login.email')}
+                type="email"
+                value={email}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                required
+              />
 
-                {info && (
-                  <div className="p-3 rounded-lg border border-primary bg-primary/10 text-primary text-sm">
-                    {info}
-                  </div>
+              {info && (
+                <div
+                  style={{
+                    color: theme.colors.accent.primary,
+                    marginBottom: '1rem',
+                    padding: '0.75rem',
+                    background: `${theme.colors.accent.primary}15`,
+                    border: `1px solid ${theme.colors.accent.primary}`,
+                    borderRadius: theme.borderRadius.card,
+                  }}
+                >
+                  {info}
+                </div>
+              )}
+
+              {error && (
+                <div
+                  style={{
+                    color: theme.colors.accent.error,
+                    marginBottom: '1rem',
+                    padding: '0.75rem',
+                    background: `${theme.colors.accent.error}20`,
+                    border: `1px solid ${theme.colors.accent.error}`,
+                    borderRadius: theme.borderRadius.card,
+                  }}
+                >
+                  {error}
+                </div>
+              )}
+
+              <Button type="submit" variant="primary" disabled={loading} className="w-full gap-2">
+                {loading ? (
+                  t('login.sendingCode')
+                ) : (
+                  <>
+                    <Envelope size={18} /> {t('login.sendCode')}
+                  </>
                 )}
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleOTPSubmit} className="space-y-4">
+              <Input
+                label={t('login.otpCode')}
+                type="text"
+                value={otpCode}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtpCode(e.target.value)}
+                required
+              />
 
-                {error && (
-                  <div className="p-3 rounded-lg border border-destructive bg-destructive/10 text-destructive text-sm">
-                    {error}
-                  </div>
-                )}
+              {error && (
+                <div
+                  style={{
+                    color: theme.colors.accent.error,
+                    marginBottom: '1rem',
+                    padding: '0.75rem',
+                    background: `${theme.colors.accent.error}20`,
+                    border: `1px solid ${theme.colors.accent.error}`,
+                    borderRadius: theme.borderRadius.card,
+                  }}
+                >
+                  {error}
+                </div>
+              )}
 
-                <Button type="submit" disabled={loading} className="w-full gap-2">
-                  {loading ? 'Code wird gesendet...' : (
+              <div className="flex gap-3">
+                <Button type="button" variant="secondary" onClick={handleBack} className="flex-1">
+                  {t('common.back')}
+                </Button>
+                <Button type="submit" variant="primary" disabled={loading} className="flex-1 gap-2">
+                  {loading ? (
+                    t('login.verifying')
+                  ) : (
                     <>
-                      <Envelope size={18} /> Code anfordern
+                      <Key size={18} /> {t('login.verify')}
                     </>
                   )}
                 </Button>
-              </form>
-            ) : (
-              <form onSubmit={handleOTPSubmit} className="space-y-4">
-                <Input
-                  label="Einmal-Code"
-                  type="text"
-                  value={otpCode}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtpCode(e.target.value)}
-                  required
-                />
-
-                {error && (
-                  <div className="p-3 rounded-lg border border-destructive bg-destructive/10 text-destructive text-sm">
-                    {error}
-                  </div>
-                )}
-
-                <div className="flex gap-3">
-                  <Button type="button" variant="secondary" onClick={handleBack} className="flex-1">
-                    Zurück
-                  </Button>
-                  <Button type="submit" disabled={loading} className="flex-1 gap-2">
-                    {loading ? 'Wird geprüft...' : (
-                      <>
-                        <Key size={18} /> Anmelden
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </form>
-            )}
-          </CardContent>
+              </div>
+            </form>
+          )}
         </Card>
       </div>
       <Footer />

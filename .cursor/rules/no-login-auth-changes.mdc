@@ -1,0 +1,24 @@
+---
+description: Login und Authentifizierung nicht anfassen
+alwaysApply: true
+---
+
+# Login & Auth — strikt schreibgeschützt
+
+**Ohne ausdrücklichen Auftrag des Nutzers dürfen Login, Registrierung und Authentifizierung nicht geändert werden.**
+
+## Login-Seite — UI/Design eingefroren
+
+Die **Login-Oberfläche** (`frontend/src/pages/Login.tsx`) ist auf den Stand **vor dem Cyber-/Glass-Redesign** zurückgeführt (klassisches Theme-Layout, `theme.ts`, einfache Card, kein `AnimatedCyberBackdrop`, kein `LanguageSwitcher` auf der Login-Karte).
+
+**Dieses Layout, die Farb-/Abstandsstruktur und die visuelle Hierarchie dürfen nicht mehr verändert werden** — auch nicht „kleine“ kosmetische Anpassungen, Refactors auf Tailwind-only oder Austausch der Komponenten-Hülle. Ausnahme **nur** bei **ausdrücklichem** Nutzerauftrag (Formulierung wie: „Login-Design ändern“, „Login-Seite umbauen“).
+
+Konkret nicht ändern (außer der Nutzer verlangt es explizit):
+
+- `frontend/src/pages/Login.tsx`, `Register.tsx` und ähnliche Auth-Seiten
+- `frontend/src/services/authService.ts`, `auth`-bezogene Services
+- `frontend/src/contexts/AuthContext.tsx`
+- Backend `auth`-Router, Token-/OTP-Logik, Passwort-Handling
+- Deploy-/Docker-Schritte, die `.env` mit `SECRET_KEY` / DB-Zugang weglassen (Login bricht sonst ohne Codeänderung)
+
+Deploy auf Server: immer `docker compose --env-file .env ...` verwenden, wenn die Compose-Datei `${VAR}` nutzt.
