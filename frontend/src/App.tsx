@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Tournaments from './pages/Tournaments';
@@ -18,7 +19,16 @@ import CreateLocation from './pages/CreateLocation';
 import EditLocation from './pages/EditLocation';
 import UserManagement from './pages/Admin/UserManagement';
 import Logs from './pages/Admin/Logs';
+import RegistrationManagement from './pages/Admin/RegistrationManagement';
 import Settings from './pages/Settings';
+import Register from './pages/Register';
+import ProfileEdit from './pages/ProfileEdit';
+import Profile from './pages/Profile';
+import Statistics from './pages/Statistics';
+import FeedbackPage from './pages/FeedbackPage';
+import TournamentModesWiki from './pages/TournamentModesWiki';
+import WikiOverview from './pages/WikiOverview';
+import ParticipantMatchDialog from './components/ParticipantMatchDialog';
 import Layout from './components/Layout/Layout';
 import { useAuth } from './contexts/AuthContext';
 import { logsService } from './services/logsService';
@@ -46,7 +56,8 @@ function getBasePath(): string {
 }
 
 function AppRoutes() {
-  const { isAuthenticated, loading, canEdit, isAdmin } = useAuth();
+  const { isAuthenticated, loading, canEdit, isAdmin, isPowerAdmin } = useAuth();
+  const { t } = useTranslation();
   const basename = getBasePath();
 
   useEffect(() => {
@@ -59,9 +70,9 @@ function AppRoutes() {
 
     const loadLayout = async () => {
       try {
-        const data = await settingsService.getSettings();
-        applyLayoutPreset(data.placeholders?.layout);
-        applyFontFamily(data.placeholders?.font_family);
+        const userSettings = await settingsService.getUserSettings();
+        applyLayoutPreset(userSettings.layout as any);
+        applyFontFamily(userSettings.font_family as any);
       } catch {
         applyLayoutPreset('standard');
         applyFontFamily(DEFAULT_FONT_FAMILY);
@@ -93,7 +104,7 @@ function AppRoutes() {
         alignItems: 'center', 
         minHeight: '100vh' 
       }}>
-        <div>Lädt...</div>
+        <div>{t('app.loading')}</div>
       </div>
     );
   }
@@ -120,6 +131,16 @@ function AppRoutes() {
           } 
         />
         <Route
+          path="/register"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Register />
+            )
+          }
+        />
+        <Route
           path="/tournaments/:id/ticker"
           element={
             isAuthenticated ? (
@@ -130,18 +151,49 @@ function AppRoutes() {
           }
         />
 
+        {/* Wiki: oeffentlich lesbar; mit Login inkl. Layout/Sidebar */}
+        <Route
+          path="/wiki"
+          element={
+            isAuthenticated ? (
+              <Layout>
+                <WikiOverview />
+              </Layout>
+            ) : (
+              <WikiOverview />
+            )
+          }
+        />
+        <Route
+          path="/wiki/modes"
+          element={
+            isAuthenticated ? (
+              <Layout>
+                <TournamentModesWiki />
+              </Layout>
+            ) : (
+              <TournamentModesWiki />
+            )
+          }
+        />
+
         {/* All other routes: wrapped in Layout with Sidebar */}
         <Route
           path="/*"
           element={
             isAuthenticated ? (
               <Layout>
+                <ParticipantMatchDialog />
                 <Routes>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/tournaments" element={<Tournaments />} />
                   <Route 
                     path="/tournaments/create" 
                     element={canEdit ? <CreateTournament /> : <Navigate to="/dashboard" replace />} 
+                  />
+                  <Route
+                    path="/tournaments/create/wizard"
+                    element={canEdit ? <CreateTournament /> : <Navigate to="/dashboard" replace />}
                   />
                   <Route path="/tournaments/:id" element={<TournamentDetail />} />
                   <Route 
@@ -152,6 +204,10 @@ function AppRoutes() {
                   <Route 
                     path="/leagues/create" 
                     element={canEdit ? <CreateLeague /> : <Navigate to="/leagues" replace />} 
+                  />
+                  <Route
+                    path="/leagues/create/wizard"
+                    element={canEdit ? <CreateLeague /> : <Navigate to="/leagues" replace />}
                   />
                   <Route path="/leagues/:id" element={<LeagueDetail />} />
                   <Route 
@@ -169,6 +225,8 @@ function AppRoutes() {
                     element={canEdit ? <EditLocation /> : <Navigate to="/locations" replace />} 
                   />
                   <Route path="/participants" element={<Participants />} />
+                  <Route path="/statistics" element={<Statistics />} />
+                  <Route path="/feedback" element={<FeedbackPage />} />
                   <Route
                     path="/admin/users"
                     element={isAdmin ? <UserManagement /> : <Navigate to="/dashboard" replace />}
@@ -178,9 +236,12 @@ function AppRoutes() {
                     element={isAdmin ? <Logs /> : <Navigate to="/dashboard" replace />}
                   />
                   <Route
-                    path="/settings"
-                    element={isAdmin ? <Settings /> : <Navigate to="/dashboard" replace />}
+                    path="/admin/registrations"
+                    element={isPowerAdmin ? <RegistrationManagement /> : <Navigate to="/dashboard" replace />}
                   />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/profile/edit" element={<ProfileEdit />} />
+                  <Route path="/profile/:id" element={<Profile />} />
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>

@@ -2,6 +2,14 @@
 import api from './api';
 import { App, Feedback, FeedbackComment } from '../types';
 
+export interface FeedbackCreateInput {
+  app_id: number;
+  feedback_type: 'bug' | 'feature_request' | 'improvement' | 'other';
+  title: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+}
+
 export const platformService = {
   // Dashboard
   async getDashboardApps(): Promise<App[]> {
@@ -143,7 +151,7 @@ export const platformService = {
     return response.data;
   },
 
-  async createFeedback(feedbackData: any) {
+  async createFeedback(feedbackData: FeedbackCreateInput): Promise<Feedback> {
     const response = await api.post<Feedback>('/platform/feedback', feedbackData);
     return response.data;
   },
