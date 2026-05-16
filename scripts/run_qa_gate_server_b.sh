@@ -12,8 +12,8 @@ APP_DIR="${APP_DIR:-/opt/ibu_sw}"
 BASE_URL="${BASE_URL:-https://test.finalstage.ch}"
 BASE_URL="${BASE_URL%/}"
 RELEASE_DIR="${QA_GATE_LOG_DIR:-/root/releases/qa_gate}"
-EXPECTED_VERSION="${EXPECTED_VERSION:-1.8.1}"
-GATE_VERSION="${GATE_VERSION:-1.8.1}"
+EXPECTED_VERSION="${EXPECTED_VERSION:-1.8.2}"
+GATE_VERSION="${GATE_VERSION:-1.8.2}"
 
 mkdir -p "${RELEASE_DIR}"
 TS="$(date +%Y%m%d_%H%M%S)"
@@ -80,7 +80,24 @@ fi
 echo "OK  postgres                    SELECT 1"
 echo ""
 
-# --- 5) Optional: neuestes MVP-Backup pruefen ---
+# --- 5) Optional: .env.prod Pflichtkeys (keine Secrets ausgeben) ---
+if [[ "${CHECK_ENV_DRIFT:-}" == "1" ]]; then
+  if [[ -x "${APP_DIR}/scripts/check_env_drift_server_b.sh" ]]; then
+    "${APP_DIR}/scripts/check_env_drift_server_b.sh" || {
+      ec=$?
+      if [[ "${ec}" -eq 2 ]]; then
+        echo "WARN env-drift Platzhalter — Gate laeuft weiter" >&2
+      else
+        exit "${ec}"
+      fi
+    }
+  else
+    echo "WARN check_env_drift_server_b.sh nicht ausfuehrbar — uebersprungen" >&2
+  fi
+  echo ""
+fi
+
+# --- 6) Optional: neuestes MVP-Backup pruefen ---
 if [[ "${VERIFY_BACKUP:-}" == "1" ]]; then
   if [[ -x "${APP_DIR}/scripts/verify_backup_server_b.sh" ]]; then
     "${APP_DIR}/scripts/verify_backup_server_b.sh"

@@ -7,14 +7,26 @@ from typing import List, Optional
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_admin
+from app.core.roles import is_platform_admin
 from app.models.user import User
-from app.models.platform import Feedback, FeedbackComment, FeedbackStatus, FeedbackPriority
+from app.models.platform import Feedback, FeedbackComment, FeedbackStatus
 from app.schemas.platform.feedback import (
     FeedbackCreate, FeedbackUpdate, FeedbackResponse,
     FeedbackCommentCreate, FeedbackCommentResponse
 )
+from app.services.feedback_rate_limit import assert_feedback_create_allowed
 
 router = APIRouter(prefix="/platform/feedback", tags=["Feedback"])
+
+
+def _can_view_feedback(current_user: User, feedback: Feedback) -> bool:
+    if is_platform_admin(current_user):
+        return True
+    return feedback.user_id == current_user.id
+
+
+def _can_comment_on_feedback(current_user: User, feedback: Feedback) -> bool:
+    return _can_view_feedback(current_user, feedback)
 
 
 @router.get("", response_model=List[FeedbackResponse])
@@ -29,26 +41,23 @@ async def get_feedback(
     """
     Get feedback list.
     Regular users see only their own feedback.
-    Admins see all feedback.
+    Admins and power admins see all feedback.
     """
     query = db.query(Feedback)
-    
-    # Regular users see only their own feedback
-    if current_user.role.value != "admin":
+
+    if not is_platform_admin(current_user):
         query = query.filter(Feedback.user_id == current_user.id)
-    
-    # Filter by app_id if provided
+
     if app_id:
         query = query.filter(Feedback.app_id == app_id)
-    
-    # Filter by status if provided
+
     if status:
         query = query.filter(Feedback.status == status)
-    
+
     feedbacks = query.order_by(
         Feedback.created_at.desc()
     ).offset(skip).limit(limit).all()
-    
+
     return feedbacks
 
 
@@ -58,8 +67,9 @@ async def create_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create new feedback"""
-    # Verify app exists
+    """Create new feedback (rate-limited per user)."""
+    assert_feedback_create_allowed(current_user.id)
+
     from app.models.platform import App
     app = db.query(App).filter(App.id == feedback_data.app_id).first()
     if app is None:
@@ -67,8 +77,7 @@ async def create_feedback(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="App not found"
         )
-    
-    # Create feedback
+
     new_feedback = Feedback(
         app_id=feedback_data.app_id,
         user_id=current_user.id,
@@ -78,11 +87,11 @@ async def create_feedback(
         priority=feedback_data.priority,
         attachments=feedback_data.attachments
     )
-    
+
     db.add(new_feedback)
     db.commit()
     db.refresh(new_feedback)
-    
+
     return new_feedback
 
 
@@ -99,14 +108,13 @@ async def get_feedback_details(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Feedback not found"
         )
-    
-    # Regular users can only see their own feedback
-    if current_user.role.value != "admin" and feedback.user_id != current_user.id:
+
+    if not _can_view_feedback(current_user, feedback):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to view this feedback"
         )
-    
+
     return feedback
 
 
@@ -114,40 +122,32 @@ async def get_feedback_details(
 async def update_feedback(
     feedback_id: int,
     feedback_data: FeedbackUpdate,
-    current_user: User = Depends(get_current_user),
+    admin_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    """Update feedback (Admin only)"""
+    """Update feedback (Admin or Power Admin only)"""
     feedback = db.query(Feedback).filter(Feedback.id == feedback_id).first()
     if feedback is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Feedback not found"
         )
-    
-    # Only admins can update feedback
-    if current_user.role.value != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can update feedback"
-        )
-    
-    # Update fields if provided
+
     if feedback_data.status is not None:
         feedback.status = feedback_data.status
-    
+
     if feedback_data.priority is not None:
         feedback.priority = feedback_data.priority
-    
+
     if feedback_data.title is not None:
         feedback.title = feedback_data.title
-    
+
     if feedback_data.description is not None:
         feedback.description = feedback_data.description
-    
+
     db.commit()
     db.refresh(feedback)
-    
+
     return feedback
 
 
@@ -158,26 +158,30 @@ async def add_comment(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Add comment to feedback"""
-    # Verify feedback exists
+    """Add comment (feedback owner or platform admin only)."""
     feedback = db.query(Feedback).filter(Feedback.id == feedback_id).first()
     if feedback is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Feedback not found"
         )
-    
-    # Create comment
+
+    if not _can_comment_on_feedback(current_user, feedback):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to comment on this feedback"
+        )
+
     new_comment = FeedbackComment(
         feedback_id=feedback_id,
         user_id=current_user.id,
         comment=comment_data.comment
     )
-    
+
     db.add(new_comment)
     db.commit()
     db.refresh(new_comment)
-    
+
     return new_comment
 
 
@@ -188,25 +192,21 @@ async def get_feedback_comments(
     db: Session = Depends(get_db)
 ):
     """Get comments for feedback"""
-    # Verify feedback exists
     feedback = db.query(Feedback).filter(Feedback.id == feedback_id).first()
     if feedback is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Feedback not found"
         )
-    
-    # Regular users can only see comments on their own feedback
-    if current_user.role.value != "admin" and feedback.user_id != current_user.id:
+
+    if not _can_view_feedback(current_user, feedback):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to view comments for this feedback"
         )
-    
+
     comments = db.query(FeedbackComment).filter(
         FeedbackComment.feedback_id == feedback_id
     ).order_by(FeedbackComment.created_at.asc()).all()
-    
+
     return comments
-
-

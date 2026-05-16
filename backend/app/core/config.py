@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     
     # App Info
     APP_NAME: str = "IBU Turniere API"
-    APP_VERSION: str = "1.8.1"
+    APP_VERSION: str = "1.8.2"
     DEBUG: bool = False
     DEPLOY_LABEL: Optional[str] = None
     
@@ -59,6 +59,11 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
         return self.CORS_ORIGINS if isinstance(self.CORS_ORIGINS, list) else ["*"]
     
+    # Feedback rate limits (Abuse-Schutz)
+    FEEDBACK_RATE_WINDOW_SEC: int = 3600
+    FEEDBACK_RATE_MAX_PER_WINDOW: int = 30
+    FEEDBACK_RATE_MIN_INTERVAL_SEC: int = 45
+
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_RETENTION_DAYS: int = 90
