@@ -105,7 +105,8 @@ export interface Tournament {
   ko_block_same_group: boolean;
   ko_block_same_position: boolean;
   ko_random_seed: number | null;
-  league_scoring_system: 'points' | 'difference' | 'wins' | null;
+  /** API: nur `points` | `difference`. UI-Wert `wins` wird vor dem Save in tie_breaking_rules gemappt. */
+  league_scoring_system: 'points' | 'difference' | null;
   league_points_win?: number;
   league_points_draw?: number;
   league_points_loss?: number;

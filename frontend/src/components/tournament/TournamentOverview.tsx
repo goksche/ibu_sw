@@ -193,21 +193,31 @@ export default function TournamentOverview({ tournament, locationName }: Tournam
                 </div>
               )}
               
-              {tournament.league_scoring_system && (
+              {(tournament.league_scoring_system || tournament.tie_breaking_rules?.includes('wins')) && (
                 <div className="mb-5 pb-5 border-b border-border">
                   <div className="text-sm text-muted-foreground mb-2 font-medium">
                     Ligatabelle Wertung
                   </div>
                   <div className={cn(
                     'inline-block py-2 px-4 rounded-md text-sm font-semibold mb-2',
-                    tournament.league_scoring_system === 'points' ? 'bg-success text-success-foreground' : 'bg-info text-info-foreground'
+                    tournament.league_scoring_system === 'points'
+                      ? 'bg-success text-success-foreground'
+                      : tournament.league_scoring_system === 'difference'
+                        ? 'bg-info text-info-foreground'
+                        : 'bg-warning text-warning-foreground'
                   )}>
-                    {tournament.league_scoring_system === 'points' ? 'Punkte' : 'Differenz'}
+                    {tournament.league_scoring_system === 'points'
+                      ? 'Punkte'
+                      : tournament.league_scoring_system === 'difference'
+                        ? 'Differenz'
+                        : 'Siege (Gleichstand)'}
                   </div>
                   <div className="text-sm text-muted-foreground italic leading-relaxed">
-                    {tournament.league_scoring_system === 'points' 
+                    {tournament.league_scoring_system === 'points'
                       ? 'Rangliste basierend auf Punkten (Sieg: 3 Punkte, Unentschieden: 1 Punkt, Niederlage: 0 Punkte)'
-                      : 'Rangliste basierend auf Differenz (Tore/Sätze/Legs für minus gegen)'}
+                      : tournament.league_scoring_system === 'difference'
+                        ? 'Rangliste basierend auf Differenz (Tore/Sätze/Legs für minus gegen)'
+                        : 'Primäre Sortierung nach Siegen (siehe Gleichstandsregeln)'}
                   </div>
                 </div>
               )}

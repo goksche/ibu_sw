@@ -6,7 +6,9 @@ import { authService } from '../services/authService';
 import { participantService } from '../services/participantService';
 import { qualificationService } from '../services/qualificationService';
 import { locationService } from '../services/locationService';
-import { Participant, LeagueVariant, KOStartRound, QualificationPlan, Location, KOStructure, KODrawMethod } from '../types';
+import { Participant, LeagueVariant, KOStartRound, QualificationPlan, Location, KOStructure, KODrawMethod, Tournament } from '../types';
+import { formatApiErrorMessage } from '../utils/apiErrors';
+import { sanitizeTournamentWritePayload } from '../utils/tournamentPayload';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Textarea } from '../components/ui';
 import { cn } from '@/lib/utils';
 import { ArrowLeft } from 'phosphor-react';
@@ -284,7 +286,7 @@ export default function EditTournament() {
     }
 
     try {
-      await tournamentService.update(tournamentId, {
+      const updateBody = sanitizeTournamentWritePayload({
         name: formData.name,
         description: formData.description || undefined,
         start_date: formData.start_date,
@@ -313,11 +315,12 @@ export default function EditTournament() {
         league_rounds_multiplier: formData.mode === 'round_robin' && formData.league_variant === 'multiple' ? formData.league_rounds_multiplier : undefined,
         seeded_participant_ids: formData.group_distribution === 'seeded' && formData.seeded_participant_ids.length > 0 ? formData.seeded_participant_ids : undefined,
         location_id: formData.location_id || undefined,
-        spielfeld_assignment_mode: formData.location_id ? formData.spielfeld_assignment_mode : undefined,
+        spielfeld_assignment_mode: formData.has_group_phase ? formData.spielfeld_assignment_mode : undefined,
       });
+      await tournamentService.update(tournamentId, updateBody as Partial<Tournament>);
       navigate(`/tournaments/${tournamentId}`);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Fehler beim Aktualisieren des Turniers');
+      setError(formatApiErrorMessage(err, 'Fehler beim Aktualisieren des Turniers'));
     } finally {
       setLoading(false);
     }
