@@ -20,7 +20,6 @@ class TournamentBase(BaseModel):
     has_ko_phase: bool = False
     league_variant: LeagueVariant | None = LeagueVariant.CLASSIC
     league_rounds_multiplier: int | None = None
-    spielfeld_assignment_mode: str | None = Field(default=None, pattern='^(random|group_fixed|group_random)$')
 
 
 class TournamentCreate(TournamentBase):

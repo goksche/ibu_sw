@@ -13,7 +13,8 @@ import { ArrowLeft } from 'phosphor-react';
 import TournamentModeVisualization from '../components/tournament/TournamentModeVisualization';
 import { MODE_VARIANTS, PAIRING_VARIANTS } from '../domain/tournamentModeMatrix';
 import { koStructureIncludesThirdPlace } from '../domain/koThirdPlace';
-import { formatApiErrorMessage, isWinsUnsupportedError } from '../utils/apiErrors';
+import { formatApiErrorMessage } from '../utils/apiErrors';
+import { sanitizeTournamentWritePayload } from '../utils/tournamentPayload';
 
 export default function CreateTournament() {
   type KODrawModeValue = 'random_first_round' | 'random_each_round' | 'predefined_slots' | 'cross' | 'draw';
@@ -301,23 +302,11 @@ export default function CreateTournament() {
         is_template: formData.is_template,
         visibility: formData.visibility,
         location_id: formData.location_id || undefined,
+        spielfeld_assignment_mode: formData.has_group_phase ? formData.spielfeld_assignment_mode : undefined,
       };
 
-      try {
-        await tournamentService.create(payload);
-      } catch (err: any) {
-        const isWinsMode =
-          (payload.mode === 'round_robin' || payload.mode === 'combined')
-          && payload.league_scoring_system === 'wins';
-        if (isWinsMode && isWinsUnsupportedError(err)) {
-          await tournamentService.create({
-            ...payload,
-            league_scoring_system: 'points',
-          });
-        } else {
-          throw err;
-        }
-      }
+      const apiPayload = sanitizeTournamentWritePayload(payload);
+      await tournamentService.create(apiPayload as Partial<Tournament>);
 
       navigate('/dashboard');
     } catch (err: any) {

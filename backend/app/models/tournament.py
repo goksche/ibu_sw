@@ -45,6 +45,7 @@ class KODrawMethod(str, enum.Enum):
     OVERALL_SEEDING = "overall_seeding"  # Gesamt-Seeding (Ranglistenbasiert)
     POT_SYSTEM = "pot_system"  # Topf-System (teilweise Zufall)
     FULL_RANDOM = "full_random"  # Vollzufällige Auslosung mit Sperrregeln
+    RANDOM_EACH_ROUND = "random_each_round"  # Pro KO-Runde neu auslosen
     BONUS_DRAW_FOR_WINNERS = "bonus_draw_for_winners"  # Bonus-Auslosung für Gruppensieger
     PREDEFINED_BRACKET = "predefined_bracket"  # Vorgegebener Turnierbaum
     MANUAL = "manual"  # Manuelle Paarungen
