@@ -53,7 +53,7 @@ check_http "home" "${BASE_URL}/" 200 || failed=1
 check_http "api-info-version" "${BASE_URL}/api/v1/info/version" 200 || failed=1
 
 # Optional: nicht überall hinter Nginx erreichbar
-check_http "api-info-diagnostics" "${BASE_URL}/api/v1/info/diagnostics" 200 404 || failed=1
+check_http "api-info-diagnostics" "${BASE_URL}/api/v1/info/diagnostics" 200 || failed=1
 
 echo ""
 

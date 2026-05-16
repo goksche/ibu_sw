@@ -1,10 +1,13 @@
 # Backend Main - FastAPI Application
 # v1.2.0-alpha.2
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
+import logging
 import time
+
+logger = logging.getLogger("ibu.api")
 
 from app.core.config import settings
 from app.core.database import init_db, SessionLocal
@@ -119,9 +122,24 @@ app.include_router(permissions.router, prefix="/api/v1")
 app.include_router(deployment.router, prefix="/api/v1")
 app.include_router(admin_logs.router, prefix="/api/v1")
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+        )
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
+
 # Initialize Database on Startup
 @app.on_event("startup")
 async def startup_event():
+    logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO))
     init_db()
 
 

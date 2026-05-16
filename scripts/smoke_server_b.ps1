@@ -43,6 +43,6 @@ Write-Step "Server-B Smoke (BaseUrl=$BaseUrl)"
 Http-Check "home" "$BaseUrl/" "GET" @(200)
 Http-Check "api-info-version" "$BaseUrl/api/v1/info/version" "GET" @(200)
 # Optional route: nicht überall hinter Nginx erreichbar (z. B. 404 ohne interne Weiterleitung)
-Http-Check "api-info-diagnostics" "$BaseUrl/api/v1/info/diagnostics" "GET" @(200, 404)
+Http-Check "api-info-diagnostics" "$BaseUrl/api/v1/info/diagnostics" "GET" @(200)
 Write-Host ""
 Write-Host "Smoke OK."

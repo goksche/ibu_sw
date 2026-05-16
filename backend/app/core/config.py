@@ -11,8 +11,9 @@ class Settings(BaseSettings):
     
     # App Info
     APP_NAME: str = "IBU Turniere API"
-    APP_VERSION: str = "1.6.0"
+    APP_VERSION: str = "1.8.1"
     DEBUG: bool = False
+    DEPLOY_LABEL: Optional[str] = None
     
     # Database
     POSTGRES_HOST: str = "localhost"

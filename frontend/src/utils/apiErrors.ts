@@ -87,6 +87,14 @@ export function formatApiErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+export function getFormattedApiError(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object' && 'formattedApiMessage' in error) {
+    const msg = (error as { formattedApiMessage?: string }).formattedApiMessage;
+    if (msg) return msg;
+  }
+  return formatApiErrorMessage(error, fallback);
+}
+
 export function isWinsUnsupportedError(err: unknown): boolean {
   const e = err as { response?: { data?: { detail?: unknown } } };
   const detail = e?.response?.data?.detail;

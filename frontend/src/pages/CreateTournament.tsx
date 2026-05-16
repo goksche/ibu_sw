@@ -698,6 +698,14 @@ export default function CreateTournament() {
     'transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
   );
 
+  /** Datum Schritt 1 — dunkle Fläche + klickbares Kalenderfeld (siehe index.css input[type=date]) */
+  const wizardDateFieldClass = cn(
+    wizardControlSurface,
+    'w-full min-h-[2.75rem] px-3 py-2 text-base rounded-md border font-medium',
+    'transition-all duration-200 outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+    'cursor-pointer',
+  );
+
   /** Auslosungsart nur sinnvoll mit Gruppenphase und mindestens einer Gruppe (Zahl robust parsen). */
   const groupsCountNum = Math.max(0, Number(formData.groups_count) || 0);
   const showGroupDrawType =
@@ -827,6 +835,7 @@ export default function CreateTournament() {
                     name="start_date"
                     value={formData.start_date}
                     onChange={handleChange}
+                    className={wizardDateFieldClass}
                     required
                   />
                   <Input
@@ -835,6 +844,7 @@ export default function CreateTournament() {
                     name="end_date"
                     value={formData.end_date}
                     onChange={handleChange}
+                    className={wizardDateFieldClass}
                   />
                 </div>
               </>

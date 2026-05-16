@@ -9,8 +9,9 @@ export interface InputProps
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, label, error, ...props }, ref) => {
+    const isDateField = type === 'date' || type === 'datetime-local'
     return (
-      <div className="w-full">
+      <div className={cn('w-full', isDateField && 'relative')}>
         {label && (
           <label className="block text-sm font-medium text-foreground mb-1.5">
             {label}

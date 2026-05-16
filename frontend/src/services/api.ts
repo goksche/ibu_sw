@@ -1,5 +1,6 @@
 // API Client - Axios Configuration
 import axios from 'axios';
+import { formatApiErrorMessage } from '../utils/apiErrors';
 
 // BASE_PATH für Plattform-Integration
 // Extrahiert BASE_PATH aus window.BASE_PATH oder aus der URL
@@ -54,10 +55,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor for error logging
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const fallback = error?.message || 'Request failed';
+    (error as { formattedApiMessage?: string }).formattedApiMessage =
+      formatApiErrorMessage(error, fallback);
     return Promise.reject(error);
   }
 );
