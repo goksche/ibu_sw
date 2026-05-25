@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Platform Core - Multi-App Platform</title>
+    <script>
+      // HTTPS erzwingen: Bei Aufruf per HTTP auf HTTPS umleiten (außer localhost)
+      if (location.protocol === 'http:' && !/^localhost(\d*)$/.test(location.hostname) && location.hostname !== '127.0.0.1') {
+        location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+      }
+      // BASE_PATH für Plattform-Integration
+      // Wird von der Plattform gesetzt, falls nicht vorhanden aus URL extrahieren
+      (function() {
+        if (!window.BASE_PATH) {
+          const parts = window.location.pathname.split('/');
+          if (parts.length > 1 && parts[1].startsWith('App-')) {
+            window.BASE_PATH = '/' + parts[1];
+          } else {
+            window.BASE_PATH = '';
+          }
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

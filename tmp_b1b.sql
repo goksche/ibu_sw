@@ -1,0 +1,2 @@
+-- Run after duplicate creates tournament_id = :new_id (set below)
+-- For B1b prep on server: will be applied to new tournament after we know ID

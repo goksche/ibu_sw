@@ -1,0 +1,21 @@
+---
+description: Server A (finalstage.ch) – Produktion, nur auf ausdrücklichen Wunsch ändern
+alwaysApply: true
+---
+
+# Server A – Produktion
+
+**Server A:** 144.91.103.103 – finalstage.ch, www.finalstage.ch
+
+## Strikte Regel
+
+**Server A darf nur auf ausdrücklichen Wunsch des Nutzers geändert werden.**
+
+- Auf finalstage.ch läuft der MVP – bis neue Anforderungen kommen
+- Keine Änderungen, Patches oder Deployments ohne explizite Anweisung
+- Bei "auf dem Server umsetzen" ohne weitere Angabe: **Server B** meinen
+
+## Wann Server A ändern
+
+- Nur wenn der Nutzer **explizit** "auf Server A" oder "auf finalstage.ch" oder "auf Produktion" sagt
+- Nach erfolgreichem Test auf Server B und expliziter Freigabe für Go-Live

@@ -207,8 +207,15 @@ def validate_mode_payload(payload: Dict[str, Any]) -> None:
     structure = payload.get("ko_structure")
     pairing_mode = payload.get("ko_pairing_mode")
 
-    if mode == "knockout" and not has_group_phase and draw_method in {"fixed_cross", "same_position_cross"}:
-        raise ValueError("Kreuzpaarungen (P3) sind ohne Gruppenphase nicht gueltig. Bitte Seeding, Zufall oder manuell verwenden.")
+    if mode == "knockout" and not has_group_phase and draw_method in {
+        "fixed_cross",
+        "same_position_cross",
+        "bonus_draw_for_winners",
+    }:
+        raise ValueError(
+            "Kreuzpaarungen und Bonus-Auslosung fuer Gruppensieger setzen eine Gruppenphase voraus. "
+            "Bitte Seeding, Zufall oder manuell verwenden."
+        )
     if mode == "knockout" and not has_group_phase and pairing_mode in {"P3", "P4"}:
         raise ValueError("P3/P4 setzen eine Gruppenphase voraus und sind im reinen KO-Modus nicht gueltig.")
 

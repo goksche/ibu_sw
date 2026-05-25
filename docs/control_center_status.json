@@ -1,0 +1,207 @@
+{
+  "schema_version": "1.0.0",
+  "last_updated": "2026-01-25T00:00:00Z",
+  "notes": "Lokale Governance-Statusdatei. Keine direkte Serverabfrage.",
+  "servers": {
+    "Server A": {
+      "version": "1.6.0",
+      "online_since": "2026-01-31T00:00:00+01:00",
+      "last_change": "2026-01-31T00:00:00+01:00",
+      "risk_flag": "stable",
+      "deployment_ref": {
+        "git_tag": "v1.6.0",
+        "app_version": "1.6.0",
+        "image_tag": "optional"
+      },
+      "confirmed_features": [
+        "MVP-Basis live",
+        "Locations/Spielorte CRUD",
+        "Liga/Meisterschaft Kernfunktionen"
+      ],
+      "open_pendencies": [
+        "Live-Ticker nicht auf Server A",
+        "KO-Spielfeld-Zuweisung offen"
+      ],
+      "governance": {
+        "promotion_gate": {
+          "stage": "Server B -> Server A",
+          "status": "ok",
+          "last_smoke_at": "2026-01-31T10:00:00+01:00"
+        },
+        "rollback": {
+          "status": "ok",
+          "backup_checked": true,
+          "rollback_path_minutes": 10,
+          "db_migration_note": "Vor Rollback DB-Dump validieren"
+        },
+        "migration": {
+          "status": "ok",
+          "current_state": "synchron",
+          "last_migration": "2026-01-31"
+        },
+        "drift_check": {
+          "status": "warn",
+          "env_file": "ok",
+          "compose": "ok",
+          "nginx": "warn"
+        },
+        "post_deploy_minimum": {
+          "status": "ok",
+          "smoke": {
+            "health": "ok",
+            "api_flow": "ok",
+            "ui_flow": "ok"
+          }
+        },
+        "timezone_rule": {
+          "status": "ok",
+          "storage": "UTC",
+          "display": "CET/Europe/Zurich"
+        },
+        "fallback_events": [
+          {
+            "time": "2026-01-25T12:00:00Z",
+            "component": "ko_generation",
+            "reason": "Cross-Mode nicht vollstaendig bildbar",
+            "fallback_used": "overall_seeding",
+            "visibility": "ok",
+            "ticket": "fix-engine-ko-consistency"
+          }
+        ]
+      }
+    },
+    "Server B": {
+      "version": "1.6.0",
+      "online_since": "2026-01-31T00:00:00+01:00",
+      "last_change": "2026-02-08T17:30:00+01:00",
+      "risk_flag": "test",
+      "deployment_ref": {
+        "git_tag": "v1.6.0-test",
+        "app_version": "1.6.0",
+        "image_tag": "test-latest"
+      },
+      "confirmed_features": [
+        "Live-Ticker",
+        "KO-Simulationsfix",
+        "Wiki/Overview-Angleichung"
+      ],
+      "open_pendencies": [
+        "Fix-Plan KO-Engine Konsistenz",
+        "Dashboard-Links ins Einstellungsmenue verschieben"
+      ],
+      "governance": {
+        "promotion_gate": {
+          "stage": "Lokal -> Server B",
+          "status": "ok",
+          "last_smoke_at": "2026-02-08T18:00:00+01:00"
+        },
+        "rollback": {
+          "status": "ok",
+          "backup_checked": true,
+          "rollback_path_minutes": 10,
+          "db_migration_note": "Rollback nur mit kompatiblen Migrationen"
+        },
+        "migration": {
+          "status": "warn",
+          "current_state": "teilweise unterschiedlich zu lokal",
+          "last_migration": "2026-02-08"
+        },
+        "drift_check": {
+          "status": "warn",
+          "env_file": "warn",
+          "compose": "ok",
+          "nginx": "ok"
+        },
+        "post_deploy_minimum": {
+          "status": "ok",
+          "smoke": {
+            "health": "ok",
+            "api_flow": "ok",
+            "ui_flow": "ok"
+          }
+        },
+        "timezone_rule": {
+          "status": "ok",
+          "storage": "UTC",
+          "display": "CET/Europe/Zurich"
+        },
+        "fallback_events": [
+          {
+            "time": "2026-02-08T17:40:00+01:00",
+            "component": "qualification_table",
+            "reason": "Endpoint auf Testserver fehlte",
+            "fallback_used": "frontend_fallback_table",
+            "visibility": "ok",
+            "ticket": "qualification-table-endpoint-serverb"
+          }
+        ]
+      }
+    },
+    "Lokal": {
+      "version": "workspace",
+      "online_since": "n/a",
+      "last_change": "n/a",
+      "risk_flag": "hotfix",
+      "deployment_ref": {
+        "git_tag": "n/a",
+        "app_version": "auto-from-config",
+        "image_tag": "n/a"
+      },
+      "confirmed_features": [
+        "Lokale Entwicklung und Vorabtests",
+        "Plan-Sync aus Hauptplan",
+        "Governance-Dashboard"
+      ],
+      "open_pendencies": [
+        "Offene Todos vor Promotion nach Server B abschliessen"
+      ],
+      "governance": {
+        "promotion_gate": {
+          "stage": "Lokal",
+          "status": "warn",
+          "last_smoke_at": "n/a"
+        },
+        "rollback": {
+          "status": "ok",
+          "backup_checked": true,
+          "rollback_path_minutes": 5,
+          "db_migration_note": "Vor Tests lokale DB sichern"
+        },
+        "migration": {
+          "status": "warn",
+          "current_state": "kann von B/A abweichen",
+          "last_migration": "n/a"
+        },
+        "drift_check": {
+          "status": "ok",
+          "env_file": "ok",
+          "compose": "ok",
+          "nginx": "ok"
+        },
+        "post_deploy_minimum": {
+          "status": "warn",
+          "smoke": {
+            "health": "ok",
+            "api_flow": "warn",
+            "ui_flow": "warn"
+          }
+        },
+        "timezone_rule": {
+          "status": "ok",
+          "storage": "UTC",
+          "display": "CET/Europe/Zurich"
+        },
+        "fallback_events": [
+          {
+            "time": "n/a",
+            "component": "n/a",
+            "reason": "Keine aktuellen lokalen Fallbacks",
+            "fallback_used": "n/a",
+            "visibility": "ok",
+            "ticket": "n/a"
+          }
+        ]
+      }
+    }
+  }
+}

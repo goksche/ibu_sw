@@ -1,0 +1,16 @@
+lcd C:/Cursor/ibu_sw/backend/app/api/v1
+cd /opt/ibu_sw/backend/app/api/v1
+put registration.py
+lcd C:/Cursor/ibu_sw/frontend/src/pages/Admin
+cd /opt/ibu_sw/frontend/src/pages/Admin
+put RegistrationManagement.tsx
+lcd C:/Cursor/ibu_sw/frontend/src/services
+cd /opt/ibu_sw/frontend/src/services
+put registrationService.ts
+lcd C:/Cursor/ibu_sw/frontend/src/locales
+cd /opt/ibu_sw/frontend/src/locales
+put de.json
+put en.json
+put fr.json
+put it.json
+put tr.json

@@ -1,0 +1,139 @@
+# IBU Turniere - Production Docker Compose Configuration
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ibu_postgres_prod
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ibu_turniere}
+      POSTGRES_USER: ${POSTGRES_USER:-ibu_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ibu_admin} -d ${POSTGRES_DB:-ibu_turniere}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ibu_network
+    restart: unless-stopped
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ibu_backend_prod
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-ibu_turniere}
+      POSTGRES_USER: ${POSTGRES_USER:-ibu_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 600
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://yourdomain.com}
+      DEBUG: "False"
+      OTP_DEV_MODE: ${OTP_DEV_MODE:-false}
+      OTP_EXPIRY_MINUTES: ${OTP_EXPIRY_MINUTES:-10}
+      OTP_LENGTH: ${OTP_LENGTH:-6}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+    volumes:
+      - backend_logs:/app/logs
+      - nginx_logs:/var/log/nginx:ro
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ibu_network
+    restart: unless-stopped
+
+  # React Frontend (Production Build)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/}
+    container_name: ibu_frontend_prod
+    # Keine Volumes - Build-Dateien sind bereits im Image
+    depends_on:
+      - backend
+    networks:
+      - ibu_network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy (direkt auf Port 80/443)
+  nginx:
+    image: nginx:stable-alpine
+    container_name: ibu_sw
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx_logs:/var/log/nginx
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - ibu_network
+    restart: unless-stopped
+
+  # Certbot for SSL (Let's Encrypt)
+  # Einmalig ausführen (oder für Renew als Cron/Systemd nutzen):
+  # docker compose -f docker-compose.prod.yml run --rm certbot
+  certbot:
+    image: certbot/certbot
+    container_name: ibu_certbot_prod
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    networks:
+      - ibu_network
+    command: >-
+      certonly --webroot
+      --webroot-path=/var/www/certbot
+      --email ${CERTBOT_EMAIL}
+      --agree-tos
+      --no-eff-email
+      -d ${DOMAIN_NAME}
+      -d www.${DOMAIN_NAME}
+    restart: "no"
+
+# Named Volumes
+volumes:
+  postgres_data:
+    driver: local
+  backend_logs:
+    driver: local
+  nginx_logs:
+    driver: local
+  certbot_certs:
+    driver: local
+  certbot_www:
+    driver: local
+
+# Network
+networks:
+  ibu_network:
+    driver: bridge
+

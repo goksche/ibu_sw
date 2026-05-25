@@ -1,0 +1,39 @@
+# GSmartSol Notify API + PostgreSQL – nur Server C (gsmartsol.ch)
+# Start: docker compose --env-file .env up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gsmartsol
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: gsmartsol_notify
+    volumes:
+      - gsmartsol_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gsmartsol -d gsmartsol_notify"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: .
+    ports:
+      - "127.0.0.1:8001:8001"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://gsmartsol:${POSTGRES_PASSWORD}@postgres:5432/gsmartsol_notify
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      NOTIFY_FROM_EMAIL: ${NOTIFY_FROM_EMAIL:-noreply@gsmartsol.ch}
+      NOTIFY_TO_EMAIL: ${NOTIFY_TO_EMAIL:-goksche23@gmail.com}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  gsmartsol_pgdata:

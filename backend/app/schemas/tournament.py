@@ -147,12 +147,12 @@ class TournamentResponse(TournamentBase):
     ko_block_same_position: bool
     ko_random_seed: int | None
     league_scoring_system: LeagueScoringSystem | None
-    league_points_win: int
-    league_points_draw: int
-    league_points_loss: int
+    league_points_win: int = 3
+    league_points_draw: int = 1
+    league_points_loss: int = 0
     tie_breaking_rules: list[str] | None
-    head_referee: str | None
-    scorekeeper: str | None
+    head_referee: str | None = None
+    scorekeeper: str | None = None
     league_variant: LeagueVariant | None
     league_rounds_multiplier: int | None
     is_template: bool

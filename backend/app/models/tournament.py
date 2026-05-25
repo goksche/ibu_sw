@@ -114,7 +114,12 @@ class Tournament(Base):
     
     # League Scoring Settings
     league_scoring_system = Column(Enum(LeagueScoringSystem), nullable=True)  # Liga-Wertungssystem
+    league_points_win = Column(Integer, default=3, nullable=False)
+    league_points_draw = Column(Integer, default=1, nullable=False)
+    league_points_loss = Column(Integer, default=0, nullable=False)
     tie_breaking_rules = Column(JSON, nullable=True)  # Gleichstandsregeln als JSON Array
+    head_referee = Column(String(120), nullable=True)
+    scorekeeper = Column(String(120), nullable=True)
     
     # League Variant Settings
     league_variant = Column(Enum(LeagueVariant), default=LeagueVariant.CLASSIC, nullable=False)  # Liga-Variante
@@ -129,6 +134,7 @@ class Tournament(Base):
     # Settings
     show_matches = Column(Boolean, default=True, nullable=False)
     show_tables = Column(Boolean, default=True, nullable=False)
+    visibility = Column(String(10), default='public', nullable=False)
     spielfeld_assignment_mode = Column(String(20), default='random', nullable=True)
     
     # Timestamps

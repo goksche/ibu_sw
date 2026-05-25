@@ -1,0 +1,67 @@
+{
+  "run_timestamp": "2026-03-18 17:44:14 CET",
+  "timezone": "Europe/Zurich",
+  "overall_status": "WARNUNG",
+  "summary": "Ressourcen stabil, Security-Rauschen durch SSH-Scans.",
+  "servers": [
+    {
+      "server_key": "A",
+      "server_name": "Server A (Produktion)",
+      "status": "WARNUNG",
+      "notes": "Systemlast normal; SSH-Scans sichtbar.",
+      "metrics": {
+        "cpu_usage_pct": 0.5,
+        "cpu_idle_pct": 99.5,
+        "load1": 0.0,
+        "load5": 0.0,
+        "load15": 0.0,
+        "cores": 4,
+        "ram_used_mb": 476,
+        "ram_total_mb": 7941,
+        "ram_used_pct": 6.0,
+        "swap_used_mb": 0,
+        "swap_total_mb": 0,
+        "network_rx_bps": 400,
+        "network_tx_bps": 430,
+        "vnstat_available": false,
+        "docker_active": false,
+        "sudo_nopasswd": true,
+        "fail2ban_status": "active"
+      },
+      "top_processes": [
+        {
+          "rank": 1,
+          "pid": 18036,
+          "process_name": "sshd",
+          "cpu_pct": 2.8,
+          "mem_pct": 0.1,
+          "command": "sshd: root@notty"
+        }
+      ],
+      "findings": [
+        {
+          "category": "security",
+          "severity": "warning",
+          "message": "SSH-Preauth-Fehler in journalctl vorhanden."
+        }
+      ],
+      "raw_data": {
+        "uptime": "17:44 up ... load average: 0.00, 0.00, 0.00",
+        "free -m": "Mem: 7941 total, 476 used, 7470 free"
+      }
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "Hoch",
+      "recommendation": "Fail2ban Trends taeglich kontrollieren.",
+      "reason": "Anhaltendes SSH-Scan-Rauschen."
+    },
+    {
+      "priority": "Mittel",
+      "recommendation": "Load- und RAM-Trend ueber mehrere Runs vergleichen.",
+      "reason": "Frueherkennung von Lastanstiegen."
+    }
+  ]
+}
+

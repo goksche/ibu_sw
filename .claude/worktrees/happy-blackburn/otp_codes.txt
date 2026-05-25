@@ -1,0 +1,5 @@
+# OTP Codes für Entwicklung
+# Diese Datei wird automatisch aktualisiert wenn OTP-Codes angefordert werden
+# Format: Zeitstempel: Email: OTP-Code
+
+Letzte OTP-Anfragen:

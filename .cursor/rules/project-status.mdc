@@ -1,0 +1,44 @@
+```markdown
+---
+description: Project status management - keep project.md frontmatter in sync
+globs: ["**/*.md", "**/*.py", "**/*.ts", "**/*.tsx", "**/*.js"]
+alwaysApply: true
+---
+
+## Project Status Rule
+
+This project uses the PMT schema. You MUST maintain the frontmatter in project.md.
+
+### On session start
+1. Read the YAML frontmatter in project.md
+2. Use name, status, phase, next_milestone as context for this session
+
+### After completing any task
+1. Mark it as [x] in the todos section of project.md
+2. Set status to "completed" in the todos[] frontmatter array
+3. Update last_activity to today's date (YYYY-MM-DD)
+4. If it was the last open high-priority task, ask user about phase_progress
+
+### When a new version is released
+1. Update current_version in the frontmatter
+2. Update last_activity
+
+### When status changes
+1. Update the status field
+2. If status is set to on_hold: ask user for on_hold_reason before saving
+
+### When a milestone is completed
+1. Ask user: what is the next milestone?
+2. Update next_milestone and milestone_due
+
+### At session end
+1. Sync all todo statuses between md content checkboxes and frontmatter todos[]
+2. Update last_activity to today
+3. Confirm in one line what was updated in the frontmatter
+
+### Never
+- Touch any markdown content below the closing ---
+- Change schema_version
+- Change pmt_id
+- Guess at status or phase changes — always ask the user
+```

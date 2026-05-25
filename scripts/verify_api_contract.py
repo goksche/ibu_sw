@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prüft API-Contract: Backend-Enums vs. Frontend tournamentApiContract.ts (v1.8.3)."""
+"""Prüft API-Contract: Backend-Enums vs. Frontend tournamentApiContract.ts (v1.8.4)."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def main() -> int:
     ]
 
     failed = False
-    print("=== verify_api_contract (v1.8.3) ===")
+    print("=== verify_api_contract (v1.8.4) ===")
     for label, backend_vals, frontend_vals in checks:
         missing_in_fe = backend_vals - frontend_vals
         extra_in_fe = frontend_vals - backend_vals

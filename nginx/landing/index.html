@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinalStage Beta</title>
+  <style>
+    :root {
+      --bg-deep: #04050d;
+      --text: #e8eaf0;
+      --text-muted: #8f96ad;
+      --text-soft: #6f7690;
+      --cyan: #00d4ff;
+      --cyan-hover: #33dcff;
+      --card-bg: rgba(8, 12, 26, 0.82);
+      --card-border: rgba(0, 212, 255, 0.18);
+      --badge-border: rgba(0, 212, 255, 0.2);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      min-height: 100%;
+      background: var(--bg-deep);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, sans-serif;
+      line-height: 1.5;
+    }
+
+    canvas#bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    .layer-glow {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, rgba(0, 212, 255, 0.08) 0%, rgba(4, 5, 13, 0.92) 70%);
+    }
+
+    .layer-vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 45%, rgba(4, 5, 13, 0.88) 100%);
+    }
+
+    .page {
+      position: relative;
+      z-index: 10;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.75rem;
+      border: 1px solid var(--badge-border);
+      border-radius: 999px;
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: 1.25rem;
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+    }
+
+    h1 {
+      font-size: clamp(1.75rem, 5vw, 2.25rem);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #f4f8ff;
+      margin-bottom: 0.75rem;
+    }
+
+    .lead {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      margin-bottom: 2rem;
+    }
+
+    h2 {
+      font-size: 0.75rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-soft);
+      margin-bottom: 1rem;
+    }
+
+    .card-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.75rem;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    }
+
+    .tiles {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    @media (min-width: 540px) {
+      .tiles { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    a.tile-link {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.35rem;
+      padding: 1rem;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      text-decoration: none;
+      color: inherit;
+      transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    a.tile-link:hover {
+      border-color: rgba(0, 212, 255, 0.35);
+      background: rgba(0, 212, 255, 0.06);
+      box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.12);
+    }
+
+    a.tile-link:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px;
+    }
+
+    a.tile-link strong {
+      font-size: 0.9rem;
+      color: #f4f8ff;
+    }
+
+    a.tile-link span {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    ul.info {
+      list-style: none;
+      padding: 0;
+    }
+
+    ul.info li {
+      position: relative;
+      padding-left: 1.1rem;
+      margin-bottom: 0.65rem;
+      color: var(--text-muted);
+      font-size: 0.92rem;
+    }
+
+    ul.info li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.55em;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--cyan);
+      opacity: 0.6;
+    }
+
+    footer {
+      margin-top: 2rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid rgba(0, 212, 255, 0.08);
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      color: var(--text-soft);
+      text-align: center;
+    }
+
+    .page-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      position: relative;
+      z-index: 20;
+    }
+
+    .page-header .badge {
+      margin-bottom: 0;
+    }
+
+    .lang-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.72rem;
+      position: relative;
+      z-index: 21;
+    }
+
+    .lang-label {
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+
+    .lang-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .lang-buttons button {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(0, 212, 255, 0.35);
+      color: #c8d0e8;
+      padding: 0.28rem 0.4rem;
+      min-width: 2.5rem;
+      min-height: 2.35rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .lang-flag-wrap {
+      display: block;
+      line-height: 0;
+    }
+
+    .lang-flag-wrap svg {
+      display: block;
+      width: 28px;
+      height: auto;
+      max-height: 18px;
+      border-radius: 2px;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+    }
+
+    .lang-buttons button:hover {
+      border-color: rgba(0, 212, 255, 0.55);
+      background: rgba(0, 212, 255, 0.1);
+      box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.08);
+    }
+
+    .lang-buttons button.active {
+      border-color: var(--cyan);
+      background: rgba(0, 212, 255, 0.15);
+      box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <script type="application/json" id="landing-i18n-embed">
+{
+  "de": {
+    "title": "FinalStage Beta",
+    "badge": "Beta",
+    "h1": "Willkommen bei FinalStage Beta",
+    "lead": "FinalStage ist eine Plattform zur Verwaltung von Turnieren und Meisterschaften — von der Planung bis zu Tabellen, Spielen und Auswertungen.",
+    "sectionEntry": "Einstieg",
+    "loginTitle": "Anmelden",
+    "loginDesc": "Mit E-Mail und Einmalcode auf die Plattform gehen.",
+    "registerTitle": "Zugang beantragen",
+    "registerDesc": "Registrierung, wenn du noch keinen Zugang hast.",
+    "wikiTitle": "Turnier-Modi",
+    "wikiDesc": "Kurz erklärt im Wiki — wie Gruppenphase, KO und Modi zusammenspielen.",
+    "sectionBeta": "Hinweise zur Beta",
+    "betaNote1": "Funktionen und Darstellung können sich noch ändern.",
+    "betaNote2": "Für Rückmeldungen zu Bedienung und Abläufen sind wir dankbar.",
+    "footerBrand": "FinalStage Beta",
+    "langLabel": "Sprache"
+  },
+  "en": {
+    "title": "FinalStage Beta",
+    "badge": "Beta",
+    "h1": "Welcome to FinalStage Beta",
+    "lead": "FinalStage is a platform for running tournaments and championships — from planning to tables, matches, and results.",
+    "sectionEntry": "Get started",
+    "loginTitle": "Sign in",
+    "loginDesc": "Use your email and one-time code to access the platform.",
+    "registerTitle": "Request access",
+    "registerDesc": "Register if you don’t have an account yet.",
+    "wikiTitle": "Tournament modes",
+    "wikiDesc": "Short wiki overview — how groups, knockout, and modes fit together.",
+    "sectionBeta": "Beta notes",
+    "betaNote1": "Features and layout may still change.",
+    "betaNote2": "We appreciate feedback on usability and workflows.",
+    "footerBrand": "FinalStage Beta",
+    "langLabel": "Language"
+  },
+  "fr": {
+    "title": "FinalStage Beta",
+    "badge": "Bêta",
+    "h1": "Bienvenue sur FinalStage Beta",
+    "lead": "FinalStage est une plateforme pour organiser tournois et championnats — de la planification aux tableaux, matchs et résultats.",
+    "sectionEntry": "Accès",
+    "loginTitle": "Connexion",
+    "loginDesc": "E-mail et code à usage unique pour accéder à la plateforme.",
+    "registerTitle": "Demander l’accès",
+    "registerDesc": "Inscription si vous n’avez pas encore de compte.",
+    "wikiTitle": "Modes de tournoi",
+    "wikiDesc": "Aperçu wiki — phases de poules, élimination et modes.",
+    "sectionBeta": "Notes bêta",
+    "betaNote1": "Les fonctions et la présentation peuvent encore évoluer.",
+    "betaNote2": "Vos retours sur l’ergonomie et les flux nous intéressent.",
+    "footerBrand": "FinalStage Beta",
+    "langLabel": "Langue"
+  },
+  "it": {
+    "title": "FinalStage Beta",
+    "badge": "Beta",
+    "h1": "Benvenuto su FinalStage Beta",
+    "lead": "FinalStage è una piattaforma per gestire tornei e campionati — dalla pianificazione a classifiche, partite e risultati.",
+    "sectionEntry": "Accesso",
+    "loginTitle": "Accedi",
+    "loginDesc": "E-mail e codice monouso per entrare nella piattaforma.",
+    "registerTitle": "Richiedi accesso",
+    "registerDesc": "Registrazione se non hai ancora un account.",
+    "wikiTitle": "Modalità torneo",
+    "wikiDesc": "Breve guida nel wiki — gironi, eliminazione diretta e modalità.",
+    "sectionBeta": "Note sulla beta",
+    "betaNote1": "Funzioni e aspetto possono ancora cambiare.",
+    "betaNote2": "Feedback su usabilità e flussi sono benvenuti.",
+    "footerBrand": "FinalStage Beta",
+    "langLabel": "Lingua"
+  },
+  "tr": {
+    "title": "FinalStage Beta",
+    "badge": "Beta",
+    "h1": "FinalStage Beta’ya hoş geldiniz",
+    "lead": "FinalStage, turnuva ve şampiyonaları planlamadan tablolara, maçlara ve değerlendirmeye kadar yönetmek için bir platformdur.",
+    "sectionEntry": "Başlangıç",
+    "loginTitle": "Giriş yap",
+    "loginDesc": "E-posta ve tek kullanımlık kodla platforma girin.",
+    "registerTitle": "Erişim talep et",
+    "registerDesc": "Henüz hesabınız yoksa kayıt olun.",
+    "wikiTitle": "Turnuva modları",
+    "wikiDesc": "Kısa wiki özeti — gruplar, eleme ve modların birlikte çalışması.",
+    "sectionBeta": "Beta notları",
+    "betaNote1": "Özellikler ve görünüm hâlâ değişebilir.",
+    "betaNote2": "Kullanım ve süreçler hakkında geri bildiriminizi bekliyoruz.",
+    "footerBrand": "FinalStage Beta",
+    "langLabel": "Dil"
+  }
+}
+  </script>
+
+
+  <canvas id="bg" aria-hidden="true"></canvas>
+  <div class="layer-glow" aria-hidden="true"></div>
+  <div class="layer-vignette" aria-hidden="true"></div>
+
+  <main class="page">
+    <div class="page-header">
+      <div class="badge">
+        <span class="badge-dot"></span>
+        <span data-i18n="badge">Beta</span>
+      </div>
+      <div class="lang-bar">
+        <span class="lang-label" data-i18n="langLabel">Sprache</span>
+        <div class="lang-buttons" id="lang-switch" role="group" aria-label="Language"></div>
+      </div>
+    </div>
+
+    <h1 data-i18n="h1">Willkommen bei FinalStage Beta</h1>
+    <p class="lead" data-i18n="lead">
+      FinalStage ist eine Plattform zur Verwaltung von Turnieren und Meisterschaften — von der Planung bis zu Tabellen, Spielen und Auswertungen.
+    </p>
+
+    <div class="card-panel">
+      <h2 data-i18n="sectionEntry">Einstieg</h2>
+      <div class="tiles">
+        <a class="tile-link" href="/login">
+          <strong data-i18n="loginTitle">Anmelden</strong>
+          <span data-i18n="loginDesc">Mit E-Mail und Einmalcode auf die Plattform gehen.</span>
+        </a>
+        <a class="tile-link" href="/register">
+          <strong data-i18n="registerTitle">Zugang beantragen</strong>
+          <span data-i18n="registerDesc">Registrierung, wenn du noch keinen Zugang hast.</span>
+        </a>
+        <a class="tile-link" href="/wiki/modes">
+          <strong data-i18n="wikiTitle">Turnier-Modi</strong>
+          <span data-i18n="wikiDesc">Kurz erklärt im Wiki — wie Gruppenphase, KO und Modi zusammenspielen.</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="card-panel">
+      <h2 data-i18n="sectionBeta">Hinweise zur Beta</h2>
+      <ul class="info">
+        <li data-i18n="betaNote1">Funktionen und Darstellung können sich noch ändern.</li>
+        <li data-i18n="betaNote2">Für Rückmeldungen zu Bedienung und Abläufen sind wir dankbar.</li>
+      </ul>
+    </div>
+
+    <footer>
+      © <span id="y"></span> <span data-i18n="footerBrand">FinalStage Beta</span>
+    </footer>
+  </main>
+
+  <script>
+    (function () {
+      var LANGS = ['de', 'en', 'fr', 'it', 'tr'];
+      var STORAGE_KEY = 'i18nextLng';
+      var stringsData = null;
+
+      function mapNavLang(nav) {
+        if (!nav) return 'de';
+        var p = nav.toLowerCase().split('-')[0];
+        return LANGS.indexOf(p) >= 0 ? p : 'de';
+      }
+
+      function getInitialLang() {
+        try {
+          var s = localStorage.getItem(STORAGE_KEY);
+          if (s && LANGS.indexOf(s) >= 0) return s;
+        } catch (e) {}
+        return mapNavLang(navigator.language || '');
+      }
+
+      function applyLang(code) {
+        if (!stringsData || !stringsData[code]) return;
+        var t = stringsData[code];
+        document.documentElement.lang = code;
+        document.title = t.title || 'FinalStage Beta';
+        try {
+          localStorage.setItem(STORAGE_KEY, code);
+        } catch (e) {}
+        document.querySelectorAll('[data-i18n]').forEach(function (el) {
+          var key = el.getAttribute('data-i18n');
+          if (key && t[key] != null) el.textContent = t[key];
+        });
+        var y = document.getElementById('y');
+        if (y) y.textContent = new Date().getFullYear();
+        document.querySelectorAll('#lang-switch button').forEach(function (btn) {
+          var active = btn.getAttribute('data-lang') === code;
+          btn.classList.toggle('active', active);
+          btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+      }
+
+      function buildLangSwitch() {
+        var nav = document.getElementById('lang-switch');
+        if (!nav) return;
+        /* SVG-Flaggen: Emoji werden auf Windows oft als DE/GB-Text gerendert */
+        var flagSvgs = {
+          de: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 5 3" aria-hidden="true"><rect fill="#000" width="5" height="1"/><rect fill="#DD0000" y="1" width="5" height="1"/><rect fill="#FFCE00" y="2" width="5" height="1"/></svg>',
+          en: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 30" aria-hidden="true"><path fill="#012169" d="M0 0h60v30H0z"/><path stroke="#fff" stroke-width="6" d="M0 0l60 30M60 0L0 30"/><path stroke="#C8102E" stroke-width="4" d="M0 0l60 30M60 0L0 30"/><path stroke="#fff" stroke-width="10" d="M30 0v30M0 15h60"/><path stroke="#C8102E" stroke-width="6" d="M30 0v30M0 15h60"/></svg>',
+          fr: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2" aria-hidden="true"><rect fill="#002395" width="1" height="2"/><rect fill="#fff" x="1" width="1" height="2"/><rect fill="#ED2939" x="2" width="1" height="2"/></svg>',
+          it: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2" aria-hidden="true"><rect fill="#009246" width="1" height="2"/><rect fill="#fff" x="1" width="1" height="2"/><rect fill="#CE2B37" x="2" width="1" height="2"/></svg>',
+          tr: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 12" aria-hidden="true"><rect fill="#E30A17" width="18" height="12"/><circle cx="5.1" cy="6" r="4.75" fill="#fff"/><circle cx="10.2" cy="6" r="4.45" fill="#E30A17"/><path fill="#fff" d="M11.450,6.000L12.244,6.259L12.245,7.094L12.736,6.418L13.530,6.676L13.040,6.000L13.530,5.324L12.736,5.582L12.245,4.906L12.244,5.741Z"/></svg>'
+        };
+        var names = { de: 'Deutsch', en: 'English', fr: 'Français', it: 'Italiano', tr: 'Türkçe' };
+        LANGS.forEach(function (code) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.setAttribute('data-lang', code);
+          b.setAttribute('aria-pressed', 'false');
+          b.setAttribute('aria-label', names[code] || code);
+          b.setAttribute('title', names[code] || code);
+          var svg = flagSvgs[code];
+          b.innerHTML = svg ? '<span class="lang-flag-wrap">' + svg + '</span>' : code.toUpperCase();
+          b.addEventListener('click', function () {
+            applyLang(code);
+          });
+          nav.appendChild(b);
+        });
+      }
+
+      function initFromData(data) {
+        stringsData = data;
+        buildLangSwitch();
+        applyLang(getInitialLang());
+      }
+
+      function failYearOnly() {
+        var y = document.getElementById('y');
+        if (y) y.textContent = new Date().getFullYear();
+      }
+
+      (function loadStrings() {
+        var el = document.getElementById('landing-i18n-embed');
+        if (el && el.textContent) {
+          try {
+            initFromData(JSON.parse(el.textContent.trim()));
+            return;
+          } catch (e) {}
+        }
+        fetch('strings.json', { cache: 'no-store' })
+          .then(function (r) {
+            if (!r.ok) throw new Error('strings');
+            return r.json();
+          })
+          .then(initFromData)
+          .catch(failYearOnly);
+      })();
+    })();
+  </script>
+
+  <script>
+    /* Dekoratives Canvas — gleiche Logik wie Login-Seite (nur Darstellung) */
+    (function () {
+      var canvas = document.getElementById("bg");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      var W, H, tick = 0;
+      var scanY = 0;
+      var frameId = 0;
+      var CYAN = "0, 212, 255";
+      var SCAN_SPEED = 0.4;
+      var N_PARTICLES = 55;
+      var particles = [];
+
+      function makeParticle(fromBottom) {
+        return {
+          x: Math.random() * W,
+          y: fromBottom ? H + 4 : Math.random() * H,
+          r: Math.random() * 1.2 + 0.3,
+          vy: -(Math.random() * 0.35 + 0.1),
+          alpha: Math.random() * 0.5 + 0.1,
+          fade: Math.random() * 0.003 + 0.001
+        };
+      }
+
+      function initParticles() {
+        particles = [];
+        for (var i = 0; i < N_PARTICLES; i++) particles.push(makeParticle(false));
+      }
+
+      function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = Math.max(document.documentElement.scrollHeight, window.innerHeight);
+        initParticles();
+      }
+
+      function drawGrid() {
+        var horizon = H * 0.52;
+        var vpX = W / 2;
+        var lines = 24;
+        var spread = 3.6;
+        ctx.save();
+        ctx.lineWidth = 1;
+        var i, t, yRaw, y, xL, xR, alpha;
+        for (i = 0; i <= lines; i++) {
+          t = i / lines;
+          yRaw = horizon + Math.pow(t, 1.6) * (H - horizon);
+          y = ((yRaw - horizon + tick * SCAN_SPEED) % (H - horizon)) + horizon;
+          xL = vpX - (W * spread / 2) * Math.pow(t, 1.0);
+          xR = vpX + (W * spread / 2) * Math.pow(t, 1.0);
+          alpha = Math.pow(t, 0.7) * 0.18;
+          ctx.strokeStyle = "rgba(" + CYAN + ", " + alpha + ")";
+          ctx.beginPath();
+          ctx.moveTo(xL, y);
+          ctx.lineTo(xR, y);
+          ctx.stroke();
+        }
+        var vLines = 16;
+        for (i = 0; i <= vLines; i++) {
+          t = i / vLines;
+          var xB = vpX - W * spread / 2 + t * W * spread;
+          ctx.strokeStyle = "rgba(" + CYAN + ", 0.06)";
+          ctx.beginPath();
+          ctx.moveTo(vpX, horizon);
+          ctx.lineTo(xB, H + 40);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawHorizon() {
+        var y = H * 0.52;
+        var g = ctx.createLinearGradient(0, y - 60, 0, y + 60);
+        g.addColorStop(0, "rgba(" + CYAN + ", 0)");
+        g.addColorStop(0.5, "rgba(" + CYAN + ", 0.07)");
+        g.addColorStop(1, "rgba(" + CYAN + ", 0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, y - 60, W, 120);
+      }
+
+      function drawParticles() {
+        for (var i = 0; i < particles.length; i++) {
+          var p = particles[i];
+          p.y += p.vy;
+          p.alpha -= p.fade;
+          if (p.alpha <= 0 || p.y < -10) {
+            particles[i] = makeParticle(true);
+            continue;
+          }
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(" + CYAN + ", " + p.alpha + ")";
+          ctx.fill();
+        }
+      }
+
+      function drawScanLine() {
+        scanY = (scanY + 0.8) % H;
+        var g = ctx.createLinearGradient(0, scanY - 60, 0, scanY + 2);
+        g.addColorStop(0, "rgba(" + CYAN + ", 0)");
+        g.addColorStop(1, "rgba(" + CYAN + ", 0.04)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, scanY - 60, W, 62);
+        ctx.strokeStyle = "rgba(" + CYAN + ", 0.12)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, scanY);
+        ctx.lineTo(W, scanY);
+        ctx.stroke();
+      }
+
+      function loop() {
+        tick += 1;
+        ctx.clearRect(0, 0, W, H);
+        var bg = ctx.createRadialGradient(W / 2, H * 0.5, 0, W / 2, H * 0.5, W * 0.8);
+        bg.addColorStop(0, "#080c1a");
+        bg.addColorStop(1, "#04050d");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+        drawGrid();
+        drawHorizon();
+        drawParticles();
+        drawScanLine();
+        frameId = requestAnimationFrame(loop);
+      }
+
+      window.addEventListener("resize", resize);
+      resize();
+      frameId = requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

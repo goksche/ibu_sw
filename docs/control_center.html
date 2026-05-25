@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FinalStage - Lokale Kontrollwebseite</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220;
+      --panel: #121a2b;
+      --panel-soft: #17233a;
+      --text: #edf2ff;
+      --muted: #9fb0d4;
+      --ok: #1ecb7b;
+      --warn: #ffd166;
+      --fail: #ef476f;
+      --unknown: #8a94ad;
+      --border: #273556;
+      --accent: #64b5ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Source Sans 3", sans-serif;
+      background: radial-gradient(1000px 700px at 100% -10%, #1d2f51 0%, var(--bg) 60%);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .wrap { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    h1, h2, h3, h4 { margin: 0 0 10px; }
+    h1 { font-size: 28px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .top {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .panel {
+      background: linear-gradient(180deg, var(--panel), var(--panel-soft));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(280px, 1fr));
+      gap: 16px;
+      margin: 18px 0;
+    }
+    .card {
+      background: linear-gradient(180deg, var(--panel), var(--panel-soft));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      border-radius: 999px;
+      padding: 4px 10px;
+      border: 1px solid transparent;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .badge-ok { color: #0c1a12; background: var(--ok); }
+    .badge-warn { color: #2b1f00; background: var(--warn); }
+    .badge-fail { color: #2e0911; background: var(--fail); }
+    .badge-unknown { color: #d2d9ea; background: #56627e; }
+    ul { margin: 8px 0 12px 18px; padding: 0; }
+    li { margin-bottom: 4px; }
+    .gov-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .gov-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      background: #0f1728;
+    }
+    .fallback-block {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      background: #0f1728;
+      margin-top: 10px;
+    }
+    .hint-good {
+      color: #97ffd0;
+      font-size: 13px;
+      margin: 6px 0 10px;
+    }
+    .hint-bad {
+      color: #ff95ab;
+      font-size: 13px;
+      margin: 6px 0 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #0d1524; }
+    .checklist li.todo { color: #ffe4a2; }
+    .checklist li.done { color: #a6f0c8; }
+    .query-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(320px, 1fr));
+      gap: 14px;
+      margin-top: 10px;
+    }
+    .server-link-state {
+      margin-top: 8px;
+      margin-bottom: 8px;
+    }
+    .query-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: #0f1728;
+    }
+    .query-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .query-card select,
+    .query-card textarea,
+    .query-card input {
+      width: 100%;
+      color: var(--text);
+      background: #0b1220;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      font: inherit;
+    }
+    .query-card textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    .btn {
+      color: var(--text);
+      background: #16233c;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      cursor: pointer;
+    }
+    .btn:hover { border-color: var(--accent); }
+    .btn-run { background: #1c355a; }
+    .cmd {
+      display: block;
+      padding: 8px;
+      border-radius: 8px;
+      background: #0b1220;
+      border: 1px solid var(--border);
+      font-family: Consolas, "Courier New", monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: 6px 0 8px;
+    }
+    .result {
+      margin-top: 8px;
+      border: 1px solid var(--border);
+      background: #0b1220;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 13px;
+    }
+    @media (max-width: 1180px) {
+      .cards { grid-template-columns: 1fr; }
+      .top { grid-template-columns: 1fr; }
+      .gov-grid { grid-template-columns: 1fr; }
+      .query-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Lokale Kontrollwebseite - FinalStage</h1>
+    <p class="muted">Nur lokale Datenaggregation. Keine direkte Serverkopplung. Generiert am: 2026-03-17T22:58:44.040974+00:00</p>
+
+    <section class="top">
+      <div class="panel">
+        <h3>Lokale Build-Metadaten</h3>
+        <p><strong>Git:</strong> Branch main | Commit 1e33df1 | Dirty: yes</p>
+        <p><strong>Letzter Commit-Zeitpunkt:</strong> 2026-02-20T16:37:32+01:00</p>
+        <p><strong>Backend APP_VERSION:</strong> 1.6.0 | <strong>Frontend Version:</strong> 1.6.0</p>
+      </div>
+      <div class="panel">
+        <h3>Plan-Sync</h3>
+        <p><strong>Quelle:</strong> C:\Users\goksc\.cursor\plans\mvp-erweiterung-1-verbesserungen_b90f1322.plan.md</p>
+        <p><strong>Offen:</strong> 2 | <strong>Erledigt:</strong> 52 | <strong>Total:</strong> 54</p>
+      </div>
+    </section>
+
+    <section class="cards">
+      
+    <section class="card">
+      <div class="card-top">
+        <h2>Server A</h2>
+        <span class="badge badge-unknown">stable</span>
+      </div>
+      <p><strong>Version:</strong> 1.6.0</p>
+      <p><strong>Online seit:</strong> 2026-01-31T00:00:00+01:00</p>
+      <p><strong>Letzte Änderung:</strong> 2026-01-31T00:00:00+01:00</p>
+      <p><strong>Deployment-Referenz:</strong> Git-Tag v1.6.0, APP_VERSION 1.6.0, Image-Tag optional</p>
+      <h3>Bestätigte Funktionen</h3>
+      <ul><li>MVP-Basis live</li><li>Locations/Spielorte CRUD</li><li>Liga/Meisterschaft Kernfunktionen</li></ul>
+      <h3>Offene Pendenzen</h3>
+      <ul><li>Live-Ticker nicht auf Server A</li><li>KO-Spielfeld-Zuweisung offen</li></ul>
+      <h3>Governance</h3>
+      
+    <div class="gov-grid">
+      <div class="gov-item">
+        <h4>Promotions-Gate</h4>
+        <p><span class="badge badge-ok">ok</span></p>
+        <p class="muted">Stufe: Server B -&gt; Server A</p>
+        <p class="muted">Letzter Smoke: 2026-01-31T10:00:00+01:00</p>
+      </div>
+      <div class="gov-item">
+        <h4>Rollback</h4>
+        <p><span class="badge badge-ok">ok</span></p>
+        <p class="muted">Backup geprüft: True</p>
+        <p class="muted">Rückrollweg: 10 min</p>
+        <p class="muted">DB-Hinweis: Vor Rollback DB-Dump validieren</p>
+      </div>
+      <div class="gov-item">
+        <h4>Migrationen</h4>
+        <p><span class="badge badge-ok">ok</span></p>
+        <p class="muted">Stand: synchron</p>
+        <p class="muted">Letzte Migration: 2026-01-31</p>
+      </div>
+      <div class="gov-item">
+        <h4>Config-Drift</h4>
+        <p><span class="badge badge-warn">warn</span></p>
+        <p class="muted">.env: ok | compose: ok | nginx: warn</p>
+      </div>
+      <div class="gov-item">
+        <h4>Post-Deploy-Minimum</h4>
+        <p><span class="badge badge-ok">ok</span></p>
+        <p class="muted">Health: <span class="badge badge-ok">ok</span></p>
+        <p class="muted">API-Flow: <span class="badge badge-ok">ok</span></p>
+        <p class="muted">UI-Flow: <span class="badge badge-ok">ok</span></p>
+      </div>
+      <div class="gov-item">
+        <h4>Zeitstandard</h4>
+        <p><span class="badge badge-ok">ok</span></p>
+        <p class="muted">Speicherung: UTC</p>
+        <p class="muted">Anzeige: CET/Europe/Zurich</p>
+      </div>
+    </div>
+    <div class="fallback-block">
+      <h4>Fallback-Transparenz</h4>
+      <p class='hint-good'>No-silent-fallback erfüllt: Alle Fallbacks sind transparent dokumentiert.</p><table><thead><tr><th>Zeit</th><th>Komponente</th><th>Grund</th><th>Fallback</th><th>Transparenz</th><th>Ticket</th></tr></thead><tbody><tr><td>2026-01-25T12:00:00Z</td><td>ko_generation</td><td>Cross-Mode nicht vollstaendig bildbar</td><td>overall_seeding</td><td><span class="badge badge-ok">ok</span></td><td>fix-engine-ko-consistency</td></tr></tbody></table>
+    </div>
+    
+    </section>
+    
+    <section class="card">
+      <div class="card-top">
+        <h2>Server B</h2>
+        <span class="badge badge-unknown">test</span>
+      </div>
+      <p><strong>Version:</strong> 1.6.0</p>
+      <p><strong>Online seit:</strong> 2026-01-31T00:00:00+01:00</p>
+      <p><strong>Letzte Änderung:</strong> 2026-02-08T17:30:00+01:00</p>
+      <p><strong>Deployment-Referenz:</strong> Git-Tag v1.6.0-test, APP_VERSION 1.6.0, Image-Tag test-latest</p>
+      <h3>Bestätigte Funktionen</h3>
+      <ul><li>Live-Ticker</li><li>KO-Simulationsfix</li><li>Wiki/Overview-Angleichung</li></ul>
+      <h3>Offene Pendenzen</h3>
+      <ul><li>Fix-Plan KO-Engine Konsistenz</li><li>Dashboard-Links ins Einstellungsmenue verschieben</li></ul>
+      <h3>Governance</h3>
+      
+    <div class="gov-grid">
+      <div class="gov-item">
+        <h4>Promotions-Gate</h4>
+        <p><span class="badge badge-ok">ok</span></p>
+        <p class="muted">Stufe: Lokal -&gt; Server B</p>
+        <p class="muted">Letzter Smoke: 2026-02-08T18:00:00+01:00</p>
+      </div>
+      <div class="gov-item">
+        <h4>Rollback</h4>
+        <p><span class="badge badge-ok">ok</span></p>
+        <p class="muted">Backup geprüft: True</p>
+        <p class="muted">Rückrollweg: 10 min</p>
+        <p class="muted">DB-Hinweis: Rollback nur mit kompatiblen Migrationen</p>
+      </div>
+      <div class="gov-item">
+        <h4>Migrationen</h4>
+        <p><span class="badge badge-warn">warn</span></p>
+        <p class="muted">Stand: teilweise unterschiedlich zu lokal</p>
+        <p class="muted">Letzte Migration: 2026-02-08</p>
+      </div>
+      <div class="gov-item">
+        <h4>Config-Drift</h4>
+        <p><span class="badge badge-warn">warn</span></p>
+        <p class="muted">.env: warn | compose: ok | nginx: ok</p>
+      </div>
+      <div class="gov-item">
+        <h4>Post-Deploy-Minimum</h4>
+        <p><span class="badge badge-ok">ok</span></p>
+        <p class="muted">Health: <span class="badge badge-ok">ok</span></p>
+        <p class="muted">API-Flow: <span class="badge badge-ok">ok</span></p>
+        <p class="muted">UI-Flow: <span class="badge badge-ok">ok</span></p>
+      </div>
+      <div class="gov-item">
+        <h4>Zeitstandard</h4>
+        <p><span class="badge badge-ok">ok</span></p>
+        <p class="muted">Speicherung: UTC</p>
+        <p class="muted">Anzeige: CET/Europe/Zurich</p>
+      </div>
+    </div>
+    <div class="fallback-block">
+      <h4>Fallback-Transparenz</h4>
+      <p class='hint-good'>No-silent-fallback erfüllt: Alle Fallbacks sind transparent dokumentiert.</p><table><thead><tr><th>Zeit</th><th>Komponente</th><th>Grund</th><th>Fallback</th><th>Transparenz</th><th>Ticket</th></tr></thead><tbody><tr><td>2026-02-08T17:40:00+01:00</td><td>qualification_table</td><td>Endpoint auf Testserver fehlte</td><td>frontend_fallback_table</td><td><span class="badge badge-ok">ok</span></td><td>qualification-table-endpoint-serverb</td></tr></tbody></table>
+    </div>
+    
+    </section>
+    
+    <section class="card">
+      <div class="card-top">
+        <h2>Lokal</h2>
+        <span class="badge badge-unknown">hotfix</span>
+      </div>
+      <p><strong>Version:</strong> workspace</p>
+      <p><strong>Online seit:</strong> n/a</p>
+      <p><strong>Letzte Änderung:</strong> n/a</p>
+      <p><strong>Deployment-Referenz:</strong> Git-Tag n/a, APP_VERSION auto-from-config, Image-Tag n/a</p>
+      <h3>Bestätigte Funktionen</h3>
+      <ul><li>Lokale Entwicklung und Vorabtests</li><li>Plan-Sync aus Hauptplan</li><li>Governance-Dashboard</li></ul>
+      <h3>Offene Pendenzen</h3>
+      <ul><li>Offene Todos vor Promotion nach Server B abschliessen</li></ul>
+      <h3>Governance</h3>
+      
+    <div class="gov-grid">
+      <div class="gov-item">
+        <h4>Promotions-Gate</h4>
+        <p><span class="badge badge-warn">warn</span></p>
+        <p class="muted">Stufe: Lokal</p>
+        <p class="muted">Letzter Smoke: n/a</p>
+      </div>
+      <div class="gov-item">
+        <h4>Rollback</h4>
+        <p><span class="badge badge-ok">ok</span></p>
+        <p class="muted">Backup geprüft: True</p>
+        <p class="muted">Rückrollweg: 5 min</p>
+        <p class="muted">DB-Hinweis: Vor Tests lokale DB sichern</p>
+      </div>
+      <div class="gov-item">
+        <h4>Migrationen</h4>
+        <p><span class="badge badge-warn">warn</span></p>
+        <p class="muted">Stand: kann von B/A abweichen</p>
+        <p class="muted">Letzte Migration: n/a</p>
+      </div>
+      <div class="gov-item">
+        <h4>Config-Drift</h4>
+        <p><span class="badge badge-ok">ok</span></p>
+        <p class="muted">.env: ok | compose: ok | nginx: ok</p>
+      </div>
+      <div class="gov-item">
+        <h4>Post-Deploy-Minimum</h4>
+        <p><span class="badge badge-warn">warn</span></p>
+        <p class="muted">Health: <span class="badge badge-ok">ok</span></p>
+        <p class="muted">API-Flow: <span class="badge badge-warn">warn</span></p>
+        <p class="muted">UI-Flow: <span class="badge badge-warn">warn</span></p>
+      </div>
+      <div class="gov-item">
+        <h4>Zeitstandard</h4>
+        <p><span class="badge badge-ok">ok</span></p>
+        <p class="muted">Speicherung: UTC</p>
+        <p class="muted">Anzeige: CET/Europe/Zurich</p>
+      </div>
+    </div>
+    <div class="fallback-block">
+      <h4>Fallback-Transparenz</h4>
+      <p class='hint-good'>No-silent-fallback erfüllt: Alle Fallbacks sind transparent dokumentiert.</p><table><thead><tr><th>Zeit</th><th>Komponente</th><th>Grund</th><th>Fallback</th><th>Transparenz</th><th>Ticket</th></tr></thead><tbody><tr><td>n/a</td><td>n/a</td><td>Keine aktuellen lokalen Fallbacks</td><td>n/a</td><td><span class="badge badge-ok">ok</span></td><td>n/a</td></tr></tbody></table>
+    </div>
+    
+    </section>
+    
+    </section>
+
+    <section class="panel">
+      <h3>Manuelle Serverabfragen</h3>
+      <p class="muted">Per Knopfdruck ausfuehren: Starter verwenden (<code>start_control_center.bat</code>). Alternativ manuell ueber Copy + Ausgabe.</p>
+      <div class="query-row">
+        <button class="btn" id="check-query-server-btn" type="button">Verbindung pruefen</button>
+      </div>
+      <p class="server-link-state" id="query-server-state"><span class="badge badge-warn">idle</span> Query-Server noch nicht geprueft.</p>
+      <div class="query-grid">
+        <div class="query-card" data-server="server-a">
+          <h4>Server A (finalstage.ch)</h4>
+          <div class="query-row">
+            <select class="query-type">
+              <option value="compose_ps">Container-Status (docker compose ps)</option>
+              <option value="health">Health-Header (Startseite)</option>
+              <option value="api">API-Header (/api/v1/settings/global)</option>
+            </select>
+          </div>
+          <label class="muted">Kommando</label>
+          <code class="cmd"></code>
+          <div class="query-row">
+            <button class="btn btn-run run-btn" type="button">Direkt ausfuehren</button>
+            <button class="btn copy-btn" type="button">Kommando kopieren</button>
+            <button class="btn eval-btn" type="button">Ausgabe auswerten</button>
+          </div>
+          <label class="muted">Ausgabe hier einfuegen</label>
+          <textarea class="query-output" placeholder="Terminal-Ausgabe einfuegen..."></textarea>
+          <div class="result muted">Noch keine Auswertung.</div>
+        </div>
+
+        <div class="query-card" data-server="server-b">
+          <h4>Server B (test.finalstage.ch)</h4>
+          <div class="query-row">
+            <select class="query-type">
+              <option value="compose_ps">Container-Status (docker compose ps)</option>
+              <option value="health">Health-Header (Startseite)</option>
+              <option value="api">API-Header (/api/v1/settings/global)</option>
+            </select>
+          </div>
+          <label class="muted">Kommando</label>
+          <code class="cmd"></code>
+          <div class="query-row">
+            <button class="btn btn-run run-btn" type="button">Direkt ausfuehren</button>
+            <button class="btn copy-btn" type="button">Kommando kopieren</button>
+            <button class="btn eval-btn" type="button">Ausgabe auswerten</button>
+          </div>
+          <label class="muted">Ausgabe hier einfuegen</label>
+          <textarea class="query-output" placeholder="Terminal-Ausgabe einfuegen..."></textarea>
+          <div class="result muted">Noch keine Auswertung.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>Offene Pendenzen aus Hauptplan</h3>
+      <table>
+        <thead><tr><th>ID</th><th>Inhalt</th><th>Status</th></tr></thead>
+        <tbody><tr><td>dashboard-move-admin-links</td><td>Teilnehmerverwaltung/Spielorte/Benutzerverwaltung ins Einstellungsmenü verschieben</td><td><span class="badge badge-unknown">pending</span></td></tr><tr><td>fix-engine-ko-consistency</td><td>KO-Engine Source-of-Truth und Draw-Logik zwischen pure KO und combined konsolidieren</td><td><span class="badge badge-unknown">pending</span></td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h3>Abnahme-Checkliste (Lokal - Server B - Server A)</h3>
+      <ul class="checklist">
+        <li class='todo'>Servertrennung bestätigt: Keine direkte Laufzeitkopplung zwischen Lokal, Server B und Server A <span class='muted'>(Offen)</span></li><li class='todo'>Datenquellen bestätigt: Nur lokale Dateien (Plan, Status-JSON, Git-Metadaten) <span class='muted'>(Offen)</span></li><li class='todo'>Promotions-Gate Lokal -&gt; Server B geprüft (Health + 1 API-Flow + 1 UI-Flow) <span class='muted'>(Offen)</span></li><li class='todo'>Promotions-Gate Server B -&gt; Server A geprüft (Health + 1 API-Flow + 1 UI-Flow) <span class='muted'>(Offen)</span></li><li class='todo'>Rollback-Bereitschaft pro Umgebung dokumentiert (Backup-Check + Rückrollweg) <span class='muted'>(Offen)</span></li><li class='todo'>Migrationsstand pro Umgebung dokumentiert und nachvollziehbar <span class='muted'>(Offen)</span></li><li class='todo'>Versionstracking synchron geprüft (Git-Tag + APP_VERSION + optional Image-Tag) <span class='muted'>(Offen)</span></li><li class='todo'>Config-Drift-Status gepflegt (.env, compose, nginx) <span class='muted'>(Offen)</span></li><li class='todo'>Zeitstandard verifiziert (UTC speichern, CET anzeigen) <span class='muted'>(Offen)</span></li><li class='todo'>No-silent-fallback verifiziert (Fallbacks immer sichtbar in Logs/UI/Status) <span class='muted'>(Offen)</span></li><li class='todo'>Offene Pendenzen werden aus Hauptplan korrekt angezeigt <span class='muted'>(Offen)</span></li><li class='todo'>Lokale Kontrollseite lässt sich reproduzierbar per Skript neu bauen <span class='muted'>(Offen)</span></li>
+      </ul>
+    </section>
+  </div>
+  <script>
+    (function () {
+      const commandMap = {
+        "server-a": {
+          compose_ps: "ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new root@144.91.103.103 \"cd /root/ibu_sw && docker compose -f docker-compose.prod.yml --env-file .env.prod ps\"",
+          health: "ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new root@144.91.103.103 \"if command -v curl >/dev/null 2>&1; then curl -skI https://127.0.0.1/ -H 'Host: finalstage.ch'; elif command -v wget >/dev/null 2>&1; then wget -S --spider --no-check-certificate --header='Host: finalstage.ch' https://127.0.0.1/ 2>&1; else echo 'curl/wget fehlt auf Server'; exit 127; fi\"",
+          api: "ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new root@144.91.103.103 \"if command -v curl >/dev/null 2>&1; then curl -skI https://127.0.0.1/api/v1/settings/global -H 'Host: finalstage.ch'; elif command -v wget >/dev/null 2>&1; then wget -S --spider --no-check-certificate --header='Host: finalstage.ch' https://127.0.0.1/api/v1/settings/global 2>&1; else echo 'curl/wget fehlt auf Server'; exit 127; fi\""
+        },
+        "server-b": {
+          compose_ps: "ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new root@95.111.238.180 \"cd /root/ibu_sw && docker compose -f docker-compose.prod.yml --env-file .env.prod ps\"",
+          health: "ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new root@95.111.238.180 \"if command -v curl >/dev/null 2>&1; then curl -skI https://127.0.0.1/ -H 'Host: test.finalstage.ch'; elif command -v wget >/dev/null 2>&1; then wget -S --spider --no-check-certificate --header='Host: test.finalstage.ch' https://127.0.0.1/ 2>&1; else echo 'curl/wget fehlt auf Server'; exit 127; fi\"",
+          api: "ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new root@95.111.238.180 \"if command -v curl >/dev/null 2>&1; then curl -skI https://127.0.0.1/api/v1/settings/global -H 'Host: test.finalstage.ch'; elif command -v wget >/dev/null 2>&1; then wget -S --spider --no-check-certificate --header='Host: test.finalstage.ch' https://127.0.0.1/api/v1/settings/global 2>&1; else echo 'curl/wget fehlt auf Server'; exit 127; fi\""
+        }
+      };
+
+      function evaluate(type, text) {
+        const normalized = (text || "").toLowerCase();
+        if (!normalized.trim()) {
+          return { status: "warn", message: "Keine Ausgabe eingefuegt." };
+        }
+        if (type === "compose_ps") {
+          if (normalized.includes("exit ") || normalized.includes("restarting")) {
+            return { status: "fail", message: "Containerproblem erkannt (Exit/Restarting)." };
+          }
+          if (normalized.includes(" up ") || normalized.includes("running")) {
+            return { status: "ok", message: "Containerstatus sieht gesund aus." };
+          }
+          return { status: "warn", message: "Containerstatus nicht eindeutig. Bitte manuell pruefen." };
+        }
+
+        if (normalized.includes("502")) {
+          return { status: "fail", message: "502 Bad Gateway erkannt." };
+        }
+        if (normalized.match(/http\/[0-9.]+\s+(200|301|302)/)) {
+          return { status: "ok", message: "HTTP-Status ok (200/301/302)." };
+        }
+        if (normalized.match(/http\/[0-9.]+\s+([45][0-9][0-9])/)) {
+          return { status: "fail", message: "HTTP-Fehler erkannt (4xx/5xx)." };
+        }
+        return { status: "warn", message: "Kein klarer HTTP-Status erkannt." };
+      }
+
+      function resultClass(status) {
+        if (status === "ok") return "badge badge-ok";
+        if (status === "fail") return "badge badge-fail";
+        return "badge badge-warn";
+      }
+
+      document.querySelectorAll(".query-card").forEach((card) => {
+        const server = card.getAttribute("data-server");
+        const select = card.querySelector(".query-type");
+        const cmdEl = card.querySelector(".cmd");
+        const runBtn = card.querySelector(".run-btn");
+        const copyBtn = card.querySelector(".copy-btn");
+        const evalBtn = card.querySelector(".eval-btn");
+        const output = card.querySelector(".query-output");
+        const result = card.querySelector(".result");
+
+        function refreshCommand() {
+          const key = select.value;
+          cmdEl.textContent = commandMap[server][key];
+        }
+
+        refreshCommand();
+        select.addEventListener("change", refreshCommand);
+
+        copyBtn.addEventListener("click", async () => {
+          const cmd = cmdEl.textContent || "";
+          try {
+            await navigator.clipboard.writeText(cmd);
+            result.innerHTML = "<span class='badge badge-ok'>kopiert</span> Kommando in Zwischenablage.";
+          } catch (err) {
+            result.innerHTML = "<span class='badge badge-warn'>hinweis</span> Kopieren nicht erlaubt. Bitte manuell markieren.";
+          }
+        });
+
+        evalBtn.addEventListener("click", () => {
+          const verdict = evaluate(select.value, output.value);
+          result.innerHTML = `<span class="${resultClass(verdict.status)}">${verdict.status}</span> ${verdict.message}`;
+        });
+
+        runBtn.addEventListener("click", async () => {
+          result.innerHTML = "<span class='badge badge-warn'>running</span> Abfrage wird ausgefuehrt...";
+          try {
+            const response = await fetch("http://127.0.0.1:8765/api/run", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ server, type: select.value })
+            });
+
+            if (!response.ok) {
+              result.innerHTML = "<span class='badge badge-fail'>fail</span> Query-Server antwortet mit Fehler.";
+              return;
+            }
+
+            const data = await response.json();
+            const merged = `${data.stdout || ""}${(data.stdout && data.stderr) ? "\n" : ""}${data.stderr || ""}`.trim();
+            output.value = merged;
+
+            const statusClass = resultClass(data.status || "warn");
+            const codeInfo = typeof data.returncode === "number" ? ` (exit=${data.returncode})` : "";
+            result.innerHTML = `<span class="${statusClass}">${data.status || "warn"}</span> ${data.message || "Keine Auswertung"}${codeInfo}`;
+          } catch (err) {
+            result.innerHTML = "<span class='badge badge-fail'>fail</span> Query-Server nicht erreichbar. Starte: start_control_center.bat (oder python scripts/control_query_server.py)";
+          }
+        });
+      });
+
+      const stateEl = document.getElementById("query-server-state");
+      const checkServerBtn = document.getElementById("check-query-server-btn");
+      async function refreshServerState() {
+        if (!stateEl) return;
+        stateEl.innerHTML = "<span class='badge badge-warn'>checking</span> Query-Server Verbindungsstatus wird geprueft...";
+        try {
+          const res = await fetch("http://127.0.0.1:8765/health", { method: "GET" });
+          if (res.ok) {
+            stateEl.innerHTML = "<span class='badge badge-ok'>online</span> Query-Server erreichbar (127.0.0.1:8765).";
+            return;
+          }
+        } catch (err) {
+        }
+        stateEl.innerHTML = "<span class='badge badge-fail'>offline</span> Query-Server nicht erreichbar. Starte: <code>start_control_center.bat</code>";
+      }
+
+      if (checkServerBtn) {
+        checkServerBtn.addEventListener("click", refreshServerState);
+      }
+    })();
+  </script>
+</body>
+</html>

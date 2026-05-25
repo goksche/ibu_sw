@@ -1,0 +1,38 @@
+# IBU Turniere Backend Dependencies
+# v1.2.0
+
+# Web Framework
+fastapi==0.110.0
+uvicorn[standard]==0.27.0
+
+# Database
+sqlalchemy==2.0.29
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# Validation
+pydantic==2.6.1
+pydantic-settings==2.1.0
+email-validator==2.1.0
+
+# Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-multipart==0.0.9
+
+# OTP & Email
+pyotp==2.9.0
+
+# Logging & Monitoring
+python-json-logger==2.0.7
+
+# PDF Export
+reportlab==4.0.9
+
+# Docker
+docker==7.0.0
+
+# Note: starlette is automatically installed with fastapi
+# No need to specify it separately
+
