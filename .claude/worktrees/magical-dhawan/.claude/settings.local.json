@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__mcp-registry__search_mcp_registry",
+      "Bash(curl -sv --max-time 3 http://localhost:9876/)",
+      "Bash(python3 -c \":*)",
+      "Bash(python \"C:/Users/goksc/.claude/blender_mcp_bridge.py\")",
+      "Bash(\"/c/Users/goksc/AppData/Roaming/Claude/claude-code/2.1.72/claude.exe\" mcp:*)",
+      "Bash(\"/c/Users/goksc/AppData/Roaming/Claude/claude-code/2.1.72/claude.exe\" --help)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\(''''projects'''',{}\\).get\\(''''C:\\\\Cursor\\\\ibu_sw\\\\.claude\\\\worktrees\\\\magical-dhawan'''',{}\\), indent=2\\)\\)\")",
+      "Read(//c/Cursor/ibu_sw/**)",
+      "mcp__blender__get_scene_info",
+      "WebFetch(domain:upland-3d.gitbook.io)",
+      "mcp__blender__list_objects",
+      "mcp__blender__execute_python",
+      "mcp__blender__render_scene"
+    ]
+  }
+}

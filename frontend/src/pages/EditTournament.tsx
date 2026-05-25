@@ -476,9 +476,24 @@ export default function EditTournament() {
       description: 'Alle Teilnehmer werden zufällig gepaart. Keine Vorsortierung oder Seeding-Regeln. Jeder kann gegen jeden treffen.' 
     },
     { 
+      value: 'overall_seeding', 
+      label: 'Gesamt-Seeding', 
+      description: 'Teilnehmer werden nach Ranking/Seeding gepaart (Bester vs. Schlechtester).' 
+    },
+    { 
+      value: 'random_each_round', 
+      label: 'Jede Runde neu zufällig', 
+      description: 'Nach jeder KO-Runde werden die Sieger neu ausgelost.' 
+    },
+    { 
       value: 'pot_system', 
       label: 'Topf-System (Stärketöpfe)', 
       description: 'Teilnehmer werden in Stärketöpfe eingeteilt (z.B. basierend auf Weltrangliste oder vorherigen Leistungen) und dann mit Regeln ausgelost. Stärkere Teilnehmer treffen später aufeinander.' 
+    },
+    { 
+      value: 'predefined_bracket', 
+      label: 'Vorgegebener Turnierbaum', 
+      description: 'Fester KO-Baum; Teilnehmer belegen die Slots.' 
     },
     { 
       value: 'manual', 
@@ -523,6 +538,11 @@ export default function EditTournament() {
       value: 'predefined_bracket', 
       label: 'Vorgegebener Turnierbaum', 
       description: 'Der KO-Baum steht bereits fest. Die Gruppenphase bestimmt nur, welche Teilnehmer welche Positionen im Bracket einnehmen. Struktur ist vorab definiert.' 
+    },
+    { 
+      value: 'random_each_round', 
+      label: 'Jede Runde neu zufällig', 
+      description: 'Nach jeder KO-Runde werden die Sieger neu ausgelost (kein Auto-Advance ohne Aktion).' 
     },
     { 
       value: 'manual', 

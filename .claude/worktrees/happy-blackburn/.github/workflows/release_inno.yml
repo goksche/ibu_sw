@@ -1,0 +1,58 @@
+name: Build & Release (Windows, Inno Setup)
+
+on:
+  push:
+    tags:
+      - 'v*'   # z. B. v1.0.0
+
+jobs:
+  build-windows-inno:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Inno Setup (Chocolatey)
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: PyInstaller build
+        run: |
+          pyinstaller --noconfirm --clean ibu_sw.spec
+
+      - name: Inno Setup compile
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          $version = $version.TrimStart("v")
+          New-Item -ItemType Directory -Force -Path "dist\installer" | Out-Null
+          iscc.exe "/DAppVersion=$version" "/DSourceDir=dist\ibu_sw" "/DOutputDir=dist\installer" "installer\ibu_sw.iss"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IBU_Setup_${{ github.ref_name }}
+          path: dist/installer/IBU_Setup_*.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            dist/installer/IBU_Setup_*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

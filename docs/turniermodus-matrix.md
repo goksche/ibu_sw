@@ -82,6 +82,7 @@
 | `ko_draw_method` | `overall_seeding`        | Gesamt-Seeding (ranglistenbasiert)         | ❌ | ✅ | ✅ |
 | `ko_draw_method` | `pot_system`             | Topf-System (teilweise Zufall)             | ❌ | ✅ | ✅ |
 | `ko_draw_method` | `full_random`            | Vollzufällige Auslosung (mit Sperrregeln)  | ❌ | ✅ | ✅ |
+| `ko_draw_method` | `random_each_round`      | Pro KO-Runde neu auslosen (P7)             | ❌ | ✅ | ✅ |
 | `ko_draw_method` | `predefined_bracket`     | Vorgegebener Turnierbaum                   | ❌ | ✅ | ✅ |
 | `ko_draw_method` | `manual`                 | Manuelle Paarungen durch Admin             | ❌ | ✅ | ✅ |
 

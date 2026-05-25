@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat /c/Cursor/ibu_sw/.claude/worktrees/happy-blackburn/.github/workflows/*.yml)",
+      "Bash(xargs cat)"
+    ]
+  }
+}

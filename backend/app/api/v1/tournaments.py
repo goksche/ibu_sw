@@ -1248,7 +1248,6 @@ async def generate_ko_bracket_matches(
             'pot_system',
             'overall_seeding',
             'predefined_bracket',
-            'bonus_draw_for_winners',
             'manual',
             'random_each_round',
         }
@@ -1258,10 +1257,14 @@ async def generate_ko_bracket_matches(
                 detail=f"KO-Auslosungsmethode '{draw_method}' ist im KO-Modus nicht unterstützt."
             )
 
-        if draw_method in {'fixed_cross', 'same_position_cross'}:
+        if draw_method in {'fixed_cross', 'same_position_cross', 'bonus_draw_for_winners'}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Kreuzpaarung ist ohne Gruppenphase nicht gueltig. Bitte Seeding, Zufall oder manuell verwenden."
+                detail=(
+                    "Diese Auslosungsmethode setzt eine Gruppenphase voraus "
+                    "(Kreuzpaarung oder Bonus fuer Gruppensieger). "
+                    "Bitte Seeding, Zufall oder manuell verwenden."
+                ),
             )
 
         generation_draw_method = 'full_random' if random_each_round_active else draw_method

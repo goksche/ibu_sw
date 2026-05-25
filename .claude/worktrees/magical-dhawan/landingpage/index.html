@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>finalstage – Turniere und Meisterschaften einfach verwalten</title>
+  <meta name="description" content="Turniere und Meisterschaften einfach verwalten. Live-Ergebnisse, Ranglisten und Viewer-Zugriff. Fokus auf Darts." />
+  <meta property="og:title" content="finalstage – Turniere und Meisterschaften einfach verwalten" />
+  <meta property="og:description" content="Turniere und Meisterschaften einfach verwalten. Live-Ergebnisse, Ranglisten und Viewer-Zugriff. Fokus auf Darts." />
+  <meta property="og:type" content="website" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="text-gray-800 antialiased">
+  <!-- Hero -->
+  <section class="bg-slate-100 py-16 px-4">
+    <div class="max-w-3xl mx-auto text-center">
+      <h1 class="text-3xl md:text-4xl font-bold text-slate-800 mb-4">
+        Turniere und Meisterschaften.<br />Einfach verwalten. Live erleben.
+      </h1>
+      <p class="text-lg text-slate-600 mb-8">
+        finalstage ist ein Webtool für die Verwaltung und Ausführung von Turnieren und Meisterschaften.
+        Entwickelt für Vereine, Verbände und Hobby-Sportler.
+        Aktuell im Beta-Status mit Fokus auf Darts.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="#zugang-anfragen" class="inline-flex justify-center rounded-lg bg-slate-800 px-6 py-3 text-white font-medium hover:bg-slate-700">Zugang anfragen</a>
+        <a href="http://localhost:3000/login" id="login-link" class="inline-flex justify-center rounded-lg border border-slate-300 bg-white px-6 py-3 text-slate-700 font-medium hover:bg-slate-50">Zum Login</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Problem & Nutzen -->
+  <section class="py-14 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-2xl font-bold text-slate-800 mb-4">Weg von Zetteln, Excel und Insellösungen</h2>
+      <p class="text-slate-600 leading-relaxed">
+        Viele Turniere werden heute noch mit Excel, Papier oder Einzellösungen verwaltet.
+        Das führt zu Fehlern, Intransparenz und hohem Aufwand – besonders bei mehreren Turnieren oder Meisterschaften.
+      </p>
+      <p class="text-slate-600 leading-relaxed mt-4">
+        finalstage vereint Turnierverwaltung, Meisterschaften und Live-Einsicht in einem zentralen System.
+      </p>
+    </div>
+  </section>
+
+  <!-- USPs -->
+  <section class="bg-slate-50 py-14 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-2xl font-bold text-slate-800 mb-6">Besonderheiten</h2>
+      <ul class="space-y-3 text-slate-700">
+        <li class="flex items-start gap-2"><span class="text-slate-500">•</span> Günstig und fair kalkuliert</li>
+        <li class="flex items-start gap-2"><span class="text-slate-500">•</span> Skalierbar von kleinen Turnieren bis großen Meisterschaften</li>
+        <li class="flex items-start gap-2"><span class="text-slate-500">•</span> Viewer-Zugriff ohne Account</li>
+        <li class="flex items-start gap-2"><span class="text-slate-500">•</span> Sportartenunabhängiger Aufbau</li>
+        <li class="flex items-start gap-2"><span class="text-slate-500">•</span> Klare, einfache Bedienung</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Funktionen MVP -->
+  <section class="py-14 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-2xl font-bold text-slate-800 mb-6">Funktionen (MVP)</h2>
+      <ul class="space-y-2 text-slate-700">
+        <li>Turniere erstellen</li>
+        <li>Gruppenphase und KO-Systeme</li>
+        <li>Automatische Auslosung</li>
+        <li>Live-Erfassung von Ergebnissen</li>
+        <li>Dynamische Ranglisten</li>
+        <li>Meisterschaften über mehrere Turniere</li>
+        <li>Exporte und Statistiken</li>
+      </ul>
+      <p class="mt-4 text-sm text-slate-500">Weitere Funktionen folgen während der Beta-Phase.</p>
+    </div>
+  </section>
+
+  <!-- Viewer-Vorteil -->
+  <section class="bg-slate-50 py-14 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-2xl font-bold text-slate-800 mb-4">Volle Transparenz für Spieler und Zuschauer</h2>
+      <p class="text-slate-600 leading-relaxed mb-6">
+        Spieler, Zuschauer und Interessierte können Turniere live mitverfolgen –
+        ohne Account, ohne App, ohne Login.
+      </p>
+      <ul class="space-y-2 text-slate-700">
+        <li>Ergebnisse in Echtzeit</li>
+        <li>Tabellen und Spielpläne jederzeit einsehbar</li>
+        <li>Ideal für Vereinswebseiten, Screens und Beamer</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Einsatzbereiche -->
+  <section class="py-14 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-2xl font-bold text-slate-800 mb-4">Einsatzbereiche & Skalierung</h2>
+      <p class="text-slate-600 leading-relaxed mb-4">
+        finalstage eignet sich für unterschiedliche Einsatzszenarien und skaliert mit den Anforderungen.
+      </p>
+      <p class="text-slate-600">Beispiele: Hobbyturniere, Vereine, Verbände, Darts (MVP), weitere Sportarten geplant.</p>
+    </div>
+  </section>
+
+  <!-- Zugangs-Anfrage Formular -->
+  <section id="zugang-anfragen" class="bg-slate-100 py-14 px-4">
+    <div class="max-w-xl mx-auto">
+      <h2 class="text-2xl font-bold text-slate-800 mb-2">Beta-Zugang anfragen</h2>
+      <p class="text-slate-600 mb-6">
+        finalstage befindet sich aktuell in der Beta-Phase.
+        Fordere jetzt deinen Zugang an und gestalte die Weiterentwicklung aktiv mit.
+      </p>
+      <form id="access-form" class="space-y-4">
+        <div>
+          <label for="name" class="block text-sm font-medium text-slate-700 mb-1">Name <span class="text-red-500">*</span></label>
+          <input type="text" id="name" name="name" required class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+        </div>
+        <div>
+          <label for="email" class="block text-sm font-medium text-slate-700 mb-1">E-Mail <span class="text-red-500">*</span></label>
+          <input type="email" id="email" name="email" required class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+        </div>
+        <div>
+          <label for="sport" class="block text-sm font-medium text-slate-700 mb-1">Sportart <span class="text-red-500">*</span></label>
+          <input type="text" id="sport" name="sport" required placeholder="z.B. Darts" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+        </div>
+        <div>
+          <label for="organisation" class="block text-sm font-medium text-slate-700 mb-1">Organisation (optional)</label>
+          <input type="text" id="organisation" name="organisation" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+        </div>
+        <div>
+          <label for="source" class="block text-sm font-medium text-slate-700 mb-1">Woher kennst du finalstage? (optional)</label>
+          <input type="text" id="source" name="source" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+        </div>
+        <!-- Honeypot: für Bots, unsichtbar für Nutzer -->
+        <div class="absolute -left-[9999px]" aria-hidden="true">
+          <label for="website">Website</label>
+          <input type="text" id="website" name="website" tabindex="-1" autocomplete="off" />
+        </div>
+        <div id="form-message" class="text-sm hidden"></div>
+        <button type="submit" class="w-full rounded-lg bg-slate-800 px-4 py-3 text-white font-medium hover:bg-slate-700">Zugang anfragen</button>
+      </form>
+      <p class="mt-4 text-sm text-slate-500">Kein Spam. Rückmeldung erfolgt persönlich.</p>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="py-14 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-2xl font-bold text-slate-800 mb-6">FAQ</h2>
+      <dl class="space-y-4">
+        <div>
+          <dt class="font-medium text-slate-800">Ist finalstage kostenlos?</dt>
+          <dd class="text-slate-600 mt-1">Aktuell Beta-Zugang. Spätere Preismodelle folgen.</dd>
+        </div>
+        <div>
+          <dt class="font-medium text-slate-800">Welche Sportarten werden unterstützt?</dt>
+          <dd class="text-slate-600 mt-1">Start mit Darts. Erweiterung geplant.</dd>
+        </div>
+        <div>
+          <dt class="font-medium text-slate-800">Brauchen Zuschauer einen Account?</dt>
+          <dd class="text-slate-600 mt-1">Nein. Alle Turniere sind öffentlich einsehbar.</dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-slate-800 text-slate-200 py-8 px-4">
+    <div class="max-w-3xl mx-auto flex flex-wrap gap-4 justify-center text-sm">
+      <a href="http://localhost:3000/login" id="footer-login-link" class="hover:underline">Login</a>
+      <span>·</span>
+      <a href="#" class="hover:underline">Kontakt</a>
+      <span>·</span>
+      <a href="#" class="hover:underline">Impressum</a>
+      <span>·</span>
+      <a href="#" class="hover:underline">Datenschutz</a>
+    </div>
+    <p class="text-center text-slate-400 text-sm mt-4">© finalstage.ch</p>
+  </footer>
+
+  <script>
+    (function() {
+      var host = window.location.hostname;
+      var loginHref = (host === 'localhost' || host === '127.0.0.1') ? 'http://localhost:3000/login' : '/app/login';
+      document.getElementById('login-link').href = loginHref;
+      var fl = document.getElementById('footer-login-link');
+      if (fl) fl.href = loginHref;
+    })();
+
+    var form = document.getElementById('access-form');
+    var msgEl = document.getElementById('form-message');
+    var apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? 'http://localhost:8000' : '';
+
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      msgEl.classList.add('hidden');
+      var honeypot = document.getElementById('website').value;
+      var payload = {
+        name: document.getElementById('name').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        sport: document.getElementById('sport').value.trim(),
+        organisation: document.getElementById('organisation').value.trim() || null,
+        source: document.getElementById('source').value.trim() || null,
+        website: honeypot || null
+      };
+      fetch(apiBase + '/api/v1/access-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+        .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+        .then(function(result) {
+          msgEl.classList.remove('hidden');
+          if (result.ok) {
+            msgEl.textContent = 'Vielen Dank. Deine Anfrage wurde gesendet.';
+            msgEl.classList.remove('text-red-600');
+            msgEl.classList.add('text-green-600');
+            form.reset();
+          } else {
+            var d = result.data.detail;
+            var txt = typeof d === 'string' ? d : (Array.isArray(d) && d[0] && d[0].msg ? d.map(function(x) { return x.msg; }).join(' ') : 'Es ist ein Fehler aufgetreten. Bitte versuche es später erneut.');
+            msgEl.textContent = txt;
+            msgEl.classList.add('text-red-600');
+          }
+        })
+        .catch(function() {
+          msgEl.classList.remove('hidden');
+          msgEl.textContent = 'Netzwerkfehler. Bitte prüfe die Verbindung und versuche es erneut.';
+          msgEl.classList.add('text-red-600');
+        });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+import{j as e}from"./iframe-jQ-knsx3.js";import{B as d,C as l}from"./tooltip-DxcaGd-F.js";import"./preload-helper-C1FmrZbK.js";import"./IconBase.esm-CaTeI6KH.js";import"./index-C31rOMmP.js";const B=[{time:"18:42:01",text:"Spiel 12 gestartet: Gruppe A"},{time:"18:43:10",text:"Zwischenstand: 1 : 0"},{time:"18:44:35",text:"Spiel 12 beendet: 3 : 1"}],T=[{time:"19:10:02",text:"Spiel 21 gestartet: Viertelfinale 1"},{time:"19:10:18",text:"Spiel 22 gestartet: Viertelfinale 2"},{time:"19:11:01",text:"Tor: Thomas Indergand (1:0)"},{time:"19:11:14",text:"Tor: Roger Baumann (1:1)"},{time:"19:12:45",text:"Spiel 21 beendet: 3 : 2"},{time:"19:13:03",text:"Spiel 22 beendet: 2 : 0"},{time:"19:13:16",text:"Nächste Folie: KO-Bracket"}];function L({state:s}){const t=s==="fullscreen",E=s==="busy"?T:B;return e.jsx("div",{className:t?"p-0 bg-background text-foreground min-h-screen":"p-6 bg-background text-foreground",children:e.jsxs("div",{className:t?"max-w-none":"max-w-5xl mx-auto",children:[e.jsxs("div",{className:"flex items-center justify-between mb-4",children:[e.jsxs("div",{children:[e.jsx("h3",{className:t?"text-4xl m-0":"m-0",children:"Live-Ticker"}),e.jsx("p",{className:"text-muted-foreground mt-1 mb-0",children:s==="busy"?"High activity stream":"Präsentationsansicht"})]}),e.jsxs("div",{className:"flex items-center gap-2",children:[e.jsx(d,{variant:s==="network_loss"?"error":"success",children:s==="network_loss"?"Offline":"Live"}),e.jsx(d,{variant:"info",children:t?"Fullscreen":"Standard"})]})]}),s==="network_loss"&&e.jsxs(l,{className:"p-4 mb-4 border-destructive",children:[e.jsx("div",{className:"text-destructive font-semibold",children:"Verbindung unterbrochen"}),e.jsx("div",{className:"text-sm text-muted-foreground mt-1",children:"Daten werden neu geladen, sobald die Verbindung wieder verfügbar ist."})]}),s==="no_data"?e.jsxs(l,{className:"p-8 text-center",children:[e.jsx("div",{className:"text-lg font-semibold",children:"Keine Live-Daten verfügbar"}),e.jsx("div",{className:"text-muted-foreground mt-2",children:"Noch keine laufenden Matches oder Ergebnisse vorhanden."})]}):e.jsxs(l,{className:t?"p-6":"p-4",children:[e.jsx("div",{className:t?"text-xl font-semibold mb-3":"font-semibold mb-3",children:"Ereignis-Stream"}),e.jsx("div",{className:"flex flex-col gap-2",children:E.map((c,_)=>e.jsxs("div",{className:"flex items-start gap-3 p-2 rounded border border-border bg-muted/40",children:[e.jsx("div",{className:"font-mono text-xs text-muted-foreground min-w-[72px]",children:c.time}),e.jsx("div",{className:t?"text-lg":"text-sm",children:c.text})]},`${c.time}-${_}`))})]}),e.jsxs("div",{className:"mt-4 flex items-center justify-between text-xs text-muted-foreground",children:[e.jsx("span",{children:"Auto-Refresh: 30s"}),e.jsx("span",{children:"Slide 2/5"})]})]})})}const R={title:"Patterns/Presentation/States/LiveTicker",component:L,parameters:{layout:"fullscreen"}},r={args:{state:"calm"}},a={args:{state:"busy"}},n={args:{state:"no_data"}},o={args:{state:"network_loss"}},i={args:{state:"fullscreen"}};var m,x,u;r.parameters={...r.parameters,docs:{...(m=r.parameters)==null?void 0:m.docs,source:{originalSource:`{
+  args: {
+    state: 'calm'
+  }
+}`,...(u=(x=r.parameters)==null?void 0:x.docs)==null?void 0:u.source}}};var p,g,f;a.parameters={...a.parameters,docs:{...(p=a.parameters)==null?void 0:p.docs,source:{originalSource:`{
+  args: {
+    state: 'busy'
+  }
+}`,...(f=(g=a.parameters)==null?void 0:g.docs)==null?void 0:f.source}}};var h,b,v;n.parameters={...n.parameters,docs:{...(h=n.parameters)==null?void 0:h.docs,source:{originalSource:`{
+  args: {
+    state: 'no_data'
+  }
+}`,...(v=(b=n.parameters)==null?void 0:b.docs)==null?void 0:v.source}}};var j,N,S;o.parameters={...o.parameters,docs:{...(j=o.parameters)==null?void 0:j.docs,source:{originalSource:`{
+  args: {
+    state: 'network_loss'
+  }
+}`,...(S=(N=o.parameters)==null?void 0:N.docs)==null?void 0:S.source}}};var w,y,k;i.parameters={...i.parameters,docs:{...(w=i.parameters)==null?void 0:w.docs,source:{originalSource:`{
+  args: {
+    state: 'fullscreen'
+  }
+}`,...(k=(y=i.parameters)==null?void 0:y.docs)==null?void 0:k.source}}};const A=["Default","Busy","Empty","Error","Fullscreen"];export{a as Busy,r as Default,n as Empty,o as Error,i as Fullscreen,A as __namedExportsOrder,R as default};

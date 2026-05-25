@@ -1,0 +1,132 @@
+```markdown
+---
+description: Template for creating new project plan files with PMT schema
+globs: ["**/*plan*.md", "**/*projekt*.md", "**/*project*.md", "**/*overview*.md"]
+alwaysApply: false
+---
+
+## New Project File Rule
+
+When creating a NEW project plan or overview markdown file, ALWAYS start with
+the PMT frontmatter schema. Do not skip fields.
+
+### Ask the user these questions in ONE message before creating the file
+
+```
+Bevor ich die Datei anlege, brauche ich folgende Infos:
+
+1. Projektname (kurz, kebab-case)?
+2. Kurzbeschreibung (1–2 Sätze)?
+3. Typ: saas / software / tool / research / internal?
+4. Status: idea / active / on_hold / launched / maintenance / archived?
+5. Phase: ideation / validation / build / release / operation?
+6. Phase-Fortschritt in %?
+7. Nächster Milestone (Titel)?
+8. Zieldatum für Milestone (optional)?
+```
+
+### Then create the file with this frontmatter
+
+```yaml
+---
+name: [user input]
+overview: [user input]
+isProject: true
+pmt_id: [generate UUID v4]
+
+type: [user input]
+tags: []
+
+status: [user input]
+phase: [user input]
+phase_progress: [user input]
+current_version: ~
+next_milestone: [user input]
+milestone_due: [user input or ~]
+on_hold_reason: ~
+
+last_activity: [today YYYY-MM-DD]
+
+todos: []
+
+schema_version: "1.0"
+---
+
+# [Project Name]
+
+## Überblick
+
+[overview text]
+
+## Todos
+
+<!-- Tasks hier als Checkboxen mit #high / #medium / #low Tags -->
+
+```
+
+### After creating
+- Confirm frontmatter was added correctly
+- Remind user: "Vergiss nicht, diesen Dateipfad im PMT zu registrieren."
+```
+
+✅ Fertig — der Agent erstellt neue Dateien ab jetzt immer im richtigen Format.
+
+---
+
+## Schritt 3 · Erstes Projekt migrieren
+
+Für jede bestehende `project.md` die bereits Todos und Inhalt hat.
+
+**3.1** Projekt in Cursor öffnen
+
+**3.2** Cursor Chat öffnen (`Cmd+L`) → Agent-Modus aktivieren
+
+**3.3** Diesen Befehl eingeben:
+
+```
+Migriere die project.md in diesem Projekt auf das PMT-Schema.
+
+Lies den vorhandenen Inhalt und Frontmatter vollständig.
+Leite folgende Felder selbst ab soweit möglich:
+- name, overview → aus bestehendem Frontmatter
+- todos[] → aus bestehendem todos-Array, ergänze priority: medium als Standard
+- current_version → suche im Inhalt nach Release-Erwähnungen
+- last_activity → setze auf heute
+
+Frage mich in einer einzigen Nachricht nach:
+- type (saas / software / tool / research / internal)
+- status (idea / active / on_hold / launched / maintenance / archived)
+- phase (ideation / validation / build / release / operation)
+- phase_progress (0–100%)
+- next_milestone (Titel)
+- milestone_due (Datum oder leer)
+
+Generiere selbst: pmt_id als neuen UUID v4.
+Setze: isProject: true, schema_version: "1.0"
+
+Verändere den Markdown-Inhalt unterhalb des Frontmatters nicht.
+```
+
+**3.4** Fragen beantworten
+
+**3.5** Migrierten Frontmatter prüfen — alle Felder vorhanden?
+
+```yaml
+# Checkliste
+✓ name
+✓ overview
+✓ isProject: true
+✓ pmt_id (UUID)
+✓ type
+✓ tags
+✓ status
+✓ phase
+✓ phase_progress
+✓ current_version
+✓ next_milestone
+✓ milestone_due
+✓ on_hold_reason
+✓ last_activity
+✓ todos[] (mit priority pro Task)
+✓ schema_version: "1.0"
+```

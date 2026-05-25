@@ -1,0 +1,88 @@
+# Platform Core - Docker Compose Configuration
+# Multi-App Platform
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database (Central)
+  postgres:
+    image: postgres:15-alpine
+    container_name: platform_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-platform_db}
+      POSTGRES_USER: ${POSTGRES_USER:-platform_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-platform_admin} -d ${POSTGRES_DB:-platform_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform_network
+    restart: unless-stopped
+
+  # Platform Backend
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: platform_backend
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-platform_db}
+      POSTGRES_USER: ${POSTGRES_USER:-platform_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://gsmartsol.ch}
+      DEBUG: "False"
+    volumes:
+      - ../backend:/app
+      - backend_logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker daemon access
+      - uploads:/app/uploads  # Docker image uploads
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - platform_network
+    restart: unless-stopped
+
+  # Platform Frontend
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://gsmartsol.ch}
+    container_name: platform_frontend
+    depends_on:
+      - backend
+    networks:
+      - platform_network
+    restart: unless-stopped
+
+# Named Volumes
+volumes:
+  postgres_data:
+    driver: local
+  backend_logs:
+    driver: local
+  uploads:
+    driver: local
+
+# Network
+networks:
+  platform_network:
+    driver: bridge
+

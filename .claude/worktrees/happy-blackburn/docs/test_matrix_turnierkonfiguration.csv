@@ -1,0 +1,57 @@
+ID;Modus;Teilnehmer;Szenario;Gruppen_Anz;TN_pro_Gruppe;Verteilung;Liga_Variante;Wertung;Tie_Break;KO_Start;KO_Struktur;KO_Auslosung;Platz3;Notizen
+RR-01;round_robin;8;passend;1;8;random;classic;points;wins,direct_encounter;;;;1 Gruppe
+RR-02;round_robin;7;unpassend;1;8;random;classic;points;wins,direct_encounter;;;;nicht voll
+RR-03;round_robin;8;passend;2;4;random;classic;points;wins;;;;2×4
+RR-04;round_robin;10;unpassend;2;4;random;classic;points;wins;;;;10 bei 2×4
+RR-05;round_robin;8;passend;2;4;seeded;classic;difference;direct_encounter;;;;Differenz
+RR-06;round_robin;6;unpassend;2;4;seeded;classic;difference;direct_encounter;;;;6 bei 2×4
+RR-07;round_robin;12;passend;4;3;random;double;points;decision_match;;;;Doppel-Liga
+RR-08;round_robin;11;unpassend;4;3;random;double;points;decision_match;;;;11 bei 4×3
+RR-09;round_robin;16;passend;4;4;random;multiple;difference;wins,direct_encounter;;;;multiple ×2
+RR-10;round_robin;14;unpassend;4;4;random;multiple;difference;wins,direct_encounter;;;;14 bei 4×4
+RR-11;round_robin;8;passend;2;4;random;classic;points;direct_encounter;;;;nur Direktbegegnung
+RR-12;round_robin;9;unpassend;2;4;random;classic;points;direct_encounter;;;;9 bei 2×4
+KO-01;knockout;16;passend;;;;;;;single_elimination;full_random;nein;16 TN
+KO-02;knockout;27;unpassend;;;;;;;single_elimination;full_random;nein;27 für 32
+KO-03;knockout;8;passend;;;;;;;single_elimination_with_third;full_random;ja;Platz 3
+KO-04;knockout;12;unpassend;;;;;;;single_elimination_with_third;full_random;ja;
+KO-05;knockout;16;passend;;;;;;;consolation_bracket;pot_system;nein;Trost
+KO-06;knockout;10;unpassend;;;;;;;consolation_bracket;pot_system;nein;
+KO-07;knockout;8;passend;;;;;;;double_elimination;full_random;;Doppel-KO
+KO-08;knockout;15;unpassend;;;;;;;double_elimination;full_random;;
+KO-09;knockout;8;passend;;;;;;;triple_elimination;pot_system;;
+KO-10;knockout;22;unpassend;;;;;;;triple_elimination;pot_system;;
+KO-11;knockout;8;passend;;;;;;;aggregate_ko;full_random;;
+KO-12;knockout;14;unpassend;;;;;;;aggregate_ko;full_random;;
+KO-13;knockout;32;passend;;;;;;;single_elimination;manual;nein;manuell
+KO-14;knockout;27;unpassend;;;;;;;single_elimination;manual;nein;
+KO-15;knockout;16;passend;;;;;;;single_elimination;pot_system;nein;
+KO-16;knockout;7;unpassend;;;;;;;single_elimination;pot_system;nein;
+CO-01;combined;16;passend;4;4;random;classic;points;wins;round_of_16;single_elimination;fixed_cross;nein;16 Qualis
+CO-02;combined;27;unpassend;4;4;random;classic;points;wins;round_of_16;single_elimination;fixed_cross;nein;
+CO-03;combined;16;passend;4;4;seeded;classic;difference;direct_encounter;round_of_16;single_elimination;same_position_cross;nein;
+CO-04;combined;14;unpassend;4;4;seeded;classic;difference;direct_encounter;round_of_16;single_elimination;same_position_cross;nein;
+CO-05;combined;8;passend;2;4;random;classic;points;decision_match;quarterfinal;single_elimination_with_third;fixed_cross;ja;
+CO-06;combined;9;unpassend;2;4;random;classic;points;decision_match;quarterfinal;single_elimination_with_third;fixed_cross;ja;
+CO-07;combined;16;passend;4;4;random;classic;points;wins;round_of_16;consolation_bracket;overall_seeding;nein;
+CO-08;combined;18;unpassend;4;4;random;classic;points;wins;round_of_16;consolation_bracket;overall_seeding;nein;
+CO-09;combined;16;passend;4;4;random;double;difference;wins,direct_encounter;round_of_16;double_elimination;pot_system;;
+CO-10;combined;12;unpassend;4;4;random;double;difference;wins,direct_encounter;round_of_16;double_elimination;pot_system;;
+CO-11;combined;8;passend;4;2;random;classic;points;wins;quarterfinal;triple_elimination;full_random;;
+CO-12;combined;10;unpassend;4;2;random;classic;points;wins;quarterfinal;triple_elimination;full_random;;
+CO-13;combined;8;passend;2;4;random;classic;points;wins;quarterfinal;aggregate_ko;bonus_draw_for_winners;;
+CO-14;combined;7;unpassend;2;4;random;classic;points;wins;quarterfinal;aggregate_ko;bonus_draw_for_winners;;
+CO-15;combined;32;passend;8;4;random;classic;points;wins;round_of_32;single_elimination;fixed_cross;nein;
+CO-16;combined;27;unpassend;8;4;random;classic;points;wins;round_of_32;single_elimination;fixed_cross;nein;
+CO-17;combined;8;passend;4;2;random;classic;points;wins;semifinal;single_elimination;predefined_bracket;nein;
+CO-18;combined;6;unpassend;4;2;random;classic;points;wins;semifinal;single_elimination;predefined_bracket;nein;
+CO-19;combined;4;passend;2;2;random;classic;points;wins;final;single_elimination;fixed_cross;nein;nur Finale
+CO-20;combined;5;unpassend;2;2;random;classic;points;wins;final;single_elimination;fixed_cross;nein;
+CO-21;combined;12;passend;4;3;random;classic;points;wins;quarterfinal;single_elimination;fixed_cross;nein;Fallback
+CO-22;combined;11;unpassend;4;3;random;classic;points;wins;quarterfinal;single_elimination;fixed_cross;nein;
+CO-23;combined;16;passend;4;4;random;multiple;difference;wins;round_of_16;single_elimination;full_random;nein;
+CO-24;combined;15;unpassend;4;4;random;multiple;difference;wins;round_of_16;single_elimination;full_random;nein;
+CO-25;combined;16;passend;4;4;random;classic;points;wins;round_of_16;single_elimination;fixed_cross;nein;block_same_group
+CO-26;combined;16;passend;4;4;random;classic;points;wins;round_of_16;single_elimination;fixed_cross;nein;block_same_position
+CO-27;combined;8;passend;2;4;random;classic;points;wins;quarterfinal;single_elimination;fixed_cross;ja;Gruppensieger-Vorteil
+CO-28;combined;9;unpassend;2;4;random;classic;points;wins;quarterfinal;single_elimination;fixed_cross;ja;

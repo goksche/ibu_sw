@@ -1,0 +1,7 @@
+# IBU Turniere v1.1.0 - Stabilität & Sicherheit
+# Exception Handling, Logging, Validation, Memory Management
+
+PyQt6>=6.6,<6.8
+pandas==2.2.2
+reportlab>=4.2,<5.0
+pyinstaller

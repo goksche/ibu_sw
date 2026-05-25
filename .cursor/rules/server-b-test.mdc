@@ -1,0 +1,21 @@
+---
+description: Server B (test.finalstage.ch) – Entwicklungs- und Test-Server
+alwaysApply: true
+---
+
+# Server B – Entwicklung & Test
+
+**Server B:** 95.111.238.180 – test.finalstage.ch, betabilic.finalstage.ch
+
+## Regel
+
+**Änderungen und neue Features werden auf Server B umgesetzt und getestet.**
+
+- Server B ist der aktive Entwicklungs-/Test-Server
+- Bei "auf dem Server umsetzen" oder "deployen" (ohne "A" oder "Produktion"): **Server B** verwenden
+- Nach erfolgreichem Test: Auf Wunsch des Nutzers auf Server A (Produktion) übertragen
+
+## Vorgehen
+
+1. Änderungen auf Server B implementieren und testen
+2. Erst bei explizitem Wunsch: Übertragung/Go-Live auf Server A

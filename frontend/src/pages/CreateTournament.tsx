@@ -11,7 +11,13 @@ import { Button, Card, Input, Textarea } from '../components/ui';
 import { cn } from '@/lib/utils';
 import { ArrowLeft } from 'phosphor-react';
 import TournamentModeVisualization from '../components/tournament/TournamentModeVisualization';
-import { MODE_VARIANTS, PAIRING_VARIANTS } from '../domain/tournamentModeMatrix';
+import {
+  DRAW_METHOD_TO_PAIRING,
+  MODE_VARIANTS,
+  getAllowedKoDrawMethodValues,
+  pairingVariantsForMode,
+  type KoDrawMethodValue,
+} from '../domain/tournamentModeMatrix';
 import { koStructureIncludesThirdPlace } from '../domain/koThirdPlace';
 import { formatApiErrorMessage } from '../utils/apiErrors';
 import { sanitizeTournamentWritePayload } from '../utils/tournamentPayload';
@@ -498,6 +504,11 @@ export default function CreateTournament() {
       description: t('tournament.ko.draw.fullRandomDesc')
     },
     {
+      value: 'overall_seeding',
+      label: t('tournament.ko.draw.overallSeeding'),
+      description: t('tournament.ko.draw.overallSeedingDesc')
+    },
+    {
       value: 'random_each_round',
       label: t('tournament.ko.drawMode.randomEachRound'),
       description: t('tournament.ko.drawMode.randomEachRoundDesc')
@@ -506,6 +517,11 @@ export default function CreateTournament() {
       value: 'pot_system',
       label: t('tournament.ko.draw.potSystem'),
       description: t('tournament.ko.draw.potSystemDesc')
+    },
+    {
+      value: 'predefined_bracket',
+      label: t('tournament.ko.draw.predefinedBracket'),
+      description: t('tournament.ko.draw.predefinedBracketDesc')
     },
     {
       value: 'manual',
@@ -551,11 +567,40 @@ export default function CreateTournament() {
       description: t('tournament.ko.draw.predefinedBracketDesc')
     },
     {
+      value: 'random_each_round',
+      label: t('tournament.ko.drawMode.randomEachRound'),
+      description: t('tournament.ko.drawMode.randomEachRoundDesc')
+    },
+    {
       value: 'manual',
       label: t('tournament.ko.draw.manual'),
       description: t('tournament.ko.draw.manualCombinedDesc')
     }
   ];
+
+  const getAllowedKODrawMethods = (mode: typeof formData.mode, hasGroupPhase: boolean) => {
+    const allowed = new Set(getAllowedKoDrawMethodValues(mode, hasGroupPhase));
+    const pool = mode === 'knockout' && !hasGroupPhase ? koOnlyDrawMethods : combinedDrawMethods;
+    return pool.filter((o) => allowed.has(o.value as KoDrawMethodValue));
+  };
+
+  const applyDrawMethodSelection = (method: KoDrawMethodValue) => {
+    const pairing = DRAW_METHOD_TO_PAIRING[method] ?? 'P1';
+    setFormData((prev) => ({
+      ...prev,
+      ko_draw_method: method,
+      ko_pairing_mode: pairing,
+      ko_distribution:
+        method === 'manual'
+          ? 'predefined_slots'
+          : method === 'random_each_round'
+            ? 'random_each_round'
+            : method === 'fixed_cross' || method === 'same_position_cross'
+              ? 'cross'
+              : prev.ko_distribution,
+      ko_block_same_group: pairing === 'P4' ? true : prev.ko_block_same_group,
+    }));
+  };
 
   const koDrawModeOptions = [
     {
@@ -1272,25 +1317,42 @@ export default function CreateTournament() {
                       }}
                       className={`${wizardSelectClass} mb-3`}
                     >
-                      {PAIRING_VARIANTS.map((variant) => (
+                      {pairingVariantsForMode(formData.mode, formData.has_group_phase).map((variant) => (
                         <option key={variant.id} className="!bg-[#080c1a] !text-[#e8eaf0]" value={variant.id}>
                           {variant.label}
                         </option>
                       ))}
                     </select>
-                    <div className="rounded border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
-                      Abgeleitete Auslosung:{' '}
-                      <span className="font-semibold text-foreground">
-                        {getKoDrawMethodLabel(formData.ko_draw_method) || '—'}
-                      </span>
+                    <label className="block mb-2 mt-3 font-bold text-foreground">
+                      Auslosungsmethode
+                    </label>
+                    <select
+                      value={formData.ko_draw_method || ''}
+                      onChange={(e) => {
+                        const method = e.target.value as KoDrawMethodValue;
+                        if (method) applyDrawMethodSelection(method);
+                      }}
+                      required
+                      className={wizardSelectClass}
+                    >
+                      <option value="" className="!bg-[#080c1a] !text-[#e8eaf0]">
+                        -
+                      </option>
+                      {getAllowedKODrawMethods(formData.mode, formData.has_group_phase).map((option) => (
+                        <option
+                          key={option.value}
+                          className="!bg-[#080c1a] !text-[#e8eaf0]"
+                          value={option.value}
+                        >
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="rounded border border-border bg-muted px-3 py-2 text-sm text-muted-foreground mt-2">
+                      {getAllowedKODrawMethods(formData.mode, formData.has_group_phase).find(
+                        (o) => o.value === formData.ko_draw_method
+                      )?.description}
                     </div>
-                  </div>
-                  <div className="flex items-start pt-7">
-                    {formData.ko_draw_method && (
-                      <p className="m-0 text-sm text-muted-foreground italic">
-                        Die Auslosungslogik wird aus der Paarungsart abgeleitet.
-                      </p>
-                    )}
                   </div>
                 </div>
               )}

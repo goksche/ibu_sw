@@ -12,27 +12,44 @@
 
 | Aspekt | Stand |
 |--------|--------|
+| Gate v1.8.4 | `./scripts/run_draw_methods_matrix_gate_server_b.sh` (Contract + `verify_draw_methods_matrix.py` + QA-Gate) |
 | Smoke (öffentlich) | `/` und `/api/v1/info/version` **200**; `diagnostics` ggf. **404** (Skript erlaubt beides). |
-| Backend Server B | Container **healthy** (Stand nach Fixes u. a. `generate_swiss_like_rounds`, `append_third_place_placeholder_if_needed` auf `main`). |
+| Wizard Create | Alle matrix-konformen `ko_draw_method` im Dropdown „Auslosungsmethode“ (neben P1–P7) |
 | **Stufe C** (nach KO-/Backend-Deploy) | Mindestens die Auslosungs-Flows, die von Backend-Änderungen berührt werden, in **Stufe A** kurz gegenprüfen. |
 
 ---
 
 ## Nächster Schritt (jetzt ausführen)
 
-1. **https://test.finalstage.ch** öffnen, anmelden.
-2. **Stufe A – erste Zeile:** Kombi-Turnier (**C**), `ko_draw_method = fixed_cross`, Minimalsetup wie Tabelle → Wizard durchlaufen, speichern.
-3. **KO-Baum / Spielplan** öffnen: Paarungen plausibel, **kein 422/500**.
-4. Ergebnis in der Tabelle **„Ergebnis / Bugs“** eintragen; Checkbox in Stufe A setzen.
-5. Danach zeilenweise die übrigen Methoden der Stufe A (oder gesammelt in einer Session).
+**Stufe B — Session 1 (läuft):** B1 → B2 → B3. Basis: Duplikat von Turnier **70** (`full_random`, Modus C). Feedback: **ok / gut / ⚠️ / ❌** pro Block.
+
+## Stufe B — Ergebnisse
+
+| ID | Thema | Turnier | Ergebnis | Notiz |
+|----|--------|---------|----------|--------|
+| B1a | `ko_block_same_group` **an** | 75 | ok | 4 VF: je A vs B (`same_group=false` in DB) |
+| B1b | `ko_block_same_group` **aus** | 77 | ok | Neu von 75; DB `ko_block_same_group=false`, `QUARTERFINAL`; 4+2+1 KO; VF alle Kreuz (Zufall, Sperre aus) |
+| B2a | `ko_block_same_position` **an** | | | |
+| B2b | `ko_block_same_position` **aus** | | | |
+| B3a | Seed **42** (1. Bracket) | | | |
+| B3b | Seed **42** (Duplikat, gleiches Bracket?) | | | |
+| B3c | Seed **99** (anderes Bracket?) | | | |
 
 ---
 
 ## Ergebnis / Bugs
 
-| ID | Datum | `ko_draw_method` | Modus (K/C) | Ergebnis | Notiz |
-|----|-------|-------------------|---------------|----------|--------|
-|    |       |                   |               |          |        |
+| ID | Datum | Turnier | `ko_draw_method` | Modus (K/C) | Ergebnis | Notiz |
+|----|-------|---------|-------------------|---------------|----------|--------|
+| A1 | 2026-05-17 | 64 | `fixed_cross` | C | ok | |
+| A2 | 2026-05-17 | 65 | `same_position_cross` | C | gut | Doppelte TN bereinigt |
+| A3 | 2026-05-17 | 67 | `bonus_draw_for_winners` | C | ok | |
+| A4 | 2026-05-17 | 68 | `overall_seeding` | C | ok | |
+| A5 | 2026-05-17 | 69 | `pot_system` | C | gut | VF4 Team 3 statt Team 5 akzeptiert |
+| A6 | 2026-05-17 | 70 | `full_random` | C | ok | |
+| A7 | 2026-05-20 | 72 | `random_each_round` | C | ok | DB: `kodrawmethod` + `RANDOM_EACH_ROUND` auf Server B; Speichern nach Fix ok |
+| A8 | 2026-05-17 | 73 | `predefined_bracket` | C | ok | |
+| A9 | 2026-05-17 | 74 | `manual` | C | gut | E2E inkl. manuelles VF-Bracket |
 
 ---
 
@@ -58,15 +75,15 @@ Pro Zeile: passende Teilnehmerzahl / Gruppen (z. B. Kombi: **2 Gruppen à 4** 
 
 | ☐ | `ko_draw_method` | Modus | Minimalsetup (Beispiel) | Erwartung |
 |---|-------------------|-------|--------------------------|-----------|
-| ☐ | `fixed_cross` | **C** | 2 Gruppen, qualifizierte Plätze für Kreuz | Paarungen gruppenübergreit plausibel |
-| ☐ | `same_position_cross` | **C** | 2+ Gruppen, gleiche Platzierung | Kreuz gemäß UI |
-| ☐ | `bonus_draw_for_winners` | **C** | Gruppensieger erkennbar | Auslosung ohne Crash |
-| ☐ | `overall_seeding` | **K** oder **C** | Ranking/Teilnehmerliste | Seeding nachvollziehbar |
-| ☐ | `pot_system` | **K** oder **C** | Genügend Teilnehmer für Töpfe | Auslosung ok |
-| ☐ | `full_random` | **K** oder **C** | Optional Sperrregeln (s. Stufe B) | Zufalls-KO ok |
-| ☐ | `random_each_round` | **K** oder **C** | Mind. 2 Runden KO; nach Runde 1: Button „nächste Runde auslosen“ (falls UI) | Kein Auto-Advance ohne Aktion; kein Crash |
-| ☐ | `predefined_bracket` | **K** oder **C** | Platzhalterbaum wie UI | Struktur ladbar |
-| ☐ | `manual` | **K** oder **C** | KO-Runde 1 in UI setzen | Speichern + nächste Runde |
+| ☑ | `fixed_cross` | **C** | 2 Gruppen, qualifizierte Plätze für Kreuz | Paarungen gruppenübergreit plausibel |
+| ☑ | `same_position_cross` | **C** | 2+ Gruppen, gleiche Platzierung | Kreuz gemäß UI |
+| ☑ | `bonus_draw_for_winners` | **C** | Gruppensieger erkennbar | Auslosung ohne Crash |
+| ☑ | `overall_seeding` | **K** oder **C** | Ranking/Teilnehmerliste | Seeding nachvollziehbar |
+| ☑ | `pot_system` | **K** oder **C** | Genügend Teilnehmer für Töpfe | Auslosung ok |
+| ☑ | `full_random` | **K** oder **C** | Optional Sperrregeln (s. Stufe B) | Zufalls-KO ok |
+| ☑ | `random_each_round` | **K** oder **C** | Mind. 2 Runden KO; nach Runde 1: Button „nächste Runde auslosen“ (falls UI) | Kein Auto-Advance ohne Aktion; kein Crash |
+| ☑ | `predefined_bracket` | **K** oder **C** | Platzhalterbaum wie UI | Struktur ladbar |
+| ☑ | `manual` | **K** oder **C** | KO-Runde 1 in UI setzen | Speichern + nächste Runde |
 
 ---
 
@@ -91,6 +108,6 @@ Stufe **A** mindestens für die geänderten Auslosungsarten wiederholen.
 
 ## Definition of Done
 
-- [ ] Alle Methoden aus **Stufe A** mit ☐ abgearbeitet oder Explizit „nicht anwendbar“ mit Grund.
+- [x] Alle Methoden aus **Stufe A** mit ☐ abgearbeitet oder Explizit „nicht anwendbar“ mit Grund.
 - [ ] **Stufe B** mindestens für aktuell genutzte Sperrregeln und einen Seed-Test.
-- [ ] Tabelle „Ergebnis / Bugs“ geführt; Fixes für nächste Iteration notiert.
+- [x] Tabelle „Ergebnis / Bugs“ geführt; Fixes für nächste Iteration notiert.
